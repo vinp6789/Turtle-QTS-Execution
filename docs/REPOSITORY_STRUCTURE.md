@@ -29,12 +29,12 @@ ExecutionEngine_Upload/
 │   ├── domain.py
 │   └── errors.py
 │
-├── event_store/                    # Module 3 (frozen)
+├── event_store/                    # Module 3 (frozen as Module 3.1)
 │   ├── __init__.py
 │   ├── _locking.py                 # cross-platform lock shim (fcntl POSIX / msvcrt Windows)
 │   ├── codec.py
 │   ├── errors.py
-│   ├── store.py                    # locks via ._locking shim (portable)
+│   ├── store.py                    # locks via ._locking shim; opens log with O_BINARY (portable)
 │   └── types.py
 │
 ├── execution_state_machine/        # Module 4 (frozen)
@@ -83,10 +83,10 @@ ExecutionEngine_Upload/
 │   ├── manager.py
 │   └── models.py
 │
-├── tests/                          # unittest-based; 305 tests total
+├── tests/                          # unittest-based; 306 tests total
 │   ├── test_config.py                     # 22
 │   ├── test_secrets_boundary.py           # 41 (+5 runtime subtests)
-│   ├── test_event_store.py                # 37
+│   ├── test_event_store.py                # 38
 │   ├── test_execution_state_machine.py    # 42
 │   ├── test_exchange_adapter.py           # 41
 │   ├── test_order_manager.py              # 23
@@ -111,8 +111,9 @@ Numbering 1–9 as in `MODULE_INVENTORY.md` / `DEPENDENCY_GRAPH.md`.
 ## Tests
 
 `tests/` contains nine `test_*.py` files, one per package, all
-`unittest`-based and run via pytest. **305 tests** collected; per-file
-counts shown above.
+`unittest`-based. **306 tests** collected; per-file counts shown above.
+Verified 306 passing on Windows (CPython 3.13) after the Module 3.1
+correction; the pre-correction 305 on Linux (CPython 3.12.3) is unchanged.
 
 ## Documentation
 

@@ -26,9 +26,13 @@ assignments are invented.
 - **Additional signing backends.** `SigningBackend` is documented as the
   extension point for future hardware or KMS backends beyond the current
   `EnvironmentHmacBackend`.
-- **Windows runtime validation.** The Module 3 `msvcrt` locking path is
-  code-reviewed but not runtime-executed in this environment; a Windows
-  validation run is required before Windows carries live capital.
+- **Windows runtime validation — COMPLETED (v1.0.1 / Module 3.1).** The
+  Module 3 `msvcrt` locking path and the `O_BINARY` binary-open fix have been
+  runtime-executed on a real Windows host; the full suite passes (306 on
+  CPython 3.13), including a dedicated binary-framing regression test. This
+  run surfaced and corrected the critical text-mode log-corruption defect —
+  see `CHANGELOG.md` (v1.0.1). No further Windows validation is outstanding
+  for Module 3.
 
 ## Integration rules for any future module
 

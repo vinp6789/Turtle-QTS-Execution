@@ -12,15 +12,16 @@ are asserted (none are verifiable in the source).
 The Turtle Execution Engine v1.0 is the first stable release of a
 crash-safe, event-sourced execution core for a crypto trading strategy. It
 comprises nine frozen modules wired into a strict acyclic dependency graph
-and backed by **305 passing tests**. It is built on the Python standard
+and backed by **306 passing tests** (Windows; 305 on the pre-correction
+Linux baseline). It is built on the Python standard
 library alone, records all state transitions durably through an append-only
 event store with an idempotency ledger, and confines all signing to a
 secrets boundary that never exposes raw key material. This release provides
 the safety and bookkeeping substrate for live execution; it does **not**
 itself connect to a live exchange (only an in-memory mock adapter exists)
-and contains no top-level orchestration loop. It is verified on Linux and,
-after reconciliation of the Module 3 locking layer, portable to Windows
-pending a Windows validation run.
+and contains no top-level orchestration loop. It is verified on Linux
+(305 passing) and, following the Module 3.1 correction described under
+"Post-release correction" below, verified on Windows as well (306 passing).
 
 ---
 
@@ -148,23 +149,26 @@ Full per-module public APIs (each package's `__all__`) are in
 
 ## Regression baseline
 
-- **305 tests passing** (plus 5 runtime subtests from one `self.subTest`
-  loop in `tests/test_secrets_boundary.py`).
-- Per package: `config` 22, `secrets_boundary` 41, `event_store` 37,
+- **306 tests** (plus 5 runtime subtests from one `self.subTest`
+  loop in `tests/test_secrets_boundary.py`). Verified **306 passing on
+  Windows** (CPython 3.13) after the v1.0.1 / Module 3.1 correction; the
+  original v1.0 baseline was **305 passing on Linux** (CPython 3.12.3,
+  pytest 9.1.1), unchanged by the fix.
+- Per package: `config` 22, `secrets_boundary` 41, `event_store` 38,
   `execution_state_machine` 42, `exchange_adapter` 41, `order_manager` 23,
   `position_manager` 22, `portfolio_manager` 21, `risk_manager` 56.
-- Verified in this environment under **CPython 3.12.3**, pytest 9.1.1.
 - One test file per package; no test file is shared across modules.
 
 ---
 
 ## Known assumptions
 
-- **Windows locking is code-reviewed, not runtime-executed here.** Module 3
+- **Windows locking — now runtime-verified (v1.0.1 / Module 3.1).** Module 3
   locks via `event_store/_locking.py`, which import-guards `fcntl` (POSIX)
-  and `msvcrt` (Windows). The POSIX branch is exercised by the full suite;
-  the `msvcrt` branch has not been run on a real Windows host in this
-  environment.
+  and `msvcrt` (Windows). Both the `msvcrt` lock path and the `O_BINARY`
+  binary-open fix have since been run on a real Windows host (full suite
+  green, 306 on CPython 3.13). This statement is retained for history; the
+  assumption it recorded no longer holds open.
 - **Windows sentinel-lock offset.** The Windows path locks a single sentinel
   byte at offset `2**62`, relying on the event log never approaching that
   size so a mandatory lock never overlaps bytes that the lock-free
@@ -198,16 +202,15 @@ Full per-module public APIs (each package's `__all__`) are in
 
 ## Supported platforms
 
-- **Linux — verified.** Full suite (305) passes on Linux/CPython in this
-  environment.
-- **Windows — supported by design, pending validation.** After
-  reconciliation, Module 3 imports and collects on Windows via the
-  `fcntl`/`msvcrt` shim, but the `msvcrt` locking path has not been
-  runtime-verified on a real Windows host here. Recommend a Windows
-  validation run before Windows carries live capital.
+- **Linux — verified.** Full suite (305) passes on Linux/CPython 3.12.3.
+- **Windows — verified (v1.0.1 / Module 3.1).** The full suite passes on a
+  real Windows host (306 on CPython 3.13), exercising both the `fcntl`/
+  `msvcrt` lock shim and the `O_BINARY` binary-open fix, plus a dedicated
+  binary-framing regression test. The previously recommended Windows
+  validation run is complete; the `msvcrt` locking path and binary log
+  writes are runtime-verified.
 - **Python:** 3.11+ (inferred from `tomllib` usage); verified on CPython
-  3.12.3. Bytecode caches for CPython 3.13 (uploader environment) are also
-  present in the source tree.
+  3.12.3 (Linux) and CPython 3.13 (Windows).
 
 ---
 
@@ -222,6 +225,38 @@ Full per-module public APIs (each package's `__all__`) are in
   approved Modules 1–9 implementation (the reconciliation reintegrated the
   approved Module 3 locking layer that was absent from the earlier uploaded
   snapshot).
+
+---
+
+## Post-release correction — v1.0.1 (Module 3.1, event_store)
+
+One critical defect was found and corrected after v1.0, under the frozen
+workflow's critical-defect exception (propose → approve → implement →
+full-regression → audit → re-freeze). It is additive and confined to
+`event_store`.
+
+- **Defect (critical: correctness / capital-protection / crash-recovery).**
+  On Windows, `EventStore` opened its append-only log without `os.O_BINARY`,
+  so the C runtime used text mode and `os.write` translated every `0x0A`
+  byte to `0x0D 0x0A`. Binary record framing (magic, big-endian
+  `event_id`/length, SHA-256 checksum) routinely contains `0x0A`, so the
+  `fsync`-durable log was silently corrupted on disk and detected only as
+  `CorruptEventStoreError` on the next open. This defeated durable replay —
+  the module's core guarantee — on Windows, and is exactly the risk the
+  original "Windows path not runtime-verified" caveat anticipated.
+- **Fix.** Add `getattr(os, "O_BINARY", 0)` to the `os.open` flags in
+  `event_store/store.py`. Windows-only by construction; on POSIX the term is
+  `0`, so the flag set is byte-identical and Linux behavior is unchanged. No
+  public-API change, no on-disk-format change, no dependency-graph change.
+- **Verification.** Full regression now **306 passing on Windows**
+  (CPython 3.13) — the prior 305 plus one additive Windows regression test
+  (`tests/test_event_store.py::BinaryModeIntegrity`), proven to fail without
+  the fix and pass with it. The Linux 305 baseline is unaffected.
+- **Status.** Module 3 re-frozen as **Module 3.1**. Recommended tag:
+  `v1.0.1`.
+- **Compatibility note.** The fix heals **new** logs only. A log already
+  written in text mode on Windows before this fix remains corrupt and cannot
+  be reopened — this is data migration, not code behavior.
 
 ---
 
@@ -252,8 +287,9 @@ Full per-module public APIs (each package's `__all__`) are in
 - **Additional signing backends.** `SigningBackend` is documented as the
   extension point for future hardware or KMS backends beyond the current
   `EnvironmentHmacBackend`.
-- **Windows runtime validation** of the Module 3 `msvcrt` locking path (see
-  Known assumptions / Supported platforms).
+- **Windows runtime validation** of the Module 3 `msvcrt` locking path —
+  **completed in v1.0.1 / Module 3.1** (see Post-release correction, Known
+  assumptions, and Supported platforms).
 
 Each future module must follow the freeze process and integration rules in
 `DEVELOPMENT_WORKFLOW.md` and `CLAUDE_ONBOARDING.md`: additive-only, no

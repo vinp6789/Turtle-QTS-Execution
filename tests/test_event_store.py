@@ -535,5 +535,45 @@ class WriteIntegrity(unittest.TestCase):
             store2.close()
 
 
+class BinaryModeIntegrity(unittest.TestCase):
+    """Regression for the Module 3.1 critical-defect fix: on Windows the log
+    must be opened with O_BINARY, or the C runtime opens it in text mode and
+    translates 0x0A bytes in the binary record framing to 0x0D 0x0A, silently
+    corrupting the fsync'd log (detected only as CorruptEventStoreError on the
+    next open). On POSIX O_BINARY does not exist and there is no translation,
+    so this test simply passes there too."""
+
+    def test_record_framing_with_newline_bytes_survives_reopen(self):
+        # event_id 10 is 0x00000000_0000000A: its 8-byte big-endian id field
+        # contains a literal 0x0A. If the log were opened in text mode, that
+        # byte would be rewritten to 0x0D 0x0A, changing the bytes the record
+        # checksum was computed over, so reopening would fail. Append well
+        # past id 10 so at least one record deterministically carries a 0x0A.
+        path = _tmp_path()
+        store = EventStore(path)
+        try:
+            for i in range(20):
+                store.append(EventType.HEALTH_ALERT, {"seq": i})
+        finally:
+            store.close()
+
+        # Bytes written must be exactly the bytes on disk -- no insertion.
+        on_disk = path.read_bytes()
+        events_direct, report = read_events(path)
+        self.assertEqual(len(events_direct), 20)
+        self.assertFalse(report.tail_truncated)
+        self.assertEqual(report.discarded_byte_count, 0)
+
+        # And a full reopen must reconstruct every event with no corruption.
+        store2 = EventStore(path)
+        try:
+            self.assertEqual(store2.event_count, 20)
+            self.assertFalse(store2.recovery_report.tail_truncated)
+            self.assertEqual([e.event_id for e in store2.replay()], list(range(1, 21)))
+        finally:
+            store2.close()
+        self.assertEqual(path.read_bytes(), on_disk)  # reopen left bytes intact
+
+
 if __name__ == "__main__":
     unittest.main()

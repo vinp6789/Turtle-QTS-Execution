@@ -30,14 +30,19 @@ elimination.
 |---|---------|-----------|--------|
 | 1 | `config` | `tests/test_config.py` | 22 |
 | 2 | `secrets_boundary` | `tests/test_secrets_boundary.py` | 41 |
-| 3 | `event_store` | `tests/test_event_store.py` | 37 |
+| 3 | `event_store` | `tests/test_event_store.py` | 38 |
 | 4 | `execution_state_machine` | `tests/test_execution_state_machine.py` | 42 |
 | 5 | `exchange_adapter` | `tests/test_exchange_adapter.py` | 41 |
 | 6 | `order_manager` | `tests/test_order_manager.py` | 23 |
 | 7 | `position_manager` | `tests/test_position_manager.py` | 22 |
 | 8 | `portfolio_manager` | `tests/test_portfolio_manager.py` | 21 |
 | 9 | `risk_manager` | `tests/test_risk_manager.py` | 56 |
-| | **Total** | | **305** |
+| | **Total** | | **306** |
+
+Module 3 (`event_store`) is frozen as **Module 3.1** following a critical
+Windows defect correction (v1.0.1); its test count rose 37→38 with a
+binary-framing regression test. Verified 306 passing on Windows (CPython
+3.13); the pre-correction 305 on Linux (CPython 3.12.3) is unchanged.
 
 ## Recommended reading order
 

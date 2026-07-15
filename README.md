@@ -25,10 +25,14 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for source-attested future work.
 
 ## Status
 
-- Regression baseline: **305 tests passing** (plus 5 runtime subtests),
-  verified on CPython 3.12.3.
-- All nine modules frozen; repository reconciled to the approved
-  implementation. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+- Regression baseline: **306 tests** (event_store 38) plus 5 runtime
+  subtests. Verified **306 passing on Windows** (CPython 3.13) after the
+  Module 3.1 correction; the prior **305 passing on Linux** (CPython 3.12.3)
+  is unchanged by the fix (its POSIX open flags are byte-identical).
+- All nine modules frozen; Module 3 re-frozen as **Module 3.1** after a
+  critical Windows defect correction (v1.0.1). See
+  [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) and
+  [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Modules
 
@@ -62,7 +66,8 @@ by elimination. Full API/dependency detail:
 python -m pytest
 ```
 
-Expected: `305 passed, 5 subtests passed`.
+Expected: `306 passed, 5 subtests passed` (Windows; the pre-correction Linux
+baseline was `305 passed, 5 subtests passed`).
 
 ## Repository layout
 
@@ -70,7 +75,7 @@ Expected: `305 passed, 5 subtests passed`.
 config/  secrets_boundary/  event_store/  execution_state_machine/
 exchange_adapter/  order_manager/  position_manager/  portfolio_manager/
 risk_manager/          # the nine frozen modules (one package each)
-tests/                 # one test_*.py per module (305 tests total)
+tests/                 # one test_*.py per module (306 tests total)
 docs/                  # documentation set (start at docs/MASTER_INDEX.md)
 config/example.toml    # sample configuration
 ```
@@ -79,11 +84,12 @@ Full tree: [`docs/REPOSITORY_STRUCTURE.md`](docs/REPOSITORY_STRUCTURE.md).
 
 ## Platform support
 
-- **Linux:** verified (305 passing).
-- **Windows:** portable by design — Module 3 locks via an import-guarded
-  `fcntl` (POSIX) / `msvcrt` (Windows) shim. The `msvcrt` path is
-  code-reviewed but **not runtime-verified** in this environment; validate on
-  a real Windows host before it guards live capital.
+- **Linux:** verified (305 passing, CPython 3.12.3).
+- **Windows:** verified (306 passing, CPython 3.13) after the Module 3.1
+  correction. Module 3 locks via an import-guarded `fcntl` (POSIX) /
+  `msvcrt` (Windows) shim and opens its log with `O_BINARY`; both the
+  `msvcrt` lock path and the binary-open fix are now runtime-exercised on a
+  real Windows host, including a dedicated binary-framing regression test.
 
 ## Documentation
 

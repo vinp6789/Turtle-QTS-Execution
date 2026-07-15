@@ -200,7 +200,16 @@ class EventStore:
         self._lock = threading.Lock()
         self._closed = False
 
-        self._fd = os.open(str(self._path), os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o600)
+        # os.O_BINARY (Windows-only; getattr yields 0 on POSIX, so the flag
+        # set is byte-identical on Linux) prevents the Windows C runtime from
+        # opening the log in text mode and translating 0x0A bytes to 0x0D 0x0A
+        # in binary record framing -- which silently corrupts the fsync'd log
+        # and is detected only as CorruptEventStoreError on the next open.
+        self._fd = os.open(
+            str(self._path),
+            os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0),
+            0o600,
+        )
         try:
             acquire_exclusive_nonblocking(self._fd)
         except OSError as exc:

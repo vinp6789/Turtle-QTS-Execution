@@ -64,7 +64,9 @@ only with explicit authorization. Never self-initiated.
 
 ## 4. Regression process
 
-- Baseline: **305 tests passing** (plus 5 subtests).
+- Baseline: **306 tests passing on Windows** (CPython 3.13) / **305 on
+  Linux** (CPython 3.12.3), plus 5 subtests. The platform delta is the one
+  additive Windows binary-framing regression test added with Module 3.1.
 - Run the **complete** suite after every milestone: `python -m pytest`.
 - Report the pass/fail count and diff against baseline; explain any change.
 - **Never edit a test to make it pass.** Tests are part of the frozen
