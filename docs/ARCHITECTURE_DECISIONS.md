@@ -101,3 +101,22 @@ Frozen modules change only via authorized critical-defect correction; new
 capability is added, not retrofitted by rewrite. *Evidence:* the Module 3
 reconciliation was a minimal additive shim with no public-API change; see
 `DEVELOPMENT_WORKFLOW.md`.
+
+## AD-19: Internal authorization and exchange-native authentication are separate secret domains
+`SecretsConfig.wallet_key_ref` is a dedicated, optional reference for a
+venue wallet-signing key (e.g. EIP-712/secp256k1), kept distinct from
+`signing_key_ref` rather than reused or left outside the validated config
+schema. *Evidence:* `config/schema.py` (`SecretsConfig` docstring and
+field), `config/loader.py` (`_validate_secrets`,
+`TURTLE_EXEC_WALLET_KEY_REF` override). *Rationale (ADR-20/ADR-21,
+this session):* a signature's contract is defined by its verifier; Turtle's
+`SigningBoundary.sign()` unconditionally binds every signature to a
+Turtle-internal, domain-separated preimage (`secrets_boundary/domain.py`),
+which is a different and incompatible contract from an exchange verifying
+its own native signature format. Reusing one key reference for both would
+be cross-primitive key reuse with coupled rotation of a capital-moving
+secret; this AD keeps the two domains structurally separate at the
+configuration layer. This is an authorized additive evolution of a frozen
+module (Module 1, re-frozen as Module 1.1) under a distinct authorization
+category from AD-18's critical-defect exception -- see
+`DEVELOPMENT_WORKFLOW.md`.

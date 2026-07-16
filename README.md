@@ -25,14 +25,17 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for source-attested future work.
 
 ## Status
 
-- Regression baseline: **306 tests** (event_store 38) plus 5 runtime
-  subtests. Verified **306 passing on Windows** (CPython 3.13) after the
-  Module 3.1 correction; the prior **305 passing on Linux** (CPython 3.12.3)
-  is unchanged by the fix (its POSIX open flags are byte-identical).
+- Regression baseline: **319 tests** (config 35, event_store 38) plus 5
+  runtime subtests. Verified **319 passing on Windows** (CPython 3.13)
+  after the Module 1.1 evolution; the Linux baseline, last directly
+  verified at **305 passing** (CPython 3.12.3) as of Module 3.1, is
+  expected at 318 by the same platform-neutral delta but was not
+  independently re-run on Linux this session.
 - All nine modules frozen; Module 3 re-frozen as **Module 3.1** after a
-  critical Windows defect correction (v1.0.1). See
-  [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) and
-  [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+  critical Windows defect correction (v1.0.1), and Module 1 re-frozen as
+  **Module 1.1** after an additive evolution (v1.1.0, optional
+  `wallet_key_ref`). See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
+  and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Modules
 
@@ -66,8 +69,9 @@ by elimination. Full API/dependency detail:
 python -m pytest
 ```
 
-Expected: `306 passed, 5 subtests passed` (Windows; the pre-correction Linux
-baseline was `305 passed, 5 subtests passed`).
+Expected: `319 passed, 5 subtests passed` (Windows, current; Linux was last
+directly verified at `305 passed, 5 subtests passed` as of Module 3.1 and is
+expected at 318, not independently re-run this session).
 
 ## Repository layout
 
@@ -75,7 +79,7 @@ baseline was `305 passed, 5 subtests passed`).
 config/  secrets_boundary/  event_store/  execution_state_machine/
 exchange_adapter/  order_manager/  position_manager/  portfolio_manager/
 risk_manager/          # the nine frozen modules (one package each)
-tests/                 # one test_*.py per module (306 tests total)
+tests/                 # one test_*.py per module, two for config (319 tests total)
 docs/                  # documentation set (start at docs/MASTER_INDEX.md)
 config/example.toml    # sample configuration
 ```
@@ -84,11 +88,13 @@ Full tree: [`docs/REPOSITORY_STRUCTURE.md`](docs/REPOSITORY_STRUCTURE.md).
 
 ## Platform support
 
-- **Linux:** verified (305 passing, CPython 3.12.3).
-- **Windows:** verified (306 passing, CPython 3.13) after the Module 3.1
-  correction. Module 3 locks via an import-guarded `fcntl` (POSIX) /
+- **Linux:** last directly verified at 305 passing (CPython 3.12.3) as of
+  Module 3.1; expected at 318 after Module 1.1's platform-neutral
+  additions, not independently re-run this session.
+- **Windows:** verified (319 passing, CPython 3.13) after the Module 1.1
+  evolution. Module 3 locks via an import-guarded `fcntl` (POSIX) /
   `msvcrt` (Windows) shim and opens its log with `O_BINARY`; both the
-  `msvcrt` lock path and the binary-open fix are now runtime-exercised on a
+  `msvcrt` lock path and the binary-open fix remain runtime-exercised on a
   real Windows host, including a dedicated binary-framing regression test.
 
 ## Documentation

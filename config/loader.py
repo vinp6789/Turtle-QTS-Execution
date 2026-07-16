@@ -39,6 +39,7 @@ from .schema import (
 _ENV_MODE_OVERRIDE = "TURTLE_EXEC_MODE"
 _ENV_SIGNING_KEY_REF_OVERRIDE = "TURTLE_EXEC_SIGNING_KEY_REF"
 _ENV_TELEGRAM_TOKEN_REF_OVERRIDE = "TURTLE_EXEC_TELEGRAM_BOT_TOKEN_REF"
+_ENV_WALLET_KEY_REF_OVERRIDE = "TURTLE_EXEC_WALLET_KEY_REF"
 
 _RAW_HEX_KEY_PATTERN = re.compile(r"^0x[0-9a-fA-F]{64}$")
 _MAX_PLAUSIBLE_REF_LENGTH = 100
@@ -83,6 +84,8 @@ def _apply_env_overrides(raw: dict, env: Mapping[str, str]) -> dict:
         raw["secrets"] = {**raw.get("secrets", {}), "signing_key_ref": env[_ENV_SIGNING_KEY_REF_OVERRIDE]}
     if _ENV_TELEGRAM_TOKEN_REF_OVERRIDE in env:
         raw["secrets"] = {**raw.get("secrets", {}), "telegram_bot_token_ref": env[_ENV_TELEGRAM_TOKEN_REF_OVERRIDE]}
+    if _ENV_WALLET_KEY_REF_OVERRIDE in env:
+        raw["secrets"] = {**raw.get("secrets", {}), "wallet_key_ref": env[_ENV_WALLET_KEY_REF_OVERRIDE]}
     return raw
 
 
@@ -278,6 +281,21 @@ def _validate_secrets(raw: dict, issues: list) -> None:
                 "later by the Secrets/Signing Boundary -- never the secret itself."
             )
 
+    # Optional: a venue wallet-signing key reference, kept as a separate
+    # secret domain from signing_key_ref (see ADR-20/ADR-21). Absent means no
+    # wallet-signing venue is configured; if present it is validated
+    # identically to the required refs above.
+    wallet_key_ref = section.get("wallet_key_ref")
+    if wallet_key_ref is not None:
+        if not isinstance(wallet_key_ref, str) or not wallet_key_ref.strip():
+            issues.append("secrets.wallet_key_ref: must be a non-empty string reference if provided")
+        elif _looks_like_raw_secret(wallet_key_ref):
+            issues.append(
+                "secrets.wallet_key_ref: value looks like raw key material, not a reference "
+                "name. The Configuration System must only ever hold references resolved "
+                "later by the Secrets/Signing Boundary -- never the secret itself."
+            )
+
 
 def _validate_telegram(raw: dict, issues: list) -> None:
     section = raw.get("telegram")
@@ -377,6 +395,7 @@ def _build(raw: dict) -> EngineConfig:
         secrets=SecretsConfig(
             signing_key_ref=secrets_section["signing_key_ref"],
             telegram_bot_token_ref=secrets_section["telegram_bot_token_ref"],
+            wallet_key_ref=secrets_section.get("wallet_key_ref"),
         ),
         telegram=TelegramConfig(
             enabled=bool(telegram_section["enabled"]),

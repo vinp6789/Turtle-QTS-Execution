@@ -8,7 +8,7 @@ lifetime of the process -- every field is frozen.
 """
 
 from dataclasses import dataclass
-from typing import Mapping, Tuple
+from typing import Mapping, Optional, Tuple
 
 # Exchanges with an implemented, production Exchange Adapter. Selecting a
 # name outside this set must fail configuration loading -- an unimplemented
@@ -80,10 +80,16 @@ class OperationalConfig:
 class SecretsConfig:
     """Holds only named references to secrets, never secret material itself.
     Resolved by the Secrets/Signing Boundary module, which is the only
-    module permitted to read the actual key/token bytes."""
+    module permitted to read the actual key/token bytes.
+
+    wallet_key_ref is optional and distinct from signing_key_ref: it names a
+    venue wallet-signing key (e.g. for EIP-712/secp256k1 exchange
+    authentication) as its own secret domain, separate from Turtle-internal
+    authorization signing. None means no wallet-signing venue is configured."""
 
     signing_key_ref: str
     telegram_bot_token_ref: str
+    wallet_key_ref: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -28,7 +28,7 @@ elimination.
 
 | # | Package | Test file | # Tests |
 |---|---------|-----------|--------|
-| 1 | `config` | `tests/test_config.py` | 22 |
+| 1 | `config` | `tests/test_config.py`, `tests/test_config_wallet_ref.py` | 35 |
 | 2 | `secrets_boundary` | `tests/test_secrets_boundary.py` | 41 |
 | 3 | `event_store` | `tests/test_event_store.py` | 38 |
 | 4 | `execution_state_machine` | `tests/test_execution_state_machine.py` | 42 |
@@ -37,12 +37,16 @@ elimination.
 | 7 | `position_manager` | `tests/test_position_manager.py` | 22 |
 | 8 | `portfolio_manager` | `tests/test_portfolio_manager.py` | 21 |
 | 9 | `risk_manager` | `tests/test_risk_manager.py` | 56 |
-| | **Total** | | **306** |
+| | **Total** | | **319** |
 
 Module 3 (`event_store`) is frozen as **Module 3.1** following a critical
 Windows defect correction (v1.0.1); its test count rose 37→38 with a
-binary-framing regression test. Verified 306 passing on Windows (CPython
-3.13); the pre-correction 305 on Linux (CPython 3.12.3) is unchanged.
+binary-framing regression test. Module 1 (`config`) is frozen as
+**Module 1.1** following an additive evolution (v1.1.0, optional
+`wallet_key_ref`); its test count rose 22→35 with a new test file,
+`tests/test_config_wallet_ref.py` (13 tests). Verified 319 passing on
+Windows (CPython 3.13); the Linux baseline is expected at 318 by the same
+platform-neutral delta but was not independently re-run this session.
 
 ## Recommended reading order
 

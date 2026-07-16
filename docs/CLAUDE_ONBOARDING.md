@@ -59,10 +59,12 @@ Treat those symbols as stable interfaces.
 
 ## 5. Regression policy
 
-- The regression baseline is **306 tests passing on Windows** (CPython 3.13)
-  / **305 on Linux** (CPython 3.12.3), plus 5 subtests. The platform delta is
-  the one additive Windows binary-framing regression test added with Module
-  3.1.
+- The regression baseline is **319 tests passing on Windows** (CPython
+  3.13, current), plus 5 subtests. Linux was last directly verified at 305
+  (CPython 3.12.3, as of Module 3.1) and is expected at 318 after Module
+  1.1's 13 platform-neutral tests, but this was not independently re-run on
+  Linux this session. The one Windows-only test (Module 3.1) is the sole
+  platform delta beyond that expected +13.
 - Run the **complete** suite after any change: `python -m pytest`.
 - Report any change in pass count, and explain any regression.
 - Do not modify tests to make them pass. Tests are part of the frozen

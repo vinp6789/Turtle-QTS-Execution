@@ -12,7 +12,7 @@ are asserted (none are verifiable in the source).
 The Turtle Execution Engine v1.0 is the first stable release of a
 crash-safe, event-sourced execution core for a crypto trading strategy. It
 comprises nine frozen modules wired into a strict acyclic dependency graph
-and backed by **306 passing tests** (Windows; 305 on the pre-correction
+and backed by **319 passing tests** (Windows, current; 305 on the original
 Linux baseline). It is built on the Python standard
 library alone, records all state transitions durably through an append-only
 event store with an idempotency ledger, and confines all signing to a
@@ -20,8 +20,9 @@ secrets boundary that never exposes raw key material. This release provides
 the safety and bookkeeping substrate for live execution; it does **not**
 itself connect to a live exchange (only an in-memory mock adapter exists)
 and contains no top-level orchestration loop. It is verified on Linux
-(305 passing) and, following the Module 3.1 correction described under
-"Post-release correction" below, verified on Windows as well (306 passing).
+(305 passing at v1.0) and, following the Module 3.1 correction and Module
+1.1 evolution described under "Post-release correction" and "Post-release
+addition" below, verified on Windows as well (319 passing, current).
 
 ---
 
@@ -257,6 +258,45 @@ full-regression → audit → re-freeze). It is additive and confined to
 - **Compatibility note.** The fix heals **new** logs only. A log already
   written in text mode on Windows before this fix remains corrupt and cannot
   be reopened — this is data migration, not code behavior.
+
+---
+
+## Post-release addition — v1.1.0 (Module 1.1, config)
+
+One additive capability was added after v1.0.1, under an explicit
+authorization distinct from the critical-defect exception (this is new
+capability, not a defect correction) -- see ADR-20 and ADR-21. It is
+additive and confined to `config`.
+
+- **Addition.** `SecretsConfig` gains an optional `wallet_key_ref` field
+  (default `None`), naming a venue wallet-signing key (e.g. EIP-712/
+  secp256k1 exchange authentication) as a secret domain kept separate from
+  the existing `signing_key_ref`. ADR-20 determined that Turtle-internal
+  authorization signing and exchange-native authentication must remain
+  separate security domains; ADR-21 determined the separation should be a
+  dedicated config reference (not reuse of `signing_key_ref`, and not a
+  reference left outside the validated schema, which would bypass the
+  engine's only defense against a raw key pasted into config).
+- **Validation and override.** Validated identically to the existing two
+  refs when present (non-empty string; rejected if it looks like raw key
+  material). An optional `TURTLE_EXEC_WALLET_KEY_REF` environment override
+  follows the existing override pattern exactly, and the override value is
+  still fully validated.
+- **Verification.** Full regression now **319 passing on Windows**
+  (CPython 3.13) — the prior 306 plus 13 additive tests in a new file,
+  `tests/test_config_wallet_ref.py`; zero failures. `tests/test_config.py`
+  (frozen) untouched. Backward compatibility verified empirically: old
+  2-argument `SecretsConfig` construction, the unmodified shipped
+  `example.toml`, equality, and frozen-instance semantics all confirmed
+  intact. Public API (`config.__all__`) identical (13 names) -- one
+  optional field on an existing exported type, not a new export.
+  Dependency graph unchanged and acyclic.
+- **Status.** Module 1 re-frozen as **Module 1.1**. Recommended tag:
+  `v1.1.0` (a minor version, since this adds backward-compatible capability
+  rather than fixing a defect).
+- **Known limitation.** Module 1 does not enforce `wallet_key_ref !=
+  signing_key_ref`; the two-key separation is representable, not enforced.
+  Enforcement belongs to a future signing module and remains open.
 
 ---
 

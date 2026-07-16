@@ -6,6 +6,49 @@ development is not itemized here. No calendar dates are asserted (none are
 verifiable in the source). Entries record only facts observable in the
 repository and in this session's verified work.
 
+## v1.1.0 — additive evolution (Module 1.1, config)
+
+### Added
+- **Optional `wallet_key_ref` on `SecretsConfig`.** Names a venue
+  wallet-signing key (e.g. EIP-712/secp256k1 exchange authentication) as a
+  secret domain separate from the existing `signing_key_ref`, per ADR-20
+  (Turtle-internal authorization vs. exchange-native authentication are
+  separate security domains) and ADR-21 (a dedicated ref, not reuse of
+  `signing_key_ref`, and not a ref left outside the validated config
+  schema). Defaults to `None`; absent means no wallet-signing venue is
+  configured.
+- Validated identically to the existing two refs (non-empty string,
+  rejected if it looks like raw key material via the existing
+  `_looks_like_raw_secret` guard), but only when present.
+- Optional environment override `TURTLE_EXEC_WALLET_KEY_REF`, following the
+  existing `TURTLE_EXEC_SIGNING_KEY_REF` / `TURTLE_EXEC_TELEGRAM_BOT_TOKEN_REF`
+  pattern exactly; the override value is still fully validated.
+- New test file `tests/test_config_wallet_ref.py` (13 tests): absence
+  defaults to `None`, valid refs load, malformed/empty/raw-hex/oversized/
+  non-string values are rejected, `SecretsConfig` remains frozen, and the
+  env override sets, replaces, is still validated, and is a no-op when unset.
+
+### Verified
+- Full regression: **319 tests passing on Windows** (CPython 3.13) — the
+  prior 306 plus 13 additive tests; zero failures. `tests/test_config.py`
+  (frozen) unmodified and unaffected. Linux baseline is expected to rise by
+  the same platform-neutral +13 (to 318) but was not independently re-run
+  on Linux this session.
+- Backward compatibility verified empirically: pre-existing 2-argument
+  `SecretsConfig` construction (positional and keyword) still works; the
+  unmodified shipped `example.toml` still loads with `wallet_key_ref is
+  None`; equality and frozen-instance semantics unchanged.
+- Public API surface (`config.__all__`) identical before and after (13
+  names) -- `SecretsConfig` gains an optional field, not a new export.
+  Dependency graph unchanged and acyclic; no new import.
+
+### Scope
+- Additive evolution of a frozen module under an explicit authorization
+  distinct from the critical-defect exception (this is new capability, not
+  a defect correction) -- see ADR-20 and ADR-21. Confined to
+  `config/schema.py`, `config/loader.py`, and one new test file. No other
+  module touched. Module 1 re-frozen as Module 1.1.
+
 ## v1.0.1 — critical defect correction (Module 3.1, event_store)
 
 ### Fixed

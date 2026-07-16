@@ -53,6 +53,9 @@ data_staleness_position_ms = 10000
 [secrets]
 signing_key_ref = "hyperliquid_signing_key_v1"
 telegram_bot_token_ref = "telegram_bot_token_v1"
+# wallet_key_ref = "hyperliquid_wallet_key_v1"  # optional; a venue wallet-signing
+#   key reference (e.g. EIP-712/secp256k1), kept as a separate secret domain from
+#   signing_key_ref (see ADR-20/ADR-21). Omit if no wallet-signing venue is used.
 
 [telegram]
 enabled = true

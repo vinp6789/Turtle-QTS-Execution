@@ -7,10 +7,11 @@ dates are asserted (the repository contains no verifiable dates).
 ## Architecture Version
 
 **1.0** (no version identifier is otherwise defined anywhere in the
-repository; per instruction, 1.0 is used). The current release is **v1.0.1**,
-a critical Windows defect correction to Module 3 (re-frozen as Module 3.1);
-the architecture version is unchanged because the correction adds no module,
-edge, or interface.
+repository; per instruction, 1.0 is used). The current release is **v1.1.0**:
+v1.0.1 was a critical Windows defect correction to Module 3 (re-frozen as
+Module 3.1); v1.1.0 is an additive evolution of Module 1 (re-frozen as
+Module 1.1, optional `wallet_key_ref`). The architecture version is
+unchanged because neither adds a module, edge, or `__all__` entry.
 
 ## Frozen Modules
 
@@ -18,7 +19,7 @@ Modules 1–9, all FROZEN:
 
 | # | Package |
 |---|---------|
-| 1 | `config` |
+| 1 | `config` (frozen as **Module 1.1**) |
 | 2 | `secrets_boundary` |
 | 3 | `event_store` (frozen as **Module 3.1**) |
 | 4 | `execution_state_machine` |
@@ -30,15 +31,18 @@ Modules 1–9, all FROZEN:
 
 ## Regression baseline
 
-- **306 tests collected** (`--collect-only` reports 306). Verified **306
-  passing on Windows** (CPython 3.13) after the Module 3.1 correction; the
-  pre-correction **305 passing on Linux** (CPython 3.12.3, pytest 9.1.1)
-  is unchanged by the fix, whose POSIX open flags are byte-identical.
-- The +1 over 305 is one additive Windows regression test
-  (`tests/test_event_store.py::BinaryModeIntegrity`).
+- **319 tests collected.** Verified **319 passing on Windows** (CPython
+  3.13) after the Module 1.1 evolution. The Linux baseline, last directly
+  verified at **305 passing** (CPython 3.12.3, pytest 9.1.1) as of Module
+  3.1, is expected to rise to 318 by the same platform-neutral delta but
+  was not independently re-run on Linux this session.
+- The count rose 305→306 with one additive Windows-only regression test
+  (`tests/test_event_store.py::BinaryModeIntegrity`, Module 3.1), then
+  306→319 with 13 additive, platform-neutral tests in a new file
+  (`tests/test_config_wallet_ref.py`, Module 1.1).
 - The 5 subtests originate from one `self.subTest` loop in
   `tests/test_secrets_boundary.py`.
-- Per-package counts: config 22, secrets_boundary 41, event_store 38,
+- Per-package counts: config 35, secrets_boundary 41, event_store 38,
   execution_state_machine 42, exchange_adapter 41, order_manager 23,
   position_manager 22, portfolio_manager 21, risk_manager 56.
 
@@ -60,11 +64,15 @@ Modules 1–9, all FROZEN:
   (Windows); `store.py` locks only through that shim and opens its log with
   `O_BINARY` (Windows-only; a no-op on POSIX), so the module works and is
   verified on both platforms.
-- **Both platforms verified.** The suite passes 305 on Linux/CPython 3.12.3
-  and 306 on Windows/CPython 3.13 (the +1 being the binary-framing
-  regression test). The POSIX branch issues the identical `fcntl.flock`
-  calls as before; the Windows `msvcrt` lock path and the `O_BINARY`
-  binary-open fix are now runtime-exercised on a real Windows host.
+- **Both platforms verified as of Module 3.1; Windows current at Module
+  1.1.** The suite passed 305 on Linux/CPython 3.12.3 and 306 on
+  Windows/CPython 3.13 as of Module 3.1 (the +1 being the binary-framing
+  regression test). It now passes 319 on Windows after Module 1.1's 13
+  additive, platform-neutral tests; the Linux count is expected at 318 by
+  the same delta but was not independently re-run this session. The POSIX
+  branch issues the identical `fcntl.flock` calls as before; the Windows
+  `msvcrt` lock path and the `O_BINARY` binary-open fix remain
+  runtime-exercised on a real Windows host.
 - **Dependency footprint:** Python standard library only; no third-party
   runtime dependency. `pytest` is the runner; tests are `unittest`-based.
 
@@ -78,8 +86,9 @@ Modules 1–9, all FROZEN:
 
 - **Not declared in the repository.** The uploaded source contains no
   "last verified module" marker, changelog, or version file. All nine
-  modules' tests pass (305 on Linux, 306 on Windows), so no single module is
-  distinguished as most-recently-verified by any repository field.
+  modules' tests pass (319 on Windows, current; 305 on Linux as of the last
+  Linux run at Module 3.1), so no single module is distinguished as
+  most-recently-verified by any repository field.
 - Stated as unknown rather than guessed. (Prior-session activity is
   deliberately not used here, per the "do not rely on previous chat
   memory" instruction.)
