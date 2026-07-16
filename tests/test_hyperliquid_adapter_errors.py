@@ -149,6 +149,10 @@ class PackageSurface(unittest.TestCase):
                 "map_request_error",
                 "map_order_status_error",
                 "map_unknown_oid",
+                "DEFAULT_BASE_URL",
+                "HttpResponse",
+                "TransportFn",
+                "post_json",
             ]),
         )
 

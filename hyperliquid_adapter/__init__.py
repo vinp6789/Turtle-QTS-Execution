@@ -10,8 +10,8 @@ business logic: it never decides whether, when, or how much to trade.
 Depends only on lower-numbered frozen modules: exchange_adapter (5) and,
 once the adapter class lands, secrets_boundary (2).
 
-Build state: capability declaration and venue error mapping only. The
-adapter class, codec, transport, and signing are not present yet.
+Build state: capability declaration, venue error mapping, and REST
+transport only. The adapter class, codec, and signing are not present yet.
 
 Public API:
     DEFAULT_HYPERLIQUID_CAPABILITIES -- vetted default capability set
@@ -20,6 +20,10 @@ Public API:
     map_request_error    -- whole-request {"status":"err"} -> closed hierarchy
     map_order_status_error -- single-order {"error":...} -> closed hierarchy
     map_unknown_oid       -- orderStatus unknownOid -> OrderUnknownError
+    DEFAULT_BASE_URL      -- Hyperliquid's documented REST base URL
+    HttpResponse          -- (status_code, body) of a successful transport call
+    TransportFn           -- the injectable transport seam's callable type
+    post_json             -- stdlib-urllib JSON POST; the default TransportFn
 """
 
 from .capabilities import DEFAULT_HYPERLIQUID_CAPABILITIES
@@ -30,6 +34,7 @@ from .errors import (
     map_request_error,
     map_unknown_oid,
 )
+from .transport import DEFAULT_BASE_URL, HttpResponse, TransportFn, post_json
 
 __all__ = [
     "DEFAULT_HYPERLIQUID_CAPABILITIES",
@@ -38,4 +43,8 @@ __all__ = [
     "map_request_error",
     "map_order_status_error",
     "map_unknown_oid",
+    "DEFAULT_BASE_URL",
+    "HttpResponse",
+    "TransportFn",
+    "post_json",
 ]
