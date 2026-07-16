@@ -75,8 +75,12 @@ class CapabilityValues(unittest.TestCase):
 
 
 class PackageSurface(unittest.TestCase):
-    def test_all_declares_exactly_the_public_names(self):
-        self.assertEqual(hyperliquid_adapter.__all__, ["DEFAULT_HYPERLIQUID_CAPABILITIES"])
+    def test_capabilities_constant_is_declared_in_all(self):
+        # The full, exact __all__ contents are asserted in
+        # tests/test_hyperliquid_adapter_errors.py, which is updated as
+        # later work packages add exports; this file only checks WP-1's
+        # own deliverable remains present.
+        self.assertIn("DEFAULT_HYPERLIQUID_CAPABILITIES", hyperliquid_adapter.__all__)
 
     def test_every_all_name_resolves(self):
         for name in hyperliquid_adapter.__all__:

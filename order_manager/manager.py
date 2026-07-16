@@ -638,9 +638,12 @@ class OrderManager:
             if existing is None:
                 raise OrderNotFoundError(f"no order tracked with client_order_id={client_order_id!r}")
             if existing.exchange_order_id is None:
-                match = next(
-                    (o for o in self._adapter.get_orders() if o.client_order_id == client_order_id), None
+                request = OrderRequest(
+                    client_order_id=existing.client_order_id, symbol=existing.symbol, side=existing.side,
+                    order_type=existing.order_type, quantity=existing.quantity, limit_price=existing.limit_price,
+                    time_in_force=existing.time_in_force, reduce_only=existing.reduce_only,
                 )
+                match = self._adapter.find_order(request)
                 if match is None:
                     return existing  # still unresolved; caller decides next step
                 return self._ingest_status(client_order_id, match.status, match.exchange_order_id)

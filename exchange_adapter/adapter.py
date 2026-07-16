@@ -143,6 +143,27 @@ class ExchangeAdapter(ABC):
     @abstractmethod
     def reconcile(self, local_positions: Tuple[Position, ...]) -> ReconciliationReport: ...
 
+    # -- attribution: concrete, overridable, strictly read-only --
+
+    def find_order(self, request: OrderRequest) -> Optional[Order]:
+        """Recompute which venue order (if any) corresponds to `request`,
+        using exactly the information the adapter had when the order was
+        placed. Never transmits anything and never mutates adapter state.
+
+        Default implementation scans get_orders() for a matching
+        client_order_id -- correct for any venue that echoes the client id
+        back unchanged. A concrete adapter for a venue whose order
+        identifier cannot be derived from client_order_id alone (e.g. one
+        requiring the full order parameters to recompute a venue-native
+        token) overrides this method; it still receives everything
+        get_orders() would have needed plus the caller's original request.
+
+        Returns None if no corresponding order is found -- this is the
+        expected outcome when the order never reached the venue, not an
+        error condition.
+        """
+        return next((o for o in self.get_orders() if o.client_order_id == request.client_order_id), None)
+
     # -- mutations: concrete template methods, audit + idempotency enforced here --
 
     def place_order(self, request: OrderRequest) -> Order:
