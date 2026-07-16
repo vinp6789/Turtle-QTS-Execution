@@ -143,6 +143,7 @@ class PackageSurface(unittest.TestCase):
         self.assertEqual(
             sorted(hyperliquid_adapter.__all__),
             sorted([
+                "HyperliquidAdapter",
                 "DEFAULT_HYPERLIQUID_CAPABILITIES",
                 "is_authentication_failure_message",
                 "map_http_error",

@@ -7,13 +7,18 @@ into Module 5's closed error hierarchy, and venue request signing (via
 Module 2's SigningBoundary only -- never raw key material). It owns no
 business logic: it never decides whether, when, or how much to trade.
 
-Depends only on lower-numbered frozen modules: exchange_adapter (5) and,
-once the adapter class lands, secrets_boundary (2).
+Depends only on lower-numbered frozen modules: exchange_adapter (5) and
+secrets_boundary (2).
 
-Build state: capability declaration, venue error mapping, and REST
-transport only. The adapter class, codec, and signing are not present yet.
+Build state: WP-5, read-only. HyperliquidAdapter implements all 11
+abstract read/lifecycle methods against the public /info endpoint (no
+authentication). The four mutation hooks are fail-closed: no signing
+capability exists yet (deferred to a future, separately-authorized work
+package). See adapter.py's module docstring for the full read-only-build
+rationale.
 
 Public API:
+    HyperliquidAdapter   -- concrete ExchangeAdapter; read-only in this build
     DEFAULT_HYPERLIQUID_CAPABILITIES -- vetted default capability set
     is_authentication_failure_message -- detects Hyperliquid's auth-failure text
     map_http_error       -- HTTP-level failure -> closed hierarchy
@@ -26,6 +31,7 @@ Public API:
     post_json             -- stdlib-urllib JSON POST; the default TransportFn
 """
 
+from .adapter import HyperliquidAdapter
 from .capabilities import DEFAULT_HYPERLIQUID_CAPABILITIES
 from .errors import (
     is_authentication_failure_message,
@@ -37,6 +43,7 @@ from .errors import (
 from .transport import DEFAULT_BASE_URL, HttpResponse, TransportFn, post_json
 
 __all__ = [
+    "HyperliquidAdapter",
     "DEFAULT_HYPERLIQUID_CAPABILITIES",
     "is_authentication_failure_message",
     "map_http_error",
