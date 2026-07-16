@@ -150,12 +150,14 @@ Full per-module public APIs (each package's `__all__`) are in
 
 ## Regression baseline
 
-- **306 tests** (plus 5 runtime subtests from one `self.subTest`
-  loop in `tests/test_secrets_boundary.py`). Verified **306 passing on
-  Windows** (CPython 3.13) after the v1.0.1 / Module 3.1 correction; the
-  original v1.0 baseline was **305 passing on Linux** (CPython 3.12.3,
-  pytest 9.1.1), unchanged by the fix.
-- Per package: `config` 22, `secrets_boundary` 41, `event_store` 38,
+- **319 tests** (plus 5 runtime subtests from one `self.subTest`
+  loop in `tests/test_secrets_boundary.py`). Verified **319 passing on
+  Windows** (CPython 3.13, current) after the v1.1.0 / Module 1.1 evolution
+  (306 after v1.0.1 / Module 3.1, +13 for Module 1.1); the original v1.0
+  baseline was **305 passing on Linux** (CPython 3.12.3, pytest 9.1.1),
+  expected at 318 by the same platform-neutral delta but not independently
+  re-run this session.
+- Per package: `config` 35, `secrets_boundary` 41, `event_store` 38,
   `execution_state_machine` 42, `exchange_adapter` 41, `order_manager` 23,
   `position_manager` 22, `portfolio_manager` 21, `risk_manager` 56.
 - One test file per package; no test file is shared across modules.
@@ -203,13 +205,16 @@ Full per-module public APIs (each package's `__all__`) are in
 
 ## Supported platforms
 
-- **Linux — verified.** Full suite (305) passes on Linux/CPython 3.12.3.
-- **Windows — verified (v1.0.1 / Module 3.1).** The full suite passes on a
-  real Windows host (306 on CPython 3.13), exercising both the `fcntl`/
-  `msvcrt` lock shim and the `O_BINARY` binary-open fix, plus a dedicated
-  binary-framing regression test. The previously recommended Windows
-  validation run is complete; the `msvcrt` locking path and binary log
-  writes are runtime-verified.
+- **Linux — last directly verified at v1.0.1.** Full suite (305) passed on
+  Linux/CPython 3.12.3 as of Module 3.1; expected at 318 after Module 1.1's
+  platform-neutral additions, not independently re-run this session.
+- **Windows — verified (v1.1.0 / Module 1.1, current).** The full suite
+  passes on a real Windows host (319 on CPython 3.13), exercising the
+  `fcntl`/`msvcrt` lock shim, the `O_BINARY` binary-open fix, a dedicated
+  binary-framing regression test, and the Module 1.1 `wallet_key_ref`
+  tests. The previously recommended Windows validation run (Module 3.1) is
+  complete; the `msvcrt` locking path and binary log writes are
+  runtime-verified.
 - **Python:** 3.11+ (inferred from `tomllib` usage); verified on CPython
   3.12.3 (Linux) and CPython 3.13 (Windows).
 
