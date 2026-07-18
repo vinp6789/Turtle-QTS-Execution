@@ -1,0 +1,20 @@
+# Turtle Execution Engine -- runtime dependencies.
+#
+# Modules 1-9 (the frozen core) and the Hyperliquid adapter's READ-ONLY
+# path are Python standard library ONLY and require nothing here. The
+# single third-party dependency below is needed exclusively by the
+# Hyperliquid venue-signing path (hyperliquid_adapter/signing.py), which
+# produces the secp256k1 / EIP-712 signatures Hyperliquid's /exchange
+# endpoint requires -- primitives the standard library does not provide
+# (no keccak256, no secp256k1). It is imported lazily, so the frozen core
+# and the read-only adapter import and run without it installed.
+#
+# Approved WP-6/7 (Option 1); supersedes the stdlib-only footprint (AD-17)
+# for the venue-signing path only.
+eth-account>=0.13.5
+
+# msgpack (WP-8): serializes Hyperliquid /exchange actions before hashing,
+# so the connectionId the phantom-agent signature is taken over matches the
+# bytes the venue re-computes. Mutation-path only; imported lazily, so the
+# frozen core and the read-only adapter import and run without it.
+msgpack>=1.0.0

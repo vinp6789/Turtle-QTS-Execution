@@ -1,4 +1,4 @@
-"""Hyperliquid JSON <-> Module 5 typed-model translation (Module 10, WP-5).
+"""Hyperliquid JSON <-> Module 5 typed-model translation (Module 10, M1).
 
 Pure functions only: no network, no signing, no state. Every money/
 quantity field is parsed through Decimal (never float) before crossing
@@ -9,19 +9,16 @@ GitBook docs and the hyperliquid-python-sdk during this work package):
   clearinghouseState, allMids, openOrders/frontendOpenOrders, userFills,
   orderStatus, metaAndAssetCtxs.
 
-KNOWN LIMITATION (deliberate, matches ADR-25's own accepted deferral of
-the identical problem for Fill attribution): Order.client_order_id and
-Fill.client_order_id are REQUIRED (non-optional) on the frozen models,
-but Hyperliquid's bulk read endpoints do not reliably echo the client
-order id (cloid) back -- the official SDK's own Fill type has no cloid
-field at all, and the documented openOrders/frontendOpenOrders examples
-show none either, despite some secondary sources claiming otherwise. This
-codec therefore FILTERS bulk order/fill reads to entries that carry a
-non-null cloid, rather than fabricating an id. This is Option 8 from
-ADR-23's option table (filter unattributed entries), already evaluated
-and not rejected, applied consistently here and to Fill reads. Single-
-order attribution (find_order, orderStatus by oid) is unaffected since it
-never needs to invent an id -- the caller already supplies it.
+ATTRIBUTION (M1 / invariant catalogue): Order.client_order_id and
+Fill.client_order_id on the frozen models always carry the ENGINE's id,
+never a venue token (INV-1). The venue returns only its cloid, so every
+order/fill parser takes a `resolve` callable (venue token -> engine id,
+or None) supplied by the adapter's durable OrderIdMapping. Entries whose
+token does not resolve -- foreign orders, orders from another engine, or
+entries carrying no cloid at all -- are EXCLUDED, never mislabeled and
+never given a fabricated id (INV-3, INV-4). Exclusion is the deliberate
+safe direction: returning fewer entries than the venue holds can only
+under-report, never mis-attribute.
 
 ASSUMPTION (flagged, not independently verified): orderStatus's nested
 order object is assumed to share openOrders/frontendOpenOrders' field
@@ -34,7 +31,10 @@ hierarchy error rather than silently fabricating a model.
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
+
+# venue token -> engine client_order_id, or None when unattributable.
+Resolver = Callable[[str], Optional[str]]
 
 from exchange_adapter import (
     Balance,
@@ -165,15 +165,21 @@ def parse_balances(clearinghouse_state_body: dict) -> Tuple[Balance, ...]:
     return (Balance(asset=Symbol("USDC"), total=total, available=available, reserved=reserved),)
 
 
-def parse_open_orders(frontend_open_orders_body: list) -> Tuple[Order, ...]:
-    """Filters to entries carrying a non-null cloid -- see module
-    docstring. Uses frontendOpenOrders (not plain openOrders) since it
-    additionally carries origSz/reduceOnly, needed to populate
-    filled_quantity and reduce_only correctly."""
+def parse_open_orders(frontend_open_orders_body: list, resolve: Resolver) -> Tuple[Order, ...]:
+    """Returns only engine-owned orders (INV-3): each entry's cloid must
+    resolve to an engine client_order_id via `resolve`, and the returned
+    Order carries that engine id (INV-1) -- never the venue token.
+    Unresolvable entries (foreign, no cloid) are excluded (INV-4). Uses
+    frontendOpenOrders (not plain openOrders) since it additionally
+    carries origSz/reduceOnly, needed to populate filled_quantity and
+    reduce_only correctly."""
     orders = []
     for entry in frontend_open_orders_body:
         cloid = entry.get("cloid")
         if not cloid:
+            continue
+        engine_id = resolve(cloid)
+        if engine_id is None:
             continue
         coin = entry.get("coin")
         side = _SIDE_MAP.get(entry.get("side"))
@@ -185,7 +191,7 @@ def parse_open_orders(frontend_open_orders_body: list) -> Tuple[Order, ...]:
         timestamp_iso = _iso(entry.get("timestamp"))
         orders.append(
             Order(
-                client_order_id=cloid,
+                client_order_id=engine_id,
                 exchange_order_id=str(entry.get("oid")) if entry.get("oid") is not None else None,
                 symbol=Symbol(coin),
                 side=side,
@@ -203,17 +209,21 @@ def parse_open_orders(frontend_open_orders_body: list) -> Tuple[Order, ...]:
     return tuple(orders)
 
 
-def parse_user_fills(user_fills_body: list) -> Tuple[Fill, ...]:
-    """Filters to entries carrying a non-null cloid -- see module
-    docstring. In practice this may return an empty tuple, since
-    Hyperliquid's userFills response is not confirmed (via the official
-    Python SDK's own Fill type, which has no cloid field) to echo cloid
-    back at all. Returning fewer fills than exist is the deliberately safe
-    failure mode -- never fabricating an id an order was not placed with."""
+def parse_user_fills(user_fills_body: list, resolve: Resolver) -> Tuple[Fill, ...]:
+    """Returns only engine-attributable fills, labeled with the ENGINE id
+    (INV-1) via `resolve`; unresolvable entries are excluded (INV-3/4).
+    Note: whether Hyperliquid echoes cloid on userFills at all is
+    unconfirmed (the official SDK's Fill type has no cloid field), so
+    this may under-report -- the deliberately safe direction. Fill
+    attribution via oid remains available to orchestration through
+    OrderSnapshot.exchange_order_id."""
     fills = []
     for entry in user_fills_body:
         cloid = entry.get("cloid")
         if not cloid:
+            continue
+        engine_id = resolve(cloid)
+        if engine_id is None:
             continue
         coin = entry.get("coin")
         side = _SIDE_MAP.get(entry.get("side"))
@@ -229,7 +239,7 @@ def parse_user_fills(user_fills_body: list) -> Tuple[Fill, ...]:
         fills.append(
             Fill(
                 fill_id=str(entry.get("tid")),
-                client_order_id=cloid,
+                client_order_id=engine_id,
                 exchange_order_id=str(oid),
                 symbol=Symbol(coin),
                 side=side,
@@ -242,11 +252,23 @@ def parse_user_fills(user_fills_body: list) -> Tuple[Fill, ...]:
     return tuple(fills)
 
 
-def parse_order_status(order_status_body: dict) -> Optional[Order]:
+def parse_order_status(
+    order_status_body: dict,
+    resolve: Resolver,
+    assume_client_order_id: Optional[str] = None,
+) -> Optional[Order]:
     """Returns None for {"status": "unknownOid"}. Mapping that absence to
     OrderUnknownError (via hyperliquid_adapter.errors.map_unknown_oid) is
-    the caller's responsibility -- this stays a pure translator, like
-    every other function in this module."""
+    the caller's responsibility -- this stays a pure translator.
+
+    Attribution (INV-1/INV-4): the returned Order's client_order_id is the
+    ENGINE id, obtained either from `assume_client_order_id` -- used when
+    the caller queried the venue BY this order's own token, so identity is
+    guaranteed by the query itself and does not depend on the venue
+    echoing cloid back (the find_order path, INV-19) -- or by resolving
+    the echoed cloid via `resolve`. If neither yields an engine id, this
+    raises rather than fabricating or mislabeling: the order exists at the
+    venue but cannot be attributed to this engine."""
     if order_status_body.get("status") != "order":
         return None
     wrapper = order_status_body.get("order", {})
@@ -257,14 +279,25 @@ def parse_order_status(order_status_body: dict) -> Optional[Order]:
     oid = order_obj.get("oid")
     if not coin or side is None or oid is None:
         raise ExchangeAdapterError(f"Hyperliquid orderStatus response is missing required fields: {order_status_body!r}")
+
+    if assume_client_order_id is not None:
+        engine_id = assume_client_order_id
+    else:
+        cloid = order_obj.get("cloid")
+        engine_id = resolve(cloid) if cloid else None
+    if engine_id is None:
+        raise ExchangeAdapterError(
+            f"Hyperliquid order oid={oid} exists but cannot be attributed to an "
+            "engine client_order_id -- refusing to mislabel it (INV-4)"
+        )
+
     sz = _decimal(order_obj.get("sz"), "order.sz")
     orig_sz = _decimal(order_obj.get("origSz"), "order.origSz") if order_obj.get("origSz") is not None else sz
     filled = orig_sz - sz
     timestamp_source = order_obj.get("timestamp") if order_obj.get("timestamp") is not None else wrapper.get("statusTimestamp")
     timestamp_iso = _iso(timestamp_source)
-    cloid = order_obj.get("cloid")
     return Order(
-        client_order_id=cloid if cloid else "",
+        client_order_id=engine_id,
         exchange_order_id=str(oid),
         symbol=Symbol(coin),
         side=side,

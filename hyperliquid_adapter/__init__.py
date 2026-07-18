@@ -7,18 +7,26 @@ into Module 5's closed error hierarchy, and venue request signing (via
 Module 2's SigningBoundary only -- never raw key material). It owns no
 business logic: it never decides whether, when, or how much to trade.
 
-Depends only on lower-numbered frozen modules: exchange_adapter (5) and
-secrets_boundary (2).
+Depends only on lower-numbered frozen modules: exchange_adapter (5),
+secrets_boundary (2), and event_store (3) (M1: the durable engine-id <->
+venue-token mapping persists through the shared canonical EventStore).
 
-Build state: WP-5, read-only. HyperliquidAdapter implements all 11
-abstract read/lifecycle methods against the public /info endpoint (no
-authentication). The four mutation hooks are fail-closed: no signing
-capability exists yet (deferred to a future, separately-authorized work
-package). See adapter.py's module docstring for the full read-only-build
-rationale.
+Build state: WP-8, read + authenticated mutations. HyperliquidAdapter
+implements all 11 abstract read/lifecycle methods against the public /info
+endpoint (no authentication), maintains the durable order-id mapping
+(hyperliquid_adapter/mapping.py), and overrides find_order() with a
+venue-status query by token (locates in-doubt orders in ANY state,
+including filled). The four mutation hooks (place/cancel/cancel_all/amend)
+are implemented against /exchange: each exercises the SigningBoundary
+authorization gate (Emergency Kill) FIRST, then produces the venue
+phantom-agent EIP-712 signature via the wallet signer
+(hyperliquid_adapter/signing.py), then transmits. They remain fail-closed
+when no wallet signer is configured, and UNSAFE_NEVER_AUTO_RETRY at the
+RetryPolicy level. See adapter.py's module docstring for the invariant and
+wiring obligations.
 
 Public API:
-    HyperliquidAdapter   -- concrete ExchangeAdapter; read-only in this build
+    HyperliquidAdapter   -- concrete ExchangeAdapter; reads + mutations (WP-8)
     DEFAULT_HYPERLIQUID_CAPABILITIES -- vetted default capability set
     is_authentication_failure_message -- detects Hyperliquid's auth-failure text
     map_http_error       -- HTTP-level failure -> closed hierarchy

@@ -38,10 +38,12 @@ from exchange_adapter import ExchangeConnectionError, ExchangeTimeoutError
 
 from .errors import map_http_error
 
-# Hyperliquid's documented mainnet REST base URL. Not consumed by
-# post_json itself (which is endpoint-agnostic); provided for a future
-# caller (WP-5+) to build full request URLs from.
-DEFAULT_BASE_URL = "https://api.hyperliquid.xyz"
+# Hyperliquid's documented REST base URLs. Not consumed by post_json
+# itself (which is endpoint-agnostic); provided for callers to build full
+# request URLs from and to check network/base_url consistency.
+MAINNET_BASE_URL = "https://api.hyperliquid.xyz"
+TESTNET_BASE_URL = "https://api.hyperliquid-testnet.xyz"
+DEFAULT_BASE_URL = MAINNET_BASE_URL
 
 
 @dataclass(frozen=True)

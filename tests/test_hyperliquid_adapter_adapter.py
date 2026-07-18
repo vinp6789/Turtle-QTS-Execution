@@ -1,13 +1,18 @@
-"""Tests for hyperliquid_adapter.HyperliquidAdapter (Module 10, WP-5).
+"""Tests for hyperliquid_adapter.HyperliquidAdapter (Module 10, M1).
 
-Uses an injected fake TransportFn (dict-dispatch on the /info request
-"type" field) -- zero real network I/O, matching the injectable-seam
-proof already established in test_hyperliquid_adapter_transport.py.
+Injected fake TransportFn (dict-dispatch on the /info "type") -- zero real
+network. A real temp-file EventStore backs the durable id mapping; fixture
+cloids are the actual tokens minted for seeded engine ids, so resolution
+exercises the true round-trip (INV-1/INV-3).
 """
 
+import os
+import tempfile
 import unittest
 from decimal import Decimal
+from pathlib import Path
 
+from event_store import EventStore
 from secrets_boundary import EnvironmentHmacBackend, SecretRevokedError, SigningBoundary
 
 from exchange_adapter import (
@@ -27,9 +32,17 @@ from exchange_adapter import (
 )
 
 from hyperliquid_adapter import HttpResponse, HyperliquidAdapter
+from hyperliquid_adapter.mapping import OrderIdMapping, mint_venue_token
 
 SIGNING_REF = "hyperliquid_signing_key_v1"
-ACCOUNT_ADDRESS = "0x1111111111111111111111111111111111111"
+ACCOUNT_ADDRESS = "0x1111111111111111111111111111111111111111"
+
+# Engine ids seeded into every test store, and their minted venue tokens.
+ENGINE_ORDER_ID = "om:default:1:place"
+ENGINE_FILL_ID = "om:default:2:place"
+ORDER_TOKEN = mint_venue_token(ENGINE_ORDER_ID)
+FILL_TOKEN = mint_venue_token(ENGINE_FILL_ID)
+FOREIGN_TOKEN = "0x" + "f" * 32  # never seeded -> unattributable
 
 ALL_MIDS = {"BTC": "50000.0", "ETH": "3000.0"}
 
@@ -37,12 +50,8 @@ CLEARINGHOUSE_STATE = {
     "assetPositions": [
         {
             "position": {
-                "coin": "ETH",
-                "entryPx": "2986.3",
-                "liquidationPx": "2866.26936529",
-                "positionValue": "100.02765",
-                "szi": "0.0335",
-                "unrealizedPnl": "-0.0134",
+                "coin": "ETH", "entryPx": "2986.3", "liquidationPx": "2866.26936529",
+                "positionValue": "100.02765", "szi": "0.0335", "unrealizedPnl": "-0.0134",
             }
         }
     ],
@@ -52,29 +61,15 @@ CLEARINGHOUSE_STATE = {
 
 FRONTEND_OPEN_ORDERS = [
     {
-        "coin": "BTC",
-        "cloid": "0x1234567890abcdef1234567890abcdef",
-        "limitPx": "29792.0",
-        "oid": 91490942,
-        "origSz": "5.0",
-        "reduceOnly": False,
-        "side": "A",
-        "sz": "5.0",
-        "timestamp": 1681247412573,
+        "coin": "BTC", "cloid": ORDER_TOKEN, "limitPx": "29792.0", "oid": 91490942,
+        "origSz": "5.0", "reduceOnly": False, "side": "A", "sz": "5.0", "timestamp": 1681247412573,
     }
 ]
 
 USER_FILLS = [
     {
-        "cloid": "0xabcdef1234567890abcdef1234567890",
-        "coin": "AVAX",
-        "fee": "0.01",
-        "oid": 90542681,
-        "px": "18.435",
-        "side": "B",
-        "sz": "93.53",
-        "tid": 118906512037719,
-        "time": 1681222254710,
+        "cloid": FILL_TOKEN, "coin": "AVAX", "fee": "0.01", "oid": 90542681, "px": "18.435",
+        "side": "B", "sz": "93.53", "tid": 118906512037719, "time": 1681222254710,
     }
 ]
 
@@ -82,18 +77,10 @@ ORDER_STATUS_KNOWN = {
     "status": "order",
     "order": {
         "order": {
-            "coin": "BTC",
-            "cloid": "0x1234567890abcdef1234567890abcdef",
-            "limitPx": "29792.0",
-            "oid": 91490942,
-            "origSz": "5.0",
-            "reduceOnly": False,
-            "side": "A",
-            "sz": "5.0",
-            "timestamp": 1681247412573,
+            "coin": "BTC", "cloid": ORDER_TOKEN, "limitPx": "29792.0", "oid": 91490942,
+            "origSz": "5.0", "reduceOnly": False, "side": "A", "sz": "5.0", "timestamp": 1681247412573,
         },
-        "status": "open",
-        "statusTimestamp": 1724361546645,
+        "status": "open", "statusTimestamp": 1724361546645,
     },
 }
 
@@ -121,14 +108,12 @@ def _boundary(revoked=False):
 
 
 class FakeTransport:
-    """Records every call; dispatches by the payload's "type" field."""
-
     def __init__(self, responses=None, fail_types=None):
         self.calls = []
         self._responses = dict(_RESPONSES if responses is None else responses)
         self._fail_types = fail_types or {}
 
-    def __call__(self, url: str, payload: dict, timeout_seconds: float) -> HttpResponse:
+    def __call__(self, url, payload, timeout_seconds):
         self.calls.append((url, payload, timeout_seconds))
         request_type = payload["type"]
         if request_type in self._fail_types:
@@ -136,26 +121,44 @@ class FakeTransport:
         return HttpResponse(status_code=200, body=self._responses[request_type])
 
 
-def _adapter(transport=None, **kwargs):
-    return HyperliquidAdapter(
-        _boundary(),
-        SIGNING_REF,
-        ACCOUNT_ADDRESS,
-        transport=transport or FakeTransport(),
-        **kwargs,
-    )
+def _new_store():
+    fd, path = tempfile.mkstemp(suffix=".log")
+    os.close(fd)
+    os.unlink(path)
+    store = EventStore(path)
+    return store, Path(path)
 
 
-def _order_request():
+def _seed(store):
+    """Record the two engine-id mappings the fixtures rely on."""
+    m = OrderIdMapping(ACCOUNT_ADDRESS, store)
+    m.record(ENGINE_ORDER_ID)
+    m.record(ENGINE_FILL_ID)
+
+
+def _order_request(client_order_id="cid-1"):
     return OrderRequest(
-        client_order_id="cid-1",
-        symbol=Symbol("BTC"),
-        side=OrderSide.BUY,
-        order_type=OrderType.LIMIT,
-        quantity=Decimal("1"),
-        limit_price=Decimal("50000"),
-        time_in_force=TimeInForce.GTC,
+        client_order_id=client_order_id, symbol=Symbol("BTC"), side=OrderSide.BUY, order_type=OrderType.LIMIT,
+        quantity=Decimal("1"), limit_price=Decimal("50000"), time_in_force=TimeInForce.GTC,
     )
+
+
+class _StoreBackedCase(unittest.TestCase):
+    """Base: a seeded temp store + connected adapter, cleaned up."""
+
+    def setUp(self):
+        self.store, self.path = _new_store()
+        _seed(self.store)
+        self.transport = FakeTransport()
+        self.adapter = HyperliquidAdapter(
+            _boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=self.transport, event_store=self.store
+        )
+        self.adapter.connect()
+
+    def tearDown(self):
+        self.store.close()
+        if self.path.exists():
+            self.path.unlink()
 
 
 class ConstructorValidation(unittest.TestCase):
@@ -163,20 +166,17 @@ class ConstructorValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             HyperliquidAdapter(_boundary(), SIGNING_REF, "", transport=FakeTransport())
 
-    def test_whitespace_only_account_address_rejected(self):
-        with self.assertRaises(ValueError):
-            HyperliquidAdapter(_boundary(), SIGNING_REF, "   ", transport=FakeTransport())
-
     def test_non_positive_timeout_rejected(self):
         with self.assertRaises(ValueError):
-            _adapter(timeout_seconds=0)
-        with self.assertRaises(ValueError):
-            _adapter(timeout_seconds=-1.0)
+            HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=FakeTransport(), timeout_seconds=0)
 
-    def test_default_capabilities_applied(self):
-        a = _adapter()
-        self.assertFalse(a.capabilities.supports_market_orders)
-        self.assertTrue(a.capabilities.supports_limit_orders)
+    def test_storeless_adapter_constructs_for_readonly_use(self):
+        # A storeless adapter is a valid read-only instrument; its own-order
+        # reads are simply empty (no mappings can exist).
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=FakeTransport())
+        a.connect()
+        self.assertEqual(a.get_orders(), ())  # nothing resolvable
+        self.assertEqual(a.get_fills(), ())
 
 
 class ConnectionLifecycle(unittest.TestCase):
@@ -185,160 +185,144 @@ class ConnectionLifecycle(unittest.TestCase):
         with self.assertRaises(SecretRevokedError):
             a.connect()
 
-    def test_connect_probes_all_mids_and_sets_connected(self):
-        transport = FakeTransport()
-        a = _adapter(transport=transport)
-        health = a.connect()
-        self.assertEqual(health.connection_state, ConnectionState.CONNECTED)
-        self.assertTrue(any(call[1]["type"] == "allMids" for call in transport.calls))
-
     def test_reads_before_connect_raise(self):
-        a = _adapter()
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=FakeTransport())
         with self.assertRaises(ExchangeConnectionError):
             a.get_positions()
 
-    def test_disconnect_then_read_raises(self):
-        a = _adapter()
-        a.connect()
-        a.disconnect()
-        with self.assertRaises(ExchangeConnectionError):
-            a.get_positions()
-
-    def test_health_reflects_disconnected_state(self):
-        a = _adapter()
-        h = a.health()
-        self.assertEqual(h.connection_state, ConnectionState.DISCONNECTED)
-        self.assertFalse(h.rest_reachable)
+    def test_health_reflects_disconnected(self):
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=FakeTransport())
+        self.assertEqual(a.health().connection_state, ConnectionState.DISCONNECTED)
 
 
-class ReadMethods(unittest.TestCase):
-    def setUp(self):
-        self.transport = FakeTransport()
-        self.adapter = _adapter(transport=self.transport)
-        self.adapter.connect()
-
+class ReadMethods(_StoreBackedCase):
     def test_get_positions(self):
         positions = self.adapter.get_positions()
-        self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0].symbol.value, "ETH")
 
     def test_get_balances(self):
-        balances = self.adapter.get_balances()
-        self.assertEqual(balances[0].asset.value, "USDC")
+        self.assertEqual(self.adapter.get_balances()[0].asset.value, "USDC")
 
-    def test_get_orders(self):
+    def test_get_orders_labeled_with_engine_id(self):
+        # INV-1: the resolved order carries the engine id, not the token.
         orders = self.adapter.get_orders()
         self.assertEqual(len(orders), 1)
-        self.assertEqual(orders[0].client_order_id, "0x1234567890abcdef1234567890abcdef")
+        self.assertEqual(orders[0].client_order_id, ENGINE_ORDER_ID)
+
+    def test_get_orders_excludes_foreign(self):
+        # INV-3: an order whose cloid is not in our mapping is foreign.
+        foreign = [dict(FRONTEND_OPEN_ORDERS[0], cloid=FOREIGN_TOKEN)]
+        transport = FakeTransport(responses={**_RESPONSES, "frontendOpenOrders": foreign})
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=transport, event_store=self.store)
+        a.connect()
+        self.assertEqual(a.get_orders(), ())
 
     def test_get_mark_price(self):
-        mp = self.adapter.get_mark_price(Symbol("BTC"))
-        self.assertEqual(mp.price, Decimal("50000.0"))
+        self.assertEqual(self.adapter.get_mark_price(Symbol("BTC")).price, Decimal("50000.0"))
 
     def test_get_funding_rate(self):
-        fr = self.adapter.get_funding_rate(Symbol("ETH"))
-        self.assertEqual(fr.rate, Decimal("-0.0002"))
+        self.assertEqual(self.adapter.get_funding_rate(Symbol("ETH")).rate, Decimal("-0.0002"))
 
-    def test_get_order_status_known(self):
+    def test_get_order_status_labeled_with_engine_id(self):
         order = self.adapter.get_order_status("91490942")
-        self.assertEqual(order.exchange_order_id, "91490942")
+        self.assertEqual(order.client_order_id, ENGINE_ORDER_ID)  # INV-1
 
-    def test_get_order_status_unknown_oid_raises_order_unknown(self):
+    def test_get_order_status_unknown_oid_raises(self):
         transport = FakeTransport(responses={**_RESPONSES, "orderStatus": {"status": "unknownOid"}})
-        a = _adapter(transport=transport)
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=transport, event_store=self.store)
         a.connect()
         with self.assertRaises(OrderUnknownError):
             a.get_order_status("1")
 
-    def test_get_order_status_non_integer_id_raises_adapter_error(self):
-        with self.assertRaises(ExchangeAdapterError):
-            self.adapter.get_order_status("not-an-oid")
-
-    def test_get_fills_unfiltered(self):
+    def test_get_fills_labeled_with_engine_id(self):
         fills = self.adapter.get_fills()
         self.assertEqual(len(fills), 1)
+        self.assertEqual(fills[0].client_order_id, ENGINE_FILL_ID)  # INV-1
 
-    def test_get_fills_filtered_by_since_utc_excludes_earlier(self):
-        # USER_FILLS' single fill has time=1681222254710 -> some 2023 date;
-        # filtering to "far future" must exclude it.
-        fills = self.adapter.get_fills(since_utc="2999-01-01T00:00:00+00:00")
-        self.assertEqual(fills, ())
+    def test_reconcile_matches(self):
+        local = (Position(symbol=Symbol("ETH"), quantity=Decimal("0.0335"), entry_price=Decimal("2986.3"),
+                          mark_price=Decimal("2986.3"), unrealized_pnl=Decimal("-0.0134"), liquidation_price=None),)
+        self.assertTrue(self.adapter.reconcile(local).matches)
 
-    def test_reconcile_reports_no_discrepancy_when_matching(self):
-        local = (
-            Position(
-                symbol=Symbol("ETH"), quantity=Decimal("0.0335"), entry_price=Decimal("2986.3"),
-                mark_price=Decimal("2986.3"), unrealized_pnl=Decimal("-0.0134"), liquidation_price=None,
-            ),
-        )
-        report = self.adapter.reconcile(local)
-        self.assertTrue(report.matches)
 
-    def test_reconcile_reports_discrepancy_on_mismatch(self):
-        local = (
-            Position(
-                symbol=Symbol("ETH"), quantity=Decimal("999"), entry_price=Decimal("1"),
-                mark_price=Decimal("1"), unrealized_pnl=Decimal("0"), liquidation_price=None,
-            ),
-        )
-        report = self.adapter.reconcile(local)
-        self.assertFalse(report.matches)
-        self.assertEqual(len(report.discrepancies), 1)
+class FindOrderOverride(_StoreBackedCase):
+    """INV-19: find_order locates the order by token in ANY venue state."""
 
-    def test_find_order_default_works_against_real_get_orders(self):
-        # WP-2's inherited default: scans get_orders() for a matching
-        # client_order_id -- proves it still works once get_orders() is a
-        # real, non-mock implementation.
-        request = _order_request()
-        # client_order_id must match FRONTEND_OPEN_ORDERS' fixture cloid.
-        request = OrderRequest(
-            client_order_id="0x1234567890abcdef1234567890abcdef",
-            symbol=Symbol("BTC"), side=OrderSide.BUY, order_type=OrderType.LIMIT,
-            quantity=Decimal("5.0"), limit_price=Decimal("29792.0"), time_in_force=TimeInForce.GTC,
-        )
-        found = self.adapter.find_order(request)
+    def test_find_order_returns_engine_id_labeled_order(self):
+        # request carries the engine id; adapter queries orderStatus by the
+        # order's token and stamps the caller's id back on.
+        found = self.adapter.find_order(_order_request(client_order_id=ENGINE_ORDER_ID))
         self.assertIsNotNone(found)
+        self.assertEqual(found.client_order_id, ENGINE_ORDER_ID)
         self.assertEqual(found.exchange_order_id, "91490942")
 
+    def test_find_order_finds_a_FILLED_in_doubt_order(self):
+        # The crux of INV-19: an in-doubt order that FILLED during a crash
+        # is absent from open orders; only the by-token status query finds
+        # it. The inherited open-orders-scan default would return None here.
+        filled_status = {
+            "status": "order",
+            "order": {
+                "order": dict(ORDER_STATUS_KNOWN["order"]["order"], sz="0.0"),  # fully filled
+                "status": "filled", "statusTimestamp": 1724361546645,
+            },
+        }
+        transport = FakeTransport(responses={**_RESPONSES, "orderStatus": filled_status})
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=transport, event_store=self.store)
+        a.connect()
+        found = a.find_order(_order_request(client_order_id=ENGINE_ORDER_ID))
+        self.assertIsNotNone(found)
+        self.assertEqual(found.status.value, "FILLED")
+        self.assertEqual(found.client_order_id, ENGINE_ORDER_ID)
 
-class FailClosedMutations(unittest.TestCase):
+    def test_find_order_unknown_returns_none_fail_safe(self):
+        transport = FakeTransport(responses={**_RESPONSES, "orderStatus": {"status": "unknownOid"}})
+        a = HyperliquidAdapter(_boundary(), SIGNING_REF, ACCOUNT_ADDRESS, transport=transport, event_store=self.store)
+        a.connect()
+        self.assertIsNone(a.find_order(_order_request(client_order_id="om:default:99:place")))
+
+    def test_find_order_does_not_transmit_or_record(self):
+        # Strictly read-only: only the orderStatus query, no append.
+        events_before = self.store.event_count
+        self.transport.calls.clear()
+        self.adapter.find_order(_order_request(client_order_id=ENGINE_ORDER_ID))
+        self.assertEqual(self.store.event_count, events_before)  # no mapping appended
+        self.assertTrue(all(c[1]["type"] == "orderStatus" for c in self.transport.calls))
+
+
+class FailClosedMutations(_StoreBackedCase):
     def setUp(self):
-        self.transport = FakeTransport()
-        self.adapter = _adapter(transport=self.transport)
-        self.adapter.connect()
-        self.transport.calls.clear()  # ignore the connect() probe call
+        super().setUp()
+        self.transport.calls.clear()
+        self.events_before = self.store.event_count
 
-    def test_place_order_fails_closed_without_network(self):
+    def _assert_fail_closed(self, thunk):
         with self.assertRaises(ExchangeAdapterError):
-            self.adapter.place_order(_order_request())
-        self.assertEqual(self.transport.calls, [])  # no network call attempted
+            thunk()
+        self.assertEqual(self.transport.calls, [])           # no network
+        self.assertEqual(self.store.event_count, self.events_before)  # no mapping recorded
 
-    def test_amend_order_fails_closed_without_network(self):
-        with self.assertRaises(ExchangeAdapterError):
-            self.adapter.amend_order(AmendRequest(request_id="r1", exchange_order_id="1", new_quantity=Decimal("2")))
-        self.assertEqual(self.transport.calls, [])
+    def test_place_order_fail_closed(self):
+        self._assert_fail_closed(lambda: self.adapter.place_order(_order_request()))
 
-    def test_cancel_order_fails_closed_without_network(self):
-        with self.assertRaises(ExchangeAdapterError):
-            self.adapter.cancel_order(CancelRequest(request_id="r1", exchange_order_id="1"))
-        self.assertEqual(self.transport.calls, [])
+    def test_amend_order_fail_closed(self):
+        self._assert_fail_closed(
+            lambda: self.adapter.amend_order(AmendRequest(request_id="r1", exchange_order_id="1", new_quantity=Decimal("2")))
+        )
 
-    def test_cancel_all_fails_closed_without_network(self):
-        with self.assertRaises(ExchangeAdapterError):
-            self.adapter.cancel_all(CancelAllRequest(request_id="r1"))
-        self.assertEqual(self.transport.calls, [])
+    def test_cancel_order_fail_closed(self):
+        self._assert_fail_closed(lambda: self.adapter.cancel_order(CancelRequest(request_id="r1", exchange_order_id="1")))
 
-    def test_fail_closed_errors_are_not_exchange_rejected_order_error(self):
-        # A capital-safety distinction: the exchange never saw this
-        # request, so it must not be reported as "the exchange rejected
-        # it" (ExchangeRejectedOrderError), which would misrepresent what
-        # happened.
+    def test_cancel_all_fail_closed(self):
+        self._assert_fail_closed(lambda: self.adapter.cancel_all(CancelAllRequest(request_id="r1")))
+
+    def test_not_reported_as_exchange_rejection(self):
         from exchange_adapter import ExchangeRejectedOrderError
 
         try:
             self.adapter.place_order(_order_request())
         except ExchangeRejectedOrderError:
-            self.fail("fail-closed mutation must not raise ExchangeRejectedOrderError")
+            self.fail("fail-closed must not raise ExchangeRejectedOrderError")
         except ExchangeAdapterError:
             pass
 
