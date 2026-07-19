@@ -30,3 +30,10 @@ env/
 
 # Local event-store data (runtime logs written by EventStore)
 *.log
+
+# Productization: runtime state, secrets, scratch
+data/
+.env
+.env.*
+!.env.example
+scratchpad/

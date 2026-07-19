@@ -1,0 +1,16 @@
+.git
+.github
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+data
+scratchpad
+*.log
+.env
+.venv
+venv
+tests
+docs
+*.md
+!README.md

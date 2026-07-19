@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      # Paper-mode signing secret so the app-layer tests / smoke can build an engine.
+      TURTLE_SECRET_HYPERLIQUID_SIGNING_KEY_V1: ci-paper-secret
+      ENGINE_CONFIG_PATH: deploy/engine.paper.toml
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install app-layer dependencies
+        run: pip install -r requirements-app.txt
+
+      - name: Validate environment / config
+        run: python scripts/validate_env.py
+
+      - name: Run full regression suite
+        run: python -m unittest discover -s tests -v
+
+      - name: End-to-end smoke test (FastAPI, in-process)
+        run: python scripts/smoke_test.py
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t turtle-execution-engine:ci .

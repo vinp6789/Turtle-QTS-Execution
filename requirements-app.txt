@@ -1,0 +1,13 @@
+# Application / interface-layer dependencies (app/ only).
+#
+# The frozen engine (Modules 1-10) and trading_system remain importable and
+# runnable WITHOUT these -- they are needed only by the app/ productization
+# layer (FastAPI HTTP interface, uvicorn server, Telegram via requests).
+# Kept separate from requirements.txt (the frozen Module-10 engine deps) so
+# that file stays byte-identical to its freeze.
+
+-r requirements.txt
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+requests>=2.31

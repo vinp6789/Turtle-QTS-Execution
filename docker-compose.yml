@@ -1,0 +1,28 @@
+# Local production-like run: `docker compose up --build`.
+# Paper mode by default. Provide real secrets via a .env file (see
+# .env.example) to run live; never commit .env.
+services:
+  turtle:
+    build: .
+    image: turtle-execution-engine:latest
+    ports:
+      - "8000:8000"
+    environment:
+      APP_PORT: "8000"
+      ENGINE_CONFIG_PATH: "deploy/engine.paper.toml"
+      ENGINE_STORE_PATH: "data/events.log"
+      WORKER_ENABLED: "true"
+      CYCLE_INTERVAL_SECONDS: "60"
+      LOG_FORMAT: "json"
+      # Secrets: set these in a .env file (docker compose auto-loads it).
+      TURTLE_SECRET_HYPERLIQUID_SIGNING_KEY_V1: "${TURTLE_SECRET_HYPERLIQUID_SIGNING_KEY_V1:-paper-signing-secret}"
+      API_KEY: "${API_KEY:-}"
+      TELEGRAM_ENABLED: "${TELEGRAM_ENABLED:-false}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+    volumes:
+      - turtle-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  turtle-data:

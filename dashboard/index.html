@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Turtle Engine</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🐢 Turtle Engine</div>
+    <div id="conn" class="pill pill-muted">connecting…</div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="card-head">
+        <h2>Status</h2>
+        <span id="updated" class="muted small"></span>
+      </div>
+      <div class="grid">
+        <div class="stat"><span class="label">Engine</span><span id="engine" class="value">—</span></div>
+        <div class="stat"><span class="label">State</span><span id="state" class="value">—</span></div>
+        <div class="stat"><span class="label">Kill switch</span><span id="kill" class="value">—</span></div>
+        <div class="stat"><span class="label">Cycles</span><span id="cycles" class="value">—</span></div>
+        <div class="stat"><span class="label">Open orders</span><span id="orders" class="value">—</span></div>
+        <div class="stat"><span class="label">Positions</span><span id="positions" class="value">—</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Portfolio</h2></div>
+      <div class="grid">
+        <div class="stat"><span class="label">Equity</span><span id="equity" class="value">—</span></div>
+        <div class="stat"><span class="label">Available</span><span id="cash" class="value">—</span></div>
+        <div class="stat"><span class="label">Used margin</span><span id="margin" class="value">—</span></div>
+        <div class="stat"><span class="label">Exposure</span><span id="exposure" class="value">—</span></div>
+        <div class="stat"><span class="label">uPnL</span><span id="upnl" class="value">—</span></div>
+        <div class="stat"><span class="label">Heat</span><span id="heat" class="value">—</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Reconciliation</h2></div>
+      <pre id="recon" class="report">—</pre>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Reports</h2></div>
+      <pre id="reports" class="report">—</pre>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Controls</h2></div>
+      <label class="field">
+        <span class="label">API key (stored locally)</span>
+        <input id="apikey" type="password" placeholder="optional — only if API_KEY set" autocomplete="off" />
+      </label>
+      <div class="btnrow">
+        <button id="btn-cycle" class="btn">Run cycle</button>
+        <button id="btn-stop" class="btn btn-danger">Emergency stop</button>
+      </div>
+      <div id="actionmsg" class="muted small"></div>
+    </section>
+
+    <footer class="foot muted small">
+      Read-only monitoring. <a href="/docs">API docs</a>
+    </footer>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

@@ -13,13 +13,45 @@ secrets/signing boundary that never exposes raw key material, deterministic
 lifecycle state machines, and a risk approval/veto layer. It is built on the
 **Python standard library only** (no third-party runtime dependency).
 
-## What this is not (yet)
+## Run as an application (deploy / monitor from your phone)
 
-- **No live exchange connectivity** — only an in-memory `MockExchangeAdapter`
-  exists; `ExchangeAdapter` is an abstract contract.
-- **No top-level orchestration / entrypoint** — the repository contains the
-  modules but no module that wires them into a running loop.
-- **One signing backend** — only `EnvironmentHmacBackend`.
+The frozen engine is now wrapped by an additive **application layer**
+(`app/`) that turns it into a deployable service — identical on a Windows
+laptop, Docker, a VPS, or Railway. The engine itself remains standard-library
+only and unaware of HTTP/Telegram/Docker.
+
+```bash
+pip install -r requirements-app.txt
+# Windows:  powershell -ExecutionPolicy Bypass -File scripts\run_local.ps1
+# Unix:     bash scripts/run_local.sh
+```
+
+Then, in a browser or on your phone:
+- **Dashboard** (mobile): http://localhost:8000/
+- **API docs** (OpenAPI/Swagger): http://localhost:8000/docs
+- **Health**: http://localhost:8000/health · **Metrics**: `/metrics`
+
+Boots in **paper mode** (no network, no real orders) by default. Full guide:
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) ·
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) ·
+[`docs/PRODUCTION_CHECKLIST.md`](docs/PRODUCTION_CHECKLIST.md).
+
+Architecture: `Engine → app.runtime (worker) → app.api (FastAPI REST +
+dashboard + metrics) + app.telegram (bot)`. The API is only an interface
+layer; nothing under `app/` is imported by any frozen module.
+
+## Historical scope notes (superseded by later modules and the app layer)
+
+The three caveats below described the v1.0 (Modules 1–9) snapshot. Module 10
+(Hyperliquid adapter) added live connectivity, and the `composition_root` /
+`orchestration` / `trading_system` / `app` layers added the wiring and
+entrypoint. Retained for provenance:
+
+- ~~No live exchange connectivity~~ → Module 10 `hyperliquid_adapter`.
+- ~~No top-level orchestration / entrypoint~~ → `composition_root`,
+  `orchestration`, `trading_system.scheduling`, and `app.main`.
+- **One signing backend** — still only `EnvironmentHmacBackend` (plus the
+  venue wallet signer for EIP-712).
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for source-attested future work.
 

@@ -1,0 +1,69 @@
+# Production-safe DEFAULT engine configuration (paper mode, testnet).
+#
+# This file contains NO secret material -- only named references resolved
+# by the Secrets/Signing Boundary from environment variables
+# (TURTLE_SECRET_<REF>). Copy to deploy/engine.live.toml and set
+# environment="paper"->"live" + network as needed for real trading.
+#
+# The app layer loads this via config.load_config(ENGINE_CONFIG_PATH);
+# ENGINE_CONFIG_PATH defaults to this file.
+
+[environment]
+mode = "paper"  # "paper" (MockExchangeAdapter, no network) | "live" (Hyperliquid)
+
+[exchange]
+name = "hyperliquid"
+network = "testnet"  # "mainnet" | "testnet"
+
+[universe]
+symbols = ["BTC", "ETH", "SOL"]
+
+[risk]
+profile = "BALANCED"  # "GROWTH" | "BALANCED" | "CAPITAL_PRESERVATION"
+max_daily_loss_pct = 0.05
+max_drawdown_from_peak_pct = 0.20
+auto_flatten_enabled = false
+auto_flatten_confirmation_seconds = 60
+
+[risk.profiles.GROWTH]
+risk_pct_per_trade = 0.020
+max_positions = 4
+sizing_mode = "conviction_weighted"
+heat_cap = 0.10
+ruin_threshold = 0.50
+
+[risk.profiles.BALANCED]
+risk_pct_per_trade = 0.010
+max_positions = 3
+sizing_mode = "fixed"
+heat_cap = 0.05
+ruin_threshold = 0.60
+
+[risk.profiles.CAPITAL_PRESERVATION]
+risk_pct_per_trade = 0.005
+max_positions = 2
+sizing_mode = "fixed"
+heat_cap = 0.02
+ruin_threshold = 0.75
+
+[operational]
+max_retries = 5
+retry_base_delay_seconds = 0.5
+retry_max_delay_seconds = 30.0
+clock_drift_tolerance_ms = 250
+data_staleness_price_ms = 5000
+data_staleness_orderbook_ms = 3000
+data_staleness_position_ms = 10000
+
+[secrets]
+signing_key_ref = "hyperliquid_signing_key_v1"
+telegram_bot_token_ref = "telegram_bot_token_v1"
+# wallet_key_ref = "hyperliquid_wallet_key_v1"  # required only for live mutations
+
+[telegram]
+enabled = true
+chat_id = "0"
+
+[logging]
+level = "INFO"
+directory = "data/logs"
