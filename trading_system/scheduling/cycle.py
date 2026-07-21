@@ -38,12 +38,12 @@ from decimal import Decimal
 from typing import Callable, Mapping, Optional, Tuple
 
 from config import RiskProfileParams
-from exchange_adapter import Symbol
+from exchange_adapter import OrderStatus, Symbol
 from risk_manager import CorrelationInfo, Decision, ReasonCode, RiskDecision
 
 from composition_root import Engine
 from orchestration import reconcile, synchronize
-from trading_system.execution import execute_place
+from trading_system.execution import ExecutionResult, QuantizationRules, execute_place
 from trading_system.market_data import MarketDataView
 from trading_system.portfolio_construction import construct_trade_requests
 from trading_system.strategy import Strategy, StrategyContext
@@ -103,6 +103,8 @@ def run_cycle(
     target_leverage: Decimal = Decimal("1"),
     volatility_by_symbol: Optional[Mapping[Symbol, Decimal]] = None,
     clock: Callable[[], str] = _default_now,
+    on_execution: Optional[Callable[[ExecutionResult], None]] = None,
+    quantization_rules: Optional[QuantizationRules] = None,
 ) -> CycleResult:
     """Executes exactly one trading cycle and returns. Never loops, never
     sleeps, never schedules a next call -- call this again yourself
@@ -125,6 +127,21 @@ def run_cycle(
     clock: returns the current UTC time as an ISO 8601 string; overridable
         only for deterministic tests. Not a timer -- called exactly once
         per run_cycle() invocation, never scheduled.
+    on_execution: optional per-execution hook, invoked synchronously with
+        each ExecutionResult IMMEDIATELY after its execute_place() returns
+        -- before the next order is attempted and before the CycleResult
+        exists. Added (additively; None preserves the exact prior
+        behavior) so a caller can durably record per-order metadata (e.g.
+        app-layer accounting levels) with a crash window of one append
+        rather than the remainder of the execution loop: if order N+1's
+        placement -- or the process -- fails, orders 1..N have already
+        been handed to the hook. A hook exception aborts the cycle
+        (fail-loud): an order whose metadata could not be durably
+        recorded must surface immediately, not trade on silently.
+    quantization_rules: optional venue quantization rules (C2), passed
+        straight through to trading_system.execution.execute_place --
+        see its docstring. None (the default) preserves prior behavior
+        exactly; the app layer supplies real venue rules for live engines.
     """
     if not isinstance(engine, Engine):
         raise SchedulingError(f"engine must be a composition_root.Engine, got {type(engine).__name__}")
@@ -161,8 +178,47 @@ def run_cycle(
         for intent in strategy.generate_intents(context)
     )
 
+    # H-A fix: suppress intents whose (symbol, reduce_only) already has a
+    # LIVE engine-owned order at the venue. StrategyContext exposes only
+    # FILLED positions, so a limit order resting across cycles is invisible
+    # to the strategy -- which then naturally re-emits the same intent, and
+    # every cycle would mint a NEW client_order_id (a fresh order, not an
+    # idempotent retry): N cycles -> N resting orders -> N fills -> N x the
+    # intended exposure. This filter is STRUCTURAL -- correctness never
+    # depends on strategy authors remembering to dedup against state they
+    # cannot even see.
+    #
+    # Matching is on (symbol, reduce_only), deliberately:
+    #   - a resting ENTRY blocks further entry intents for that symbol
+    #     (any side: same-symbol entry churn while an order rests is
+    #     exactly the stacking hazard);
+    #   - a resting entry NEVER blocks a reduce-only (risk-REDUCING)
+    #     intent -- suppressing a close because an entry rests would be
+    #     the unsafe direction;
+    #   - a resting reduce-only order blocks further reduce-only intents
+    #     (duplicate closes would over-close).
+    # "Live" = any non-terminal venue status; UNKNOWN counts as live
+    # (unknown equals unsafe: never place on top of an order whose state
+    # is unclear). Read once per cycle from the frozen adapter's
+    # engine-owned view (venue truth on live; O(orders + intents) set
+    # membership, no persistence, no new state -- replay, idempotency,
+    # and crash recovery are untouched because this writes nothing.
+    live_order_keys = {
+        (order.symbol.value, order.reduce_only)
+        for order in engine.adapter.get_orders()
+        if order.status not in (OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED)
+    }
+    suppressed_by_open_orders = tuple(
+        intent for intent in intents
+        if (intent.symbol.value, intent.reduce_only) in live_order_keys
+    )
+    tradable_intents = tuple(
+        intent for intent in intents
+        if (intent.symbol.value, intent.reduce_only) not in live_order_keys
+    )
+
     construction = construct_trade_requests(
-        intents,
+        tradable_intents,
         context,
         risk_manager=engine.risk_manager,
         risk_profile=risk_profile,
@@ -173,10 +229,16 @@ def run_cycle(
         volatility_by_symbol=volatility_by_symbol,
     )
 
-    executions = tuple(
-        execute_place(trade_request, _approved_marker(evaluated_at_utc), engine.order_manager)
-        for trade_request in construction.approved
-    )
+    executed = []
+    for trade_request in construction.approved:
+        result = execute_place(
+            trade_request, _approved_marker(evaluated_at_utc), engine.order_manager,
+            rules=quantization_rules,
+        )
+        if on_execution is not None:
+            on_execution(result)
+        executed.append(result)
+    executions = tuple(executed)
 
     return CycleResult(
         started=started,
@@ -187,4 +249,5 @@ def run_cycle(
         construction=construction,
         executions=executions,
         evaluated_at_utc=evaluated_at_utc,
+        suppressed_by_open_orders=suppressed_by_open_orders,
     )

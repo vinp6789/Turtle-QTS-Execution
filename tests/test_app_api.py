@@ -79,20 +79,39 @@ class TestReadOnlyEndpoints(_ApiCase):
         self.assertIn("/health", r.json()["paths"])
 
 
-class TestControlEndpointsUnprotected(_ApiCase):
-    def test_run_cycle(self):
-        r = self.client.post("/cycle/run")
-        self.assertEqual(r.status_code, 200)
-        body = r.json()
-        self.assertTrue(body["ok"])
-        self.assertEqual(body["cycles_run"], 1)
+class TestControlEndpointsFailClosed(_ApiCase):
+    """H1: with no API_KEY configured, mutating endpoints are DISABLED
+    (503) and NEVER execute -- previously they failed open (200)."""
 
-    def test_emergency_stop(self):
+    def test_run_cycle_disabled_and_no_side_effect(self):
+        r = self.client.post("/cycle/run")
+        self.assertEqual(r.status_code, 503)
+        # Proof it did NOT execute: no cycle ran.
+        self.assertEqual(self.state.cycles_run, 0)
+
+    def test_emergency_stop_disabled_and_no_side_effect(self):
         r = self.client.post("/control/emergency-stop")
-        self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.json()["emergency_stopped"])
-        # Reflected in health afterward.
-        self.assertTrue(self.client.get("/health").json()["emergency_stopped"])
+        self.assertEqual(r.status_code, 503)
+        # Proof the one-way action did NOT fire.
+        self.assertFalse(self.state.emergency_stopped)
+        self.assertFalse(self.client.get("/health").json()["emergency_stopped"])
+
+    def test_readonly_endpoints_still_open(self):
+        for path in ("/health", "/status", "/portfolio", "/reports", "/metrics"):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
+
+
+class TestControlEndpointsWhitespaceKeyFailsClosed(_ApiCase):
+    """A whitespace-only API_KEY is treated as unset -- a config typo must
+    never be mistaken for an enabled credential."""
+
+    extra_env = {"API_KEY": "   "}
+
+    def test_disabled_even_with_matching_whitespace(self):
+        # 503 (disabled), not 200 -- the key is not a usable credential.
+        self.assertEqual(self.client.post("/cycle/run").status_code, 503)
+        self.assertEqual(self.client.post("/cycle/run", headers={"X-API-Key": "   "}).status_code, 503)
+        self.assertEqual(self.state.cycles_run, 0)
 
 
 class TestDashboardServing(_ApiCase):
@@ -127,6 +146,30 @@ class TestControlEndpointsProtected(_ApiCase):
 
     def test_readonly_still_open(self):
         self.assertEqual(self.client.get("/health").status_code, 200)
+
+    def test_empty_presented_key_rejected(self):
+        r = self.client.post("/cycle/run", headers={"X-API-Key": ""})
+        self.assertEqual(r.status_code, 401)
+
+    def test_whitespace_presented_key_rejected(self):
+        r = self.client.post("/cycle/run", headers={"X-API-Key": "   "})
+        self.assertEqual(r.status_code, 401)
+
+    def test_emergency_stop_requires_key(self):
+        self.assertEqual(self.client.post("/control/emergency-stop").status_code, 401)
+        r = self.client.post("/control/emergency-stop", headers={"X-API-Key": "secret-key-123"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_concurrent_wrong_key_all_rejected(self):
+        import concurrent.futures
+
+        def hit():
+            return self.client.post("/cycle/run", headers={"X-API-Key": "wrong"}).status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            codes = list(pool.map(lambda _: hit(), range(24)))
+        self.assertTrue(all(c == 401 for c in codes), codes)
+        self.assertEqual(self.state.cycles_run, 0)  # none executed
 
 
 if __name__ == "__main__":

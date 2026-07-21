@@ -11,7 +11,7 @@ Public API:
 
 from .engine_builder import build_engine_from_settings
 from .settings import AppSettings
-from .state import AppState
+from .state import AppState, EmergencyStopActive
 from .worker import CycleWorker
 
-__all__ = ["AppSettings", "build_engine_from_settings", "AppState", "CycleWorker"]
+__all__ = ["AppSettings", "build_engine_from_settings", "AppState", "CycleWorker", "EmergencyStopActive"]

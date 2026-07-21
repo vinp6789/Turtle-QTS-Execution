@@ -249,5 +249,19 @@ class TestCycleClockInjection(_RealPaperEngineCase):
         self.assertEqual(result.evaluated_at_utc, "2030-05-05T00:00:00+00:00")
 
 
+class TestOnExecutionHook(_RealPaperEngineCase):
+    def test_hook_invoked_per_execution_before_cycle_result(self):
+        self.engine.portfolio_manager.deposit(Decimal("100000"), request_id="seed-deposit")
+        received = []
+        strategy = _FixedIntentStrategy(_intent())
+        result = self._run((strategy,), on_execution=received.append)
+        self.assertEqual(len(result.executions), 1)
+        self.assertEqual(received, list(result.executions))  # same objects, in order
+
+    def test_hook_defaults_to_none_with_prior_behavior(self):
+        result = self._run((_NoOpStrategy(),))  # no on_execution passed
+        self.assertEqual(result.executions, ())
+
+
 if __name__ == "__main__":
     unittest.main()

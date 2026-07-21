@@ -8,6 +8,7 @@ data
 scratchpad
 *.log
 .env
+env
 .venv
 venv
 tests

@@ -58,15 +58,56 @@ class TestSettings(unittest.TestCase):
         with self.assertRaises(ValueError):
             AppSettings.from_env({"PORT": "not-a-number", **_SIGNING_ENV})
 
+    # -- F4 regression: staleness limit must exceed the cycle interval --
+
+    def test_default_staleness_exceeds_default_interval(self):
+        # PRE-FIX the defaults themselves were the unsafe combination
+        # (interval 60s, staleness 30s): every post-idle evaluation
+        # FAIL_SAFEd on STALE_DATA. Defaults must now boot AND satisfy
+        # the validation.
+        settings = AppSettings.from_env(dict(_SIGNING_ENV))
+        self.assertGreater(settings.risk_max_stale_data_seconds, settings.cycle_interval_seconds)
+
+    def test_staleness_below_interval_fails_fast_with_clear_error(self):
+        with self.assertRaises(ValueError) as ctx:
+            AppSettings.from_env({
+                **_SIGNING_ENV,
+                "CYCLE_INTERVAL_SECONDS": "60",
+                "RISK_MAX_STALE_DATA_SECONDS": "30",
+            })
+        message = str(ctx.exception)
+        self.assertIn("RISK_MAX_STALE_DATA_SECONDS", message)
+        self.assertIn("CYCLE_INTERVAL_SECONDS", message)
+        self.assertIn("STALE_DATA", message)
+
+    def test_staleness_equal_to_interval_also_fails(self):
+        # "Greater than" is strict: equal means one slow cycle already
+        # renders the data stale at evaluation time.
+        with self.assertRaises(ValueError):
+            AppSettings.from_env({
+                **_SIGNING_ENV,
+                "CYCLE_INTERVAL_SECONDS": "60",
+                "RISK_MAX_STALE_DATA_SECONDS": "60",
+            })
+
+    def test_safe_staleness_configuration_boots(self):
+        settings = AppSettings.from_env({
+            **_SIGNING_ENV,
+            "CYCLE_INTERVAL_SECONDS": "60",
+            "RISK_MAX_STALE_DATA_SECONDS": "150",
+        })
+        self.assertEqual(settings.risk_max_stale_data_seconds, 150)
+
 
 class TestEngineConstruction(_RuntimeCase):
     def test_builds_engine_universe_and_risk_profile(self):
         env = _env(self.store_path)
         settings = AppSettings.from_env(env)
-        engine, universe, risk_profile = build_engine_from_settings(settings, env=env)
+        engine, universe, risk_profile, quantization_rules = build_engine_from_settings(settings, env=env)
         self.addCleanup(engine.event_store.close)
         self.assertTrue(len(universe) >= 1)
         self.assertGreater(risk_profile.max_positions, 0)
+        self.assertIsNone(quantization_rules)  # paper mode: no venue rules, no fetch
 
 
 class TestAppStateCycle(_RuntimeCase):

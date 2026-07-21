@@ -74,11 +74,17 @@ def run_cycle(state: AppState = Depends(get_state)) -> CycleRunResponse:
 @router.post("/control/emergency-stop", response_model=ControlResponse, tags=["control"],
              dependencies=[Depends(require_api_key)])
 def emergency_stop(state: AppState = Depends(get_state)) -> ControlResponse:
-    """Emergency Kill: revoke all signing so no further order can be
-    authorized. One-way. Protected by API key when one is configured."""
-    state.emergency_stop()
+    """Emergency Kill: best-effort cancel of resting venue orders FIRST
+    (while signing is still valid), then revoke all signing. One-way.
+    Requires the API key (fail-closed when none is configured)."""
+    cancelled = state.emergency_stop()
+    detail = (
+        f"Cancelled {len(cancelled)} venue-confirmed resting order(s), then revoked all "
+        "signing capability; no further mutations can be authorized."
+    )
+    if state.last_error and "cancel_all before revocation failed" in state.last_error:
+        detail += f" WARNING: {state.last_error}"
     return ControlResponse(
-        ok=True, action="emergency_stop",
-        detail="All signing capability revoked; no further mutations can be authorized.",
+        ok=True, action="emergency_stop", detail=detail,
         emergency_stopped=state.emergency_stopped,
     )

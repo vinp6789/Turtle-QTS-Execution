@@ -20,6 +20,14 @@ read/observe path.
 from .errors import ExecutionError
 from .executor import execute_amend, execute_cancel, execute_place
 from .models import ExecutionOperation, ExecutionResult
+from .quantization import (
+    PRICE_MAX_DECIMALS,
+    PRICE_SIG_FIGS,
+    QuantizationRules,
+    SymbolRules,
+    quantize_price,
+    quantize_size,
+)
 
 __all__ = [
     "execute_place",
@@ -28,4 +36,10 @@ __all__ = [
     "ExecutionResult",
     "ExecutionOperation",
     "ExecutionError",
+    "SymbolRules",
+    "QuantizationRules",
+    "quantize_size",
+    "quantize_price",
+    "PRICE_SIG_FIGS",
+    "PRICE_MAX_DECIMALS",
 ]

@@ -36,4 +36,7 @@ data/
 .env
 .env.*
 !.env.example
+# Plaintext secrets file kept locally as `env` (no dot): the `env/` rule
+# above matches only a DIRECTORY, so the file must be ignored explicitly.
+env
 scratchpad/

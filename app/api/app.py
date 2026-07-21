@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router
 from app.observability import configure_logging, log_event
 from app.runtime import AppSettings, AppState, CycleWorker
+from app.telegram import TelegramBot
 
 _DASHBOARD_DIR = Path(__file__).resolve().parents[2] / "dashboard"
 
@@ -52,8 +53,11 @@ def create_app(
         worker = CycleWorker(state)
 
     logger = logging.getLogger("turtle.app")
-    if not state.settings.api_key:
-        logger.warning("API_KEY is not set: control endpoints (/cycle/run, /control/emergency-stop) are UNPROTECTED.")
+    if not (state.settings.api_key and state.settings.api_key.strip()):
+        logger.warning(
+            "API_KEY is not set: control endpoints (/cycle/run, /control/emergency-stop) are "
+            "DISABLED (fail-closed, HTTP 503). Set API_KEY to enable them. Read-only monitoring is unaffected."
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -68,9 +72,19 @@ def create_app(
             app.state.worker.start()
             log_event(logger, logging.INFO, "cycle worker started",
                       interval_seconds=app.state.app_state.settings.cycle_interval_seconds)
+        # H5: start the Telegram polling bot when Telegram is enabled. The
+        # bot's own _enabled guard makes this a no-op otherwise; config was
+        # already validated fail-clear at settings load. Bot lifecycle is
+        # tied to this lifespan: started here, stopped in finally.
+        if app.state.telegram_bot is not None:
+            app.state.telegram_bot.start()
+            if app.state.telegram_bot.is_running:
+                log_event(logger, logging.INFO, "telegram bot started")
         try:
             yield
         finally:
+            if app.state.telegram_bot is not None:
+                app.state.telegram_bot.stop()
             app.state.worker.stop()
             app.state.app_state.shutdown()
             log_event(logger, logging.INFO, "engine shut down")
@@ -81,6 +95,12 @@ def create_app(
     app.state.worker = worker
     app.state.start_worker = start_worker
     app.state.run_startup_cycle = run_startup_cycle
+    # H5: construct the bot once (cheap; no network until start()). Its own
+    # _enabled guard means a disabled Telegram never polls. None only when
+    # the whole feature is off, so the lifespan can skip it entirely.
+    app.state.telegram_bot = (
+        TelegramBot(state, state.settings) if state.settings.telegram_enabled else None
+    )
 
     app.include_router(router)
 

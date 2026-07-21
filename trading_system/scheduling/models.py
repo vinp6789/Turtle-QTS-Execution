@@ -26,3 +26,10 @@ class CycleResult:
     construction: ConstructionResult
     executions: Tuple[ExecutionResult, ...]
     evaluated_at_utc: str
+    # H-A fix: intents suppressed because a LIVE engine-owned order for the
+    # same (symbol, reduce_only) already rests at the venue -- placing
+    # another would stack duplicate exposure across cycles. Additive field
+    # (defaulted) so existing constructions are unaffected; nothing is
+    # silently dropped: `intents` still shows everything the strategies
+    # emitted, and this field shows exactly what the filter withheld.
+    suppressed_by_open_orders: Tuple[TradeIntent, ...] = ()

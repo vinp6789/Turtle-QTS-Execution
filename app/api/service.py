@@ -87,9 +87,10 @@ def _snapshot_dict(snapshot: EngineSnapshot) -> Dict[str, Any]:
 
 
 def status_dict(state: AppState) -> Dict[str, Any]:
-    """Full status -- captures a fresh EngineSnapshot (runs a read-only
-    reconciliation when the engine is started)."""
-    snapshot = state.capture()
+    """Full status from the worker-produced snapshot (H3: read endpoints
+    never touch the venue or the engine lock; freshness is cycle-cadence,
+    carried in captured_at_utc)."""
+    snapshot = state.snapshot_for_reads()
     data = _snapshot_dict(snapshot)
     data["cycles_run"] = state.cycles_run
     data["emergency_stopped"] = state.emergency_stopped
@@ -99,12 +100,12 @@ def status_dict(state: AppState) -> Dict[str, Any]:
 
 
 def portfolio_dict(state: AppState) -> Dict[str, Any]:
-    return _snapshot_dict(state.capture())["portfolio"]
+    return _snapshot_dict(state.snapshot_for_reads())["portfolio"]
 
 
 def reports_dict(state: AppState) -> Dict[str, str]:
-    """All five human-readable reports in one call."""
-    snapshot = state.capture()
+    """All five human-readable reports in one call (H3: cached snapshot)."""
+    snapshot = state.snapshot_for_reads()
     return {
         "portfolio": portfolio_summary(snapshot),
         "execution": execution_summary(snapshot),

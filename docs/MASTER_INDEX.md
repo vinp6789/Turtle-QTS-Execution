@@ -12,6 +12,7 @@ and tests. All entries reflect actual repository contents.
 | `CHANGELOG.md` | Recorded changes, starting at v1.0 |
 | `ROADMAP.md` | Future work, grounded in source-attested hooks |
 | `ARCHITECTURE_DECISIONS.md` | Design decisions evidenced in the source |
+| `ADR_ACCOUNTING_CRASH_WINDOWS.md` | AD-25 full analysis: the accepted venue-ACK ↔ EventStore crash windows (timeline, impossibility argument, recovery) |
 | `SECURITY_ASSUMPTIONS.md` | Security posture and assumptions |
 | `MODULE_INVENTORY.md` | Per-module table: API, deps, test file, test count |
 | `DEPENDENCY_GRAPH.md` | Import graph, layering, responsibilities |

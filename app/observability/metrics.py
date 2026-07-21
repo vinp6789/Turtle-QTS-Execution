@@ -27,7 +27,9 @@ def _metric(lines: List[str], name: str, value, help_text: str, mtype: str = "ga
 
 
 def render_metrics(state: AppState) -> str:
-    snapshot = state.capture()
+    # H3: metrics are scraped frequently and unauthenticated -- they must
+    # never trigger venue I/O or contend for the engine lock.
+    snapshot = state.snapshot_for_reads()
     p = snapshot.portfolio_snapshot
     lines: List[str] = []
 

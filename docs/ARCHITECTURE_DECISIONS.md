@@ -120,3 +120,25 @@ configuration layer. This is an authorized additive evolution of a frozen
 module (Module 1, re-frozen as Module 1.1) under a distinct authorization
 category from AD-18's critical-defect exception -- see
 `DEVELOPMENT_WORKFLOW.md`.
+
+## AD-25: Accepted accounting crash windows (venue-ACK <-> EventStore)
+The app-layer accounting synchronization retains exactly two crash
+windows, each one local fsync wide: venue-order-acceptance -> levels
+append (W1), and Module 7's self-minted position CREATE -> the
+order->position mapping append (W2). Both are accepted, not fixable in
+place: W1 is a distributed-atomic-commit impossibility (the venue's
+matching engine and the local EventStore are independent durability
+domains with no shared coordinator), and every reachable reordering or
+compensation either recreates an equivalent window, requires modifying
+frozen Module 6 (carrying the stop level in the SUBMIT event -- the
+correct long-term fix if the module is ever reopened under AD-18), or
+fabricates capital data. The failure mode is bookkeeping-conservative
+(nothing is invented; no fabricated position ever enters a risk
+decision), loud (per-sync notes plus a reconciliation mismatch every
+cycle until resolved), and replay-safe (every accounting fact is a
+single idempotent append; re-syncing the venue's fill history is a
+proven zero-append no-op). *Evidence:* `app/runtime/accounting.py`
+(module docstring), `trading_system/scheduling/cycle.py` (`on_execution`
+hook), crash-injection regression tests in `tests/test_app_accounting.py`
+(`TestLevelsCrashWindow`, `TestF1CrashWindowHealing`). *Full analysis
+with crash timeline:* `ADR_ACCOUNTING_CRASH_WINDOWS.md`.

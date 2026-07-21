@@ -14,9 +14,13 @@
 | POST | `/cycle/run` | API key* | Run one trading cycle now |
 | POST | `/control/emergency-stop` | API key* | Revoke all signing (Emergency Kill) |
 
-\* Protected only when `API_KEY` is set. **Always set `API_KEY` in
-production.** Present it as `X-API-Key: <key>` or `Authorization: Bearer
-<key>`. The dashboard stores it in the browser's localStorage.
+\* **Fail-closed (H1):** these two endpoints are **disabled (HTTP 503)**
+whenever `API_KEY` is unset or whitespace — no unauthenticated caller can
+run a cycle or trigger the one-way emergency stop. Setting `API_KEY`
+**enables** them and requires it (constant-time compared) via `X-API-Key:
+<key>` or `Authorization: Bearer <key>`; a missing/empty/wrong key then
+returns 401. **Always set `API_KEY` in production.** The dashboard stores
+it in the browser's localStorage. Read-only endpoints are always open.
 
 ## Monitoring from your phone
 
@@ -27,10 +31,29 @@ plus **Run cycle** and **Emergency stop** buttons (enter the API key once).
 ## Emergency stop
 
 `POST /control/emergency-stop` (or `/stop` in Telegram, or the dashboard
-button) revokes **all** signing capability via the frozen
-`SigningBoundary.revoke_all()` and the wallet signer's `revoke()`. This is
-**one-way** for the running process — no further order can be authorized.
-To resume trading, redeploy/restart with fresh signing config.
+button) executes in fail-safe order: **(1) best-effort cancel of all
+resting venue orders while signing is still valid** (H2 fix — revocation
+is one-way, so anything not cancelled first would rest at the venue,
+fillable but unmanageable, forever; the response reports the
+venue-confirmed cancel count, and a cancel failure is surfaced but never
+delays step 2), **(2) revoke all signing** via the frozen
+`SigningBoundary.revoke_all()` and the wallet signer's `revoke()`, then
+**(3) durably record** the stop by driving the Execution State Machine
+into `EMERGENCY_KILL` (M1 fix). Consequences, all deliberate:
+
+- Every subsequent risk evaluation returns `BLOCKED` and every cycle
+  attempt is refused (`EmergencyStopActive`) — no orphan order records.
+- Monitoring/dashboard/`/health` show the kill switch **active**.
+- The stop **survives restart**: the kill state replays from the event
+  store, so a restarted process stays stopped (previously a restart
+  silently resumed trading). Read-only monitoring and fill booking keep
+  working.
+
+Resuming requires a **fresh deployment state**: a new `ENGINE_STORE_PATH`
+(archive the old event log first — `scripts/backup_eventstore.py`) plus
+signing configuration, matching the frozen design's "an emergency kill is
+a one-way trip requiring a fresh process" (`EMERGENCY_KILL`'s only exit is
+`SHUTDOWN`).
 
 ## Telegram
 
