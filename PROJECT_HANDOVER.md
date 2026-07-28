@@ -1,3 +1,13 @@
+> **SUPERSEDED.** This was the "current status" snapshot as of the point
+> the Alpha Engine work began. It is retained for history (per
+> `docs/PROJECT_CONSTITUTION.md`'s decision-log discipline: never rewrite
+> history) but is no longer current. **For current status, see
+> [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) or
+> [`docs/PROJECT_DASHBOARD.md`](docs/PROJECT_DASHBOARD.md).** The 820/820
+> regression baseline recorded below is still accurate for the Execution
+> Engine alone; the full current suite (Execution Engine + Alpha Engine)
+> is 1,567 passing.
+
 # Project Status (Latest)
 
 ## Overall

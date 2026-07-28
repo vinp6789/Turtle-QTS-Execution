@@ -55,6 +55,20 @@ entrypoint. Retained for provenance:
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for source-attested future work.
 
+## Alpha Engine (additive research subsystem)
+
+This repository also contains the **Alpha Engine** (`alpha_engine/`,
+`research/`) — a separate, additive research platform that discovers,
+validates, and (eventually) promotes trading hypotheses into this
+Execution Engine via the same `trading_system.strategy` seam any other
+strategy would use. It has never modified any frozen module here (a test
+enforces this) and has not yet been wired into a running deployment.
+**Start at [`docs/PROJECT_CONSTITUTION.md`](docs/PROJECT_CONSTITUTION.md)**
+for the full picture, or
+[`docs/PROJECT_DASHBOARD.md`](docs/PROJECT_DASHBOARD.md) for current
+status — as of this writing, one research campaign has run (Open
+Interest), closing with zero approved models.
+
 ## Status
 
 - Regression baseline: **319 tests** (config 35, event_store 38) plus 5

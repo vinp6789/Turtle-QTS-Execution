@@ -1,5 +1,10 @@
 # ARCHITECTURE_DECISIONS.md
 
+> This is one of **two** decision logs, by design — see
+> `PROJECT_CONSTITUTION.md` §11. This log covers the frozen **Execution
+> Engine** only. For **Alpha Engine** decisions, see
+> `../alpha_engine/DECISIONS.md`.
+
 Architecture decisions that are **evidenced in the source** of the Turtle
 Execution Engine. Each records the decision and the repository artifact that
 demonstrates it. This is a description of decisions already made and frozen,

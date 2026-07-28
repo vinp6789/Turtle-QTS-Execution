@@ -1,3 +1,9 @@
+> **SUPERSEDED for current status** — retained for history. See
+> [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for current state and
+> [`FINAL_PRODUCTION_AUDIT.md`](FINAL_PRODUCTION_AUDIT.md) for the later,
+> more complete independent audit (which re-verified every item below from
+> source and found no new capital-safety defect).
+
 Independent audits completed
 
 ✓ C1

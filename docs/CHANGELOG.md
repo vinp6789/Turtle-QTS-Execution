@@ -6,6 +6,102 @@ development is not itemized here. No calendar dates are asserted (none are
 verifiable in the source). Entries record only facts observable in the
 repository and in this session's verified work.
 
+> No formal version number is asserted for the entries below beyond what
+> is already established (v1.0/v1.0.1/v1.1.0) — per this file's own
+> no-invented-version discipline, they are labeled descriptively. See
+> `git log` for the actual commit sequence and `PROJECT_STATUS.md` for
+> current state.
+
+## Module 10 — Hyperliquid Adapter (frozen)
+
+### Added
+- `hyperliquid_adapter/`: concrete `ExchangeAdapter` implementation for
+  Hyperliquid — read-only methods, four authenticated mutations
+  (place/cancel/cancel_all/amend), EIP-712 venue signing, durable
+  engine-id↔cloid order attribution. Full detail, known limitations, and
+  validation evidence: `../MODULE_10_FREEZE.md`.
+- 206 module tests; full-suite regression at freeze: 534 passing (no
+  regression in the frozen core).
+
+## Application layer
+
+### Added
+- `app/`, `composition_root/`, `trading_system/`, `orchestration/`: the
+  deployable service wrapping the frozen engine (REST API, mobile
+  dashboard, Telegram bot, Prometheus metrics, worker loop) — see
+  `DEPLOYMENT.md`, `OPERATIONS.md`, `PRODUCTION_CHECKLIST.md`.
+- Capital-safety fixes (accounting wiring, quantization, crash-window
+  healing, short-side PnL, staleness validation, emergency-stop
+  propagation, fail-closed control endpoints, read-path isolation,
+  Telegram lifecycle) — see `../AUDIT_HISTORY.md` (superseded snapshot)
+  and `../FINAL_PRODUCTION_AUDIT.md` (independently re-verified from
+  source, GO verdict on engineering/capital safety).
+- Full-suite regression at this point: 820 passing.
+
+## Alpha Engine — platform build (R1–R8)
+
+### Added
+- `alpha_engine/`: an additive research subsystem — Experiment Registry,
+  two data sources (funding rate, open interest), feature transforms,
+  rule-based candidates, a five-stage validation gate, immutable evidence
+  packages, governance (reviewer-separation), a ten-state lifecycle,
+  degradation/freeze policy, conflict-refusing portfolio selection, and
+  an execution bridge (`ApprovedFundingAlphaStrategy`) consuming the
+  Execution Engine only through its public `Strategy`/`TradeIntent` seam.
+- Zero frozen Execution Engine modules modified — enforced by an
+  automated test (`tests/test_alpha_engine_scaffold.py`).
+- Full detail: `ALPHA_ENGINE.md`; decision record: `../alpha_engine/DECISIONS.md` (D1–D8).
+
+## Alpha Engine — adversarial audit remediation
+
+### Fixed
+- Ten findings (A1, A2, B1–B6, C3, C4) from an independent adversarial
+  audit: bridge liveness re-checking, cadence enforcement, dataset
+  fingerprinting, evidence-fingerprint scope, registry storage hardening
+  (lock/checksum/torn-tail tolerance), structured logging, canonical
+  timestamp handling, registry deep-copy at read/write boundaries,
+  catalog-based candidate dispatch, and watchlist enforcement. All fixes
+  additive and (mostly) opt-in via new optional arguments defaulting to
+  prior behavior. Full detail: `ALPHA_ENGINE.md` §8; decision record:
+  `../alpha_engine/DECISIONS.md` D9.
+
+## Alpha Engine — historical data pipeline
+
+### Added
+- `alpha_engine/historical/`: a reproducible, incrementally-rerunnable
+  pipeline collecting Open Interest, mark price, and Funding Rate history
+  for BTC/ETH/SOL from Binance (primary) and Hyperliquid (secondary,
+  venue-consistent) public sources — checksummed, integrity-validated,
+  point-in-time-correct. Full detail: `HISTORICAL_DATA.md`.
+
+## Alpha Engine — Research Campaign 01 (Open Interest)
+
+### Added
+- `research/campaign_01_open_interest/`: point-in-time sample
+  construction and campaign execution harness.
+- New platform additions required by the campaign's own evidence (not
+  built ahead of need): `MarkPriceObservation` + `collect_metrics`
+  (historical), rolling percentile-rank/z-score OI features, and the
+  `open_interest_extremeness_rule` candidate.
+
+### Result
+- Four pre-registered experiments executed on 18 months of real
+  BTC/ETH/SOL data. **All four REJECTED on merit** — no reliable 24h
+  directional edge in raw Open Interest level. Full record:
+  `RESEARCH_LEDGER.md` (CAMP-01), `RESEARCH_CAMPAIGN_01_open_interest.md`.
+- Full-suite regression at this point: 1,567 passing.
+
+## Documentation — project-mode transition
+
+### Added
+- `PROJECT_CONSTITUTION.md`, `PROJECT_DASHBOARD.md`, `RESEARCH_LEDGER.md`,
+  `ALPHA_LIBRARY.md`, `WATCHLIST.md`, `RESEARCH_PLAYBOOK.md`,
+  `REVIEW_PROTOCOL.md` — consolidating what had been conversation-only
+  context into permanent, repository-resident documentation. Updated
+  `PROJECT_STATUS.md`, `ROADMAP.md`, and `MASTER_INDEX.md` to reflect
+  current (both-subsystem) state rather than the pre-Alpha-Engine
+  snapshot they previously described.
+
 ## v1.1.0 — additive evolution (Module 1.1, config)
 
 ### Added

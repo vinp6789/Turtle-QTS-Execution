@@ -7,9 +7,48 @@
 > approved (shim-based) version. The repository now matches the approved
 > Modules 1–9 implementation and collects on Windows.
 
+> **SCOPE NOTE.** The detailed tree below is the original Modules 1–9
+> packaging snapshot and remains accurate *for that scope*. Since then the
+> repository has grown substantially: Module 10 (`hyperliquid_adapter/`),
+> the app layer (`app/`, `composition_root/`, `trading_system/`,
+> `orchestration/`), and the entire Alpha Engine subsystem
+> (`alpha_engine/`, `research/`, `data/`). See "Current top-level layout"
+> below for the additions; the Modules 1–9 detail underneath is unchanged
+> and still correct.
+
 Repository tree for the Turtle Execution Engine, listing only files that
 actually exist. Nine frozen packages (Modules 1–9), one test suite, one
 sample config, generated caches, and this documentation set.
+
+## Current top-level layout (addendum — everything added since the snapshot below)
+
+```
+├── hyperliquid_adapter/            # Module 10 (frozen) — see MODULE_10_FREEZE.md
+├── app/                            # Application layer (API, dashboard, Telegram, worker)
+├── composition_root/               # Wires Modules 1-10 + app into a running Engine
+├── trading_system/                 # Strategy/TradeIntent seam, scheduling, execution
+├── orchestration/                  # Cycle orchestration
+├── alpha_engine/                   # Alpha Engine subsystem (registry, data_sources,
+│                                   #   features, candidates, validation, governance,
+│                                   #   lifecycle, portfolio, execution_bridge,
+│                                   #   historical, watchlist.py, research.py)
+│   └── DECISIONS.md                # Alpha Engine decision log (D1 onward)
+├── research/                       # Research campaign harnesses (not platform code)
+│   └── campaign_01_open_interest/  # Campaign 01's sample-construction + execution scripts
+├── data/                           # Runtime state, historical backfills (git-ignored)
+├── deploy/                         # Deployment configs (e.g. engine.paper.toml)
+├── scripts/                        # Operational scripts (backup, validate_env, smoke_test)
+├── README.md, PROJECT_HANDOVER.md, AUDIT_HISTORY.md,
+│   FINAL_PRODUCTION_AUDIT.md, MODULE_10_FREEZE.md   # root-level docs — see MASTER_INDEX.md
+└── docs/                           # full documentation set — see MASTER_INDEX.md
+```
+
+`tests/` now holds one `test_*.py` per Execution Engine module/package
+plus a large Alpha Engine test set (`test_alpha_engine_*.py`,
+`test_research_campaign_01_*.py`) — **1,567 tests total** (820 Execution
+Engine + 747 Alpha Engine), see `MASTER_INDEX.md`.
+
+## Modules 1-9 packaging snapshot (original tree, still accurate for its scope)
 
 ## Tree
 
