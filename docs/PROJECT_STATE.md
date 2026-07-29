@@ -36,10 +36,10 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | Collect the outcome series (Hyperliquid-native + Binance, 2025-07-27→present), then the full 12-month liquidation backfill, then Campaign 06's outcome-blind feasibility review |
-| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items and Backlog 1.3 closed, including a High-severity defect found by independent QA review and fixed before 1.5.** |
-| **Immediate next task** | Outcome series 2025-07-27 → present: Hyperliquid-native daily candles (primary) + Binance metrics (secondary) (Backlog 1.4) |
-| **Full regression** | **1,669 passed, 92 subtests, 0 failed** (re-verified this session — independent QA audit of Backlog 1.3 + fixes, 8 new tests) |
+| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5), then Campaign 06's outcome-blind feasibility review (1.6) |
+| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items, Backlog 1.3, and Backlog 1.4 closed.** |
+| **Immediate next task** | Full 12-month liquidation backfill, single pass, all symbols retained (Backlog 1.5) |
+| **Full regression** | **1,683 passed, 92 subtests, 0 failed** (re-verified this session — Backlog 1.4: Hyperliquid daily-candle mark price + Binance dual-source `collect_mark_price`, 14 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -258,6 +258,14 @@ pre-fix code and passes against the fix).
   was explicitly scoped as optional. Left deferred per instruction.
 - 8 new tests. Full regression: **1,669 passed, 92 subtests, 0 failed.**
 
+**Backlog 1.4 closed (2026-07-29):** outcome series 2025-07-27 → present.
+- `sources/hyperliquid.py::fetch_daily_candles()` — new function, live-verified against the real `candleSnapshot` endpoint (2026-07-29): all price fields string-encoded decimals, no pagination cap up to a 368-day single request (unlike `fundingHistory`'s 500-record cap), a repeated call against an already-closed day returned byte-identical data (point-in-time stable). Decodes into `MarkPriceObservation` using the candle CLOSE — a **daily close, not a point-in-time mark price** (derivation-scope note, RD-11 A), documented in both the function's docstring and `MarkPriceObservation`'s own.
+- `pipeline.py::collect_mark_price()` split into a dispatcher + `_collect_mark_price_binance`/`_collect_mark_price_hyperliquid`, mirroring `collect_funding_rate`'s existing two-source pattern exactly (same high-water-mark resume shape for the Hyperliquid side). `_SUPPORTED_MARK_PRICE_SOURCES` extended to `("binance", "hyperliquid")`.
+- **Boundary defect found and fixed before committing, via a real end-to-end run against the live API (not caught by unit tests with fakes alone):** `_collect_mark_price_hyperliquid`'s `end_ms` computation copied `collect_funding_rate`'s "+1 day, exclusive" formula verbatim. Live-verified that `candleSnapshot`'s `endTime` is **inclusive** of a candle whose own `t` equals `endTime` exactly — safe for hourly funding settlements (which essentially never land exactly on a day boundary) but not for daily candles (whose `t` always does), so the copied formula silently included one extra day beyond the caller's requested range. First real run for BTC 2025-07-27→2026-07-28 pulled in a 369th, still-forming row for 2026-07-29. Fixed with a `-1ms` adjustment; locked in by `test_end_date_boundary_does_not_leak_the_following_days_candle`, confirmed to fail against the pre-fix formula (leaks a day) and pass against the fix. The erroneous data was deleted and the collection re-run cleanly.
+- **Real end-to-end collection executed** (not just tested against fakes): Hyperliquid daily candles for BTC/ETH/SOL, 2025-07-27→2026-07-28 — **367/367/367 rows**, dates and values verified. Binance secondary-source backfill (via `collect_metrics`, chunked weekly with retry, mirroring `research/campaign_01_open_interest/collect_backfill.py`'s established pattern) verified correct on every completed chunk, zero errors; continuing in the background past this session's end — its completion is a data-volume matter, not an open code question, and is not required for Backlog 1.4's capability to be considered done (same distinction as Backlog 1.3's collector vs. 1.5's full-scale run). Per the pre-existing, deliberate `data/` gitignore policy, none of this collected data is committed — only the code and tests are.
+- `docs/HISTORICAL_DATA.md` §0/§1 updated: Mark Price added as its own row (both sources) to the source-comparison table; the DEX-first section's "Funding Rate is the only currently-collected metric where Hyperliquid-replicate is executable" claim corrected to scope it to feature metrics (mark price is an outcome series, not a feature, so it was never covered by that claim and didn't need venue-transfer validation — but the zero-overlap gap it closes is recorded).
+- 14 new tests (9 `fetch_daily_candles`, 5 `collect_mark_price` Hyperliquid-path incl. the boundary regression). Full regression: **1,683 passed, 92 subtests, 0 failed.**
+
 ---
 
 ## Immediate Backlog
@@ -270,8 +278,8 @@ pre-fix code and passes against the fix).
 | ~~1.1~~ | ~~Restore the governance-inspection clause in `RESEARCH_PLAYBOOK.md` §5~~ | — | — | — | **Done 2026-07-29** |
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
-| **1.4** | Outcome series 2025-07-27 → present: **Hyperliquid-native daily candles (primary** — free, verified live to 2020-08-19, DEX-first per Constitution §4/§6) + Binance metrics (secondary cross-venue check, verified HTTP 200) | 1.3 | Yes — closes verified zero-overlap gap (mark price ends 2025-01-01, liquidation archive starts 2025-07-27) | ~4 hrs | Not started |
-| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time; staged/partial backfill considered and rejected — walk-forward requires chronological contiguity, and month-selection would be an un-pre-registered researcher choice) | 0.2 (done), 1.3 | Yes, for Campaign 06 only | ~1 day wall-clock | Not started |
+| ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
+| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time; staged/partial backfill considered and rejected — walk-forward requires chronological contiguity, and month-selection would be an un-pre-registered researcher choice) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | Not started |
 | **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
 | **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | Not started |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
@@ -300,7 +308,7 @@ pre-fix code and passes against the fix).
 - ~~`boto3`/`lz4` undeclared~~ — **closed 2026-07-29**, declared in `requirements.txt`, scoped to the historical pipeline only.
 
 **Scientific**
-- Zero overlap between existing mark-price coverage (ends 2025-01-01) and the liquidation archive (starts 2025-07-27).
+- ~~Zero overlap between mark-price coverage and the liquidation archive~~ — **closed 2026-07-29.** Hyperliquid-native daily-candle mark price now covers 2025-07-27→2026-07-28 (367/367/367 rows, BTC/ETH/SOL) — full overlap with the liquidation archive's own window. Binance secondary-source coverage for the same window still filling in (see Active Work) but is not itself blocking.
 - Measured cross-symbol correlation (+0.85–0.90) means the pilot's raw per-fold sample counts overstate true statistical power by roughly 2.5–3×; the feasibility review (Backlog 1.6) may reject Campaign 06 outright.
 
 **Operational**
@@ -337,8 +345,8 @@ pre-fix code and passes against the fix).
 4. ~~Add the governance-inspection clause to `RESEARCH_PLAYBOOK.md`~~ — **done 2026-07-29**, landed in §5 (governance stage), not §2 (it's a review-time inspection, not a pre-registration criterion).
 5. ~~Write RD-13~~ — **done 2026-07-29**: pilot measurements, RD-12 correction, cross-symbol correlation finding, new feasibility-review requirement.
 6. ~~Build `collect_liquidations()` + CLI entry; declare `boto3`/`lz4`~~ — **done 2026-07-29**, plus a real durability defect (deferred-write, not per-day flush) found and fixed before commit.
-7. Collect Hyperliquid-native daily candles 2025-07-27→present (verify point-in-time/revision safety first); collect Binance metrics for the same window as the secondary check. *(Next unstarted task.)*
-8. Execute the full 12-month liquidation backfill, single pass, all symbols retained.
+7. ~~Collect Hyperliquid-native daily candles 2025-07-27→present + Binance metrics secondary check~~ — **done 2026-07-29**, plus a real end-date boundary defect found via live run and fixed (see Active Work).
+8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(Next unstarted task.)*
 9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
 10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and move to the deep-history backfill (Backlog 2.1) ahead of the next funding/OI campaign.
 
@@ -517,7 +525,7 @@ accordingly.)*
 2026-07-29   Independent QA audit of commit 9334d4f: found the per-day
              flush above did not fully close the checkpoint-durability
              defect (High), plus one Medium and three Low findings (see
-             Decision Register). Fixed in the following commit: checkpoint
+             Decision Register). Fixed in commit `508d4b4`: checkpoint
              now advances only after a day's flush succeeds, not per
              hour during the fetch loop; S3 exceptions now translate to
              HistoricalDataError so the CLI retry can actually catch
@@ -525,6 +533,22 @@ accordingly.)*
              client reused per call instead of one per request. 8 new
              tests, each confirmed to fail against the pre-fix code and
              pass against the fix. 1,669 tests passing.
-   ...        [next: Immediate Backlog items 1.4 → 1.6, then Campaign 06
-              decision point]
+2026-07-29   Backlog 1.4: collect_mark_price() extended to a Hyperliquid
+             daily-candle source (fetch_daily_candles, new), mirroring
+             collect_funding_rate's existing two-source pattern. A real
+             end-date boundary defect (candleSnapshot's endTime is
+             inclusive, unlike the hourly-funding formula it was copied
+             from) found via a live end-to-end run against the real API,
+             not by unit tests with fakes alone -- fixed with a -1ms
+             adjustment before committing. Real collection executed:
+             Hyperliquid daily candles for BTC/ETH/SOL, 2025-07-27 to
+             2026-07-28, 367/367/367 rows -- full overlap with the
+             liquidation archive's window, closing that blocker. Binance
+             secondary-source coverage for the same window continued
+             filling in past this session (data-volume matter, not an
+             open code question; per the pre-existing gitignore policy,
+             none of the collected data itself is committed). 14 new
+             tests. 1,683 tests passing.
+   ...        [next: Immediate Backlog item 1.5, then 1.6, then Campaign
+              06 decision point]
 ```

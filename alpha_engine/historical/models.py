@@ -90,6 +90,12 @@ class MarkPriceObservation:
     sum_open_interest_value / sum_open_interest -- the open-interest units
     cancel, leaving the venue's own mark price (empirically verified to
     match spot to the dollar; see docs/RESEARCH_CAMPAIGN_01_open_interest.md).
+    For the Hyperliquid source (Backlog 1.4, `sources.hyperliquid.
+    fetch_daily_candles`) this is a DAILY CANDLE CLOSE, not a point-in-time
+    mark price -- reused as the same type because it is structurally
+    identical (one Decimal value per symbol per timestamp), not because
+    the two quantities mean the same thing; see that function's own
+    derivation-scope note (RD-11 A).
     Kept as its OWN series/type rather than a field on OpenInterestObservation
     because a mark price is a distinct metric with distinct downstream use
     (forward-return outcomes), and mixing two metrics in one row would

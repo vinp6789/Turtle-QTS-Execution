@@ -54,9 +54,10 @@ _logger = logging.getLogger(__name__)
 _OI_EXPECTED_INTERVAL_SECONDS = 300           # Binance metrics: 5-minute resolution
 _BINANCE_FUNDING_EXPECTED_INTERVAL_SECONDS = 8 * 3600   # Binance's historical native cadence
 _HYPERLIQUID_FUNDING_EXPECTED_INTERVAL_SECONDS = 3600   # Hyperliquid's native cadence
+_HYPERLIQUID_DAILY_CANDLE_INTERVAL_SECONDS = 24 * 3600  # one candle per day (Backlog 1.4)
 
 _SUPPORTED_OPEN_INTEREST_SOURCES = ("binance",)
-_SUPPORTED_MARK_PRICE_SOURCES = ("binance",)
+_SUPPORTED_MARK_PRICE_SOURCES = ("binance", "hyperliquid")
 _SUPPORTED_FUNDING_RATE_SOURCES = ("binance", "hyperliquid")
 
 
@@ -202,16 +203,28 @@ def collect_mark_price(
     *,
     source: str = "binance",
     force: bool = False,
-    transport: Optional[binance.TransportFn] = None,
-    timeout_seconds: float = 30.0,
+    transport: Optional[Any] = None,
+    timeout_seconds: Optional[float] = None,
     clock: Callable[[], str] = _now,
 ) -> CollectionResult:
-    """Collects daily mark-price series (derived from the Binance metrics
-    file's value/OI ratio) for `symbol` over [start_date, end_date]
-    inclusive. Structurally identical to collect_open_interest() -- same
-    daily-file, skip-covered-days, atomic-merge, quality-report flow --
-    because both draw from the same daily metrics files. Required for
-    forward-return outcomes in return-based research."""
+    """Collects daily mark-price series for `symbol` over [start_date,
+    end_date] inclusive, from `source` ("binance" or "hyperliquid", Backlog
+    1.4) into storage_root/series_filename(...).
+
+    Binance: derived from the daily metrics file's value/OI ratio, skips
+    days already on disk unless force=True (structurally identical to
+    collect_open_interest() -- same daily-file, skip-covered-days,
+    atomic-merge, quality-report flow, since both draw from the same
+    daily metrics files).
+    Hyperliquid: a daily candle's CLOSE price (sources.hyperliquid.
+    fetch_daily_candles -- see that function's own derivation-scope note,
+    RD-11 A: a daily close is not the same quantity as Binance's
+    point-in-time mark price). Resumes from the latest observed_at_utc
+    already on disk (a high-water mark), never earlier than the caller's
+    own start_date -- the same continuous-range pattern
+    collect_funding_rate already uses for this venue.
+
+    Required for forward-return outcomes in return-based research."""
     if source not in _SUPPORTED_MARK_PRICE_SOURCES:
         raise HistoricalDataError(
             f"unsupported mark_price source {source!r}; supported: {_SUPPORTED_MARK_PRICE_SOURCES}"
@@ -219,12 +232,26 @@ def collect_mark_price(
     if not isinstance(start_date, date) or not isinstance(end_date, date) or end_date < start_date:
         raise HistoricalDataError("start_date/end_date must be date instances with end_date >= start_date")
 
-    fetch_kwargs = {"timeout_seconds": timeout_seconds, "clock": clock}
+    path = Path(storage_root) / storage.series_filename("mark_price", symbol, source)
+    existing = storage.load(path, MarkPriceObservation)
+
+    if source == "binance":
+        return _collect_mark_price_binance(
+            symbol, start_date, end_date, path, existing, force, transport, timeout_seconds, clock,
+        )
+    return _collect_mark_price_hyperliquid(
+        symbol, start_date, end_date, path, existing, force, transport, timeout_seconds, clock,
+    )
+
+
+def _collect_mark_price_binance(
+    symbol, start_date, end_date, path, existing, force, transport, timeout_seconds, clock,
+) -> CollectionResult:
+    fetch_kwargs = {"clock": clock}
+    fetch_kwargs["timeout_seconds"] = timeout_seconds if timeout_seconds is not None else 30.0
     if transport is not None:
         fetch_kwargs["transport"] = transport
 
-    path = Path(storage_root) / storage.series_filename("mark_price", symbol, source)
-    existing = storage.load(path, MarkPriceObservation)
     covered_days = _existing_days_covered(existing) if not force else set()
 
     requested = fetched = skipped = unavailable = 0
@@ -247,8 +274,8 @@ def collect_mark_price(
     merge_result = storage.merge_and_write(path, MarkPriceObservation, tuple(new_observations))
     if merge_result.conflict_keys:
         _logger.warning(
-            "mark_price merge for %s/%s found %d conflicting duplicate key(s); existing values kept: %s",
-            symbol.value, source, len(merge_result.conflict_keys), merge_result.conflict_keys,
+            "mark_price merge for %s/binance found %d conflicting duplicate key(s); existing values kept: %s",
+            symbol.value, len(merge_result.conflict_keys), merge_result.conflict_keys,
         )
 
     full_series = storage.load(path, MarkPriceObservation)
@@ -257,10 +284,66 @@ def collect_mark_price(
         if full_series else None
     )
     return CollectionResult(
-        metric="mark_price", symbol_value=symbol.value, source=source, path=str(path),
+        metric="mark_price", symbol_value=symbol.value, source="binance", path=str(path),
         periods_requested=requested, periods_fetched=fetched, periods_skipped=skipped,
         periods_unavailable=unavailable, rows_added=merge_result.added_count,
         quality_report=quality_report, collected_at_utc=clock(),
+    )
+
+
+def _collect_mark_price_hyperliquid(
+    symbol, start_date, end_date, path, existing, force, transport, timeout_seconds, clock,
+) -> CollectionResult:
+    fetch_kwargs = {"clock": clock}
+    fetch_kwargs["timeout_seconds"] = timeout_seconds if timeout_seconds is not None else 15.0
+    if transport is not None:
+        fetch_kwargs["transport"] = transport
+
+    start_ms = int(datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc).timestamp() * 1000)
+    # -1ms, NOT the "+1 day, exclusive" pattern collect_funding_rate uses:
+    # live-verified (2026-07-29) that candleSnapshot's endTime is INCLUSIVE
+    # of a candle whose own start time == endTime exactly. A daily candle's
+    # start time always lands precisely on a day boundary, so the funding
+    # pattern's "midnight of end_date+1" would itself be a valid candle
+    # start and silently pull in one extra day beyond what the caller
+    # asked for (harmless for hourly funding settlements, which almost
+    # never land exactly on that boundary -- not safe to copy verbatim
+    # for daily data).
+    end_ms = int(
+        (datetime(end_date.year, end_date.month, end_date.day, tzinfo=timezone.utc) + timedelta(days=1)).timestamp()
+        * 1000
+    ) - 1
+
+    if not force and existing:
+        high_water_ms = max(int(parse_utc(obs.observed_at_utc).timestamp() * 1000) for obs in existing)
+        cursor_ms = max(start_ms, high_water_ms + 1)
+    else:
+        cursor_ms = start_ms
+
+    if cursor_ms > end_ms:
+        new_observations: Tuple[MarkPriceObservation, ...] = ()
+        fetched = 0
+    else:
+        new_observations = hyperliquid.fetch_daily_candles(symbol, cursor_ms, end_ms, **fetch_kwargs)
+        fetched = 1
+
+    merge_result = storage.merge_and_write(path, MarkPriceObservation, tuple(new_observations))
+    if merge_result.conflict_keys:
+        _logger.warning(
+            "mark_price merge for %s/hyperliquid found %d conflicting duplicate key(s); existing values kept: %s",
+            symbol.value, len(merge_result.conflict_keys), merge_result.conflict_keys,
+        )
+
+    full_series = storage.load(path, MarkPriceObservation)
+    quality_report = (
+        assess_quality(full_series, expected_interval_seconds=_HYPERLIQUID_DAILY_CANDLE_INTERVAL_SECONDS)
+        if full_series else None
+    )
+    return CollectionResult(
+        metric="mark_price", symbol_value=symbol.value, source="hyperliquid", path=str(path),
+        periods_requested=1, periods_fetched=fetched, periods_skipped=(1 - fetched),
+        periods_unavailable=(1 if fetched and len(new_observations) == 0 else 0),
+        rows_added=merge_result.added_count, quality_report=quality_report, collected_at_utc=clock(),
     )
 
 

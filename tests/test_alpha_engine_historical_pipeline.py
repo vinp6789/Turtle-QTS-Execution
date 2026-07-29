@@ -185,10 +185,10 @@ class TestCollectMarkPrice(unittest.TestCase):
             obs = load(Path(result.path), MarkPriceObservation)
             self.assertEqual(obs[0].value, Decimal("42000"))  # 4200000 / 100
 
-    def test_unsupported_source_refused(self):
+    def test_still_unsupported_source_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(HistoricalDataError):
-                collect_mark_price(Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 1), tmp, source="hyperliquid")
+                collect_mark_price(Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 1), tmp, source="okx")
 
     def test_incremental_rerun_skips_covered_days(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -199,6 +199,142 @@ class TestCollectMarkPrice(unittest.TestCase):
             )
             self.assertEqual(result.periods_skipped, 1)
             self.assertEqual(result.periods_fetched, 1)
+
+
+def _candle(t_ms, close):
+    return {"t": t_ms, "T": t_ms + 86399999, "s": "BTC", "i": "1d",
+            "o": close, "c": close, "h": close, "l": close, "v": "0", "n": 1}
+
+
+class TestCollectMarkPriceHyperliquid(unittest.TestCase):
+    """Backlog 1.4: mirrors TestCollectFundingRateHyperliquid's pattern
+    exactly -- same venue, same continuous-range/high-water-mark resume
+    shape, different endpoint (candleSnapshot instead of fundingHistory)."""
+
+    def test_collects_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+
+            def transport(url, payload, timeout_seconds):
+                calls.append(payload)
+                return [_candle(payload["req"]["startTime"], "50000.0")]
+
+            result = collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 1), tmp,
+                source="hyperliquid", transport=transport, clock=_CLOCK,
+            )
+            self.assertEqual(result.rows_added, 1)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0]["req"]["interval"], "1d")
+            obs = load(Path(result.path), MarkPriceObservation)
+            self.assertEqual(obs[0].value, Decimal("50000.0"))
+            self.assertEqual(obs[0].source, "hyperliquid")
+
+    def test_incremental_rerun_resumes_from_high_water_mark(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first_time_ms = 1704067200000  # 2024-01-01T00:00:00Z
+
+            def transport1(url, payload, timeout_seconds):
+                return [_candle(first_time_ms, "50000.0")]
+
+            collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 2), tmp,
+                source="hyperliquid", transport=transport1, clock=_CLOCK,
+            )
+
+            seen_start_times = []
+
+            def transport2(url, payload, timeout_seconds):
+                seen_start_times.append(payload["req"]["startTime"])
+                return []
+
+            collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 2), tmp,
+                source="hyperliquid", transport=transport2, clock=_CLOCK,
+            )
+            self.assertEqual(seen_start_times, [first_time_ms + 1])
+
+    def test_force_refetches_full_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first_time_ms = 1704067200000
+
+            def transport1(url, payload, timeout_seconds):
+                return [_candle(first_time_ms, "50000.0")]
+
+            collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 2), tmp,
+                source="hyperliquid", transport=transport1, clock=_CLOCK,
+            )
+
+            seen_start_times = []
+
+            def transport2(url, payload, timeout_seconds):
+                seen_start_times.append(payload["req"]["startTime"])
+                return [_candle(first_time_ms, "50000.0")]
+
+            collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 2), tmp,
+                source="hyperliquid", force=True, transport=transport2, clock=_CLOCK,
+            )
+            expected_start_ms = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+            self.assertEqual(seen_start_times, [expected_start_ms])
+
+    def test_binance_and_hyperliquid_write_separate_series(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            binance_transport = _metrics_transport({"2024-01-01"})
+            hl_transport = lambda url, payload, timeout_seconds: [_candle(payload["req"]["startTime"], "50000.0")]
+
+            collect_mark_price(Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 1), tmp, transport=binance_transport, clock=_CLOCK)
+            collect_mark_price(
+                Symbol("BTC"), date(2024, 1, 1), date(2024, 1, 1), tmp,
+                source="hyperliquid", transport=hl_transport, clock=_CLOCK,
+            )
+            self.assertTrue((Path(tmp) / "mark_price__BTC__binance.csv").is_file())
+            self.assertTrue((Path(tmp) / "mark_price__BTC__hyperliquid.csv").is_file())
+            binance_obs = load(Path(tmp) / "mark_price__BTC__binance.csv", MarkPriceObservation)
+            hl_obs = load(Path(tmp) / "mark_price__BTC__hyperliquid.csv", MarkPriceObservation)
+            self.assertEqual(binance_obs[0].value, Decimal("42000"))  # 4200000 / 100, from _metrics_transport
+            self.assertEqual(hl_obs[0].value, Decimal("50000.0"))
+
+    def test_end_date_boundary_does_not_leak_the_following_days_candle(self):
+        """Live-verified (2026-07-29): candleSnapshot's endTime is INCLUSIVE
+        of a candle whose own `t` == endTime exactly -- unlike
+        fundingHistory's hourly settlements, a daily candle's `t` always
+        lands precisely on a day boundary, so end_date's "midnight of
+        end_date+1" cannot be used as an exclusive endTime the way
+        collect_funding_rate's identical-looking formula safely is: it
+        would silently return end_date+1's candle too. This locks in the
+        -1ms correction."""
+        with tempfile.TemporaryDirectory() as tmp:
+            requested_end_times = []
+
+            def transport(url, payload, timeout_seconds):
+                requested_end_times.append(payload["req"]["endTime"])
+                start = payload["req"]["startTime"]
+                # Simulate the real endpoint: return every candle whose t is
+                # in [start, endTime], one candle per day, INCLUSIVE.
+                out, t = [], start
+                while t <= payload["req"]["endTime"]:
+                    out.append(_candle(t, "50000.0"))
+                    t += 86400000
+                return out
+
+            collect_mark_price(
+                Symbol("BTC"), date(2026, 6, 1), date(2026, 6, 5), tmp,
+                source="hyperliquid", transport=transport, clock=_CLOCK,
+            )
+            obs = load(Path(tmp) / "mark_price__BTC__hyperliquid.csv", MarkPriceObservation)
+            days_present = sorted(o.observed_at_utc[:10] for o in obs)
+            self.assertEqual(
+                days_present,
+                ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05"],
+                "end_date's request leaked a candle from 2026-06-06 (the day AFTER end_date)",
+            )
+            june5_midnight_ms = int(datetime(2026, 6, 5, tzinfo=timezone.utc).timestamp() * 1000)
+            self.assertEqual(
+                requested_end_times[0], june5_midnight_ms + 86400000 - 1,
+                "endTime must be 1ms before the start of the day AFTER end_date",
+            )
 
 
 class TestCollectMetrics(unittest.TestCase):

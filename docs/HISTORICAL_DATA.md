@@ -39,9 +39,20 @@ Binance-screened finding promotion-ready:
   row). This is a standing limitation, not specific to Campaign 01.
 - **Funding Rate can clear this gate** — Hyperliquid's own `fundingHistory`
   (§1) is a real, if shallower, native source, making Funding Rate the
-  only currently-collected metric where the full Binance-screen →
+  only currently-collected FEATURE metric where the full Binance-screen →
   Hyperliquid-replicate → (later) Hyperliquid-paper-trade sequence is
   actually executable today.
+- **Mark Price (Backlog 1.4, `sources.hyperliquid.fetch_daily_candles`)
+  is now also Hyperliquid-native.** This is an OUTCOME series, not a
+  feature — used to compute forward returns, not as a candidate signal —
+  so it does not itself need venue-transfer validation the way a feature
+  does. Its role in the DEX-first framing is different and narrower:
+  liquidation-family research (RD-12/RD-13) can now compute outcomes
+  against the same venue its feature data comes from, closing the
+  zero-overlap gap between the liquidation archive (starts 2025-07-27)
+  and the previously Binance-only mark-price series (ended 2025-01-01).
+  Binance's own mark-price derivation (§1) remains available as the
+  secondary cross-venue check.
 - **Venue-relative thresholds are now a required methodology, not a
   documented risk (permanent rule, confirmed by Campaign 02).** Absolute
   thresholds are not considered transferable across exchanges. Campaign
@@ -70,6 +81,8 @@ API, Binance's public bulk archive):
 | Open Interest | Hyperliquid `/info` | — | **None** | — | **No historical OI endpoint exists.** `metaAndAssetCtxs` is current-snapshot only; an `openInterestHistory`-shaped request is rejected. Confirmed live, not assumed. |
 | Open Interest | **Binance** bulk archive (`metrics`) | Yes, no key | BTC from ~2020-09; ETH/SOL from ~late 2021/early 2022 | 5-minute | The only free historical OI source found for these three symbols. |
 | Open Interest | Binance live REST (`openInterestHist`) | Yes, no key | **~29 days only** (retention window measured live) | 5-minute | Explicitly rejected as a backfill source — see §3. Not used by this pipeline. |
+| Mark Price | **Hyperliquid** `/info` `candleSnapshot` (Backlog 1.4) | Yes, no key | from ~2020-08 (venue launch) | Daily (`interval="1d"`, close price) | **OUTCOME series, not a feature** — used for forward returns. Live-verified (2026-07-29): no pagination cap up to ~368-day single requests; a repeated call against an already-closed day returned byte-identical data. A daily CLOSE is not a point-in-time mark price (derivation-scope note, RD-11 A) — reused as `MarkPriceObservation` because it is structurally identical, not because the two quantities mean the same thing. |
+| Mark Price | **Binance** bulk archive (`metrics`, value/OI ratio) | Yes, no key | Same depth as Open Interest above | 5-minute | Derived, not native — `value ÷ sum_open_interest`, verified to match spot to the dollar (Campaign 01). Secondary cross-venue check once Hyperliquid mark price exists. |
 | Both | Coinalyze (third-party aggregator) | Requires free API key (registration) | Multi-exchange, likely deep | — | Not used: introduces a credential/registration dependency this pipeline avoids; noted as a future option if Binance/Hyperliquid prove insufficient. |
 | **Liquidations** | **Hyperliquid** official S3 `node_fills_by_block` | **No — authenticated AWS, Requester Pays** | **2025-07-27 → present (~12 months)** | Hourly objects (per-fill events) | Added RD-12. **Liquidations are not a stream** — they are an optional `liquidation` field ON FILLS (`{liquidatedUser, markPx, method}`), measured present on 0.31% of fills and 100% non-null when present. `hourly/YYYYMMDD/H.lz4`, LZ4 ~4.8×, 24 objects/day, ~240 GB total, backfill ~$27 (~$0 same-region). **One liquidation = two paired fills sharing one `tid`.** Source: `historical/sources/hyperliquid_s3.py`. |
 | Liquidations | Hyperliquid WebSocket / REST `/info` | Yes | **None (market-wide)** | — | **No market-wide liquidation channel or request type exists** — live-verified (RD-06): 10 candidate WS subscriptions enum-rejected identically to a fake channel; REST returns HTTP 422. Per-user only (`userEvents`/`userFills`), so unusable for market-wide research. |
