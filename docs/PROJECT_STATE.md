@@ -37,9 +37,9 @@ they're found, never silently carried forward.
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
 | **Current objective** | Collect the outcome series (Hyperliquid-native + Binance, 2025-07-27→present), then the full 12-month liquidation backfill, then Campaign 06's outcome-blind feasibility review |
-| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items and Backlog 1.3 closed.** |
+| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items and Backlog 1.3 closed, including a High-severity defect found by independent QA review and fixed before 1.5.** |
 | **Immediate next task** | Outcome series 2025-07-27 → present: Hyperliquid-native daily candles (primary) + Binance metrics (secondary) (Backlog 1.4) |
-| **Full regression** | **1,661 passed, 92 subtests, 0 failed** (re-verified this session — `collect_liquidations()` + CLI added, 19 new tests) |
+| **Full regression** | **1,669 passed, 92 subtests, 0 failed** (re-verified this session — independent QA audit of Backlog 1.3 + fixes, 8 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -189,29 +189,74 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
   than day-covered (see the function's own DURABILITY docstring section)
   and deliberately plural (`symbols: Tuple[Symbol, ...]`, not a single
   `symbol`) since one hourly archive object serves every symbol at once.
-- **Durability defect found and fixed during implementation, before
-  commit:** the first draft only called `storage.merge_and_write` once
-  at the very end of the whole requested date range, while the
-  checkpoint (correctly) advances every hour. A process killed partway
-  through a multi-day call would have left the checkpoint durably ahead
-  of what was ever persisted to the CSV — resume would then skip those
-  already-checkpointed hours forever, silently discarding decoded data.
-  Fixed by flushing to disk once per calendar day, matching the granularity
-  the one-month pilot backfill itself already validated end-to-end
-  against a real interruption and resume. Locked in by
-  `test_already_processed_days_survive_a_failure_on_a_later_day`.
+- **Durability defect found and PARTIALLY fixed during implementation,
+  before commit:** the first draft only called `storage.merge_and_write`
+  once at the very end of the whole requested date range, while the
+  checkpoint (correctly) advances every hour. Changed to flush to disk
+  once per calendar day. **This partial fix was itself defective — see
+  the QA review cycle below, which found and closed the remaining gap.**
 - `alpha_engine/historical/backfill_liquidations.py` — the CLI entry
   point (Constitution §5), retiring the scratchpad-only pilot driver.
   `python -m alpha_engine.historical.backfill_liquidations --start ... --end ...`.
-  Bounded retry around a single `collect_liquidations()` call — no
-  day-chunking needed at the CLI level, since the function is already
-  safely interruptible/resumable via its own per-day flush + per-hour
-  checkpoint.
 - `boto3>=1.34.0` / `lz4>=4.3.0` declared in `requirements.txt`, scoped
   to the historical pipeline only (both lazily imported; re-verified the
   deployed `app.main` entrypoint still imports neither).
-- 19 new tests (11 `collect_liquidations`, 8 CLI). Full regression:
-  **1,661 passed, 92 subtests, 0 failed.**
+- 19 new tests (11 `collect_liquidations`, 8 CLI). Full regression at the
+  time: 1,661 passed, 92 subtests, 0 failed — **later found incomplete,
+  see below.**
+
+**Independent QA audit of Backlog 1.3, then fixes (2026-07-29):** an
+independent reviewer audited the committed implementation against
+`PROJECT_STATE.md`'s own durability claims and found one High, one
+Medium, and three Low findings; all were independently re-verified
+before any fix was written (each finding was reproduced from a minimal,
+from-scratch probe — not accepted on the audit's word alone — and each
+fix was confirmed red→green: the new regression test fails against the
+pre-fix code and passes against the fix).
+
+- **H1 (High, closed) — the per-day flush above did not restore the
+  actual invariant.** The checkpoint still advanced per HOUR, inside the
+  fetch loop, while the flush to disk still only happened once, after
+  the loop, per DAY. A crash between the checkpoint write for hour *k*
+  and that day's eventual flush left the checkpoint durably ahead of
+  hours 0..*k* with **zero** bytes of their data ever written anywhere —
+  reproduced directly: crash at hour 3 of a 5-hour day left the
+  checkpoint at hour 2 with no CSV file even created. **Root fix:**
+  checkpoint write moved to strictly after the day's flush succeeds, and
+  reduced to one write per day (to the last hour of that day's batch) —
+  not one write per hour. If a fetch fails partway through a day,
+  nothing is written and the checkpoint does not move; the **whole day**
+  is safely retried from scratch on the next call. Locked in by
+  `test_mid_day_interruption_does_not_advance_checkpoint_past_unpersisted_rows`,
+  confirmed to fail against the pre-fix code (checkpoint left at hour 2,
+  zero rows persisted) and pass against the fix.
+- **M1 (Medium, closed) — the CLI's retry only caught `HistoricalDataError`,
+  and `hyperliquid_s3.py` never raised it for a real S3 failure.**
+  Neither `list_hour_keys` nor `fetch_hour` wrapped their `s3.list_objects_v2`/
+  `s3.get_object` calls, so a genuine transient failure surfaced as a raw
+  `botocore` exception and escaped the retry loop entirely — reproduced
+  directly with a simulated `EndpointConnectionError`. **Fix:** both
+  calls now translate `botocore.exceptions.(BotoCoreError, ClientError)`
+  into `HistoricalDataError`, mirroring `sources/binance.py`'s own
+  `HTTPError`/`URLError` translation exactly — no change needed to the
+  CLI's retry loop itself. 3 new tests in `test_historical_hyperliquid_s3.py`.
+- **L1 (Low, closed) — `--force`/`--checkpoint-path` were not reachable
+  from the CLI**, so the one lever that fully recovers from H1 (before
+  it was fixed) required dropping into Python. Both flags added to
+  `backfill_liquidations.py`'s argparse and threaded through `run()`.
+- **L3 (Low, closed) — a fresh `boto3` client was constructed on every
+  `list_hour_keys`/`fetch_hour` call** (measured: 25/day in a synthetic
+  test), fragmenting connection reuse against the remote Requester-Pays
+  region across a multi-day backfill, both functions already accept
+  `client` for exactly this reuse. **Fix:** one client constructed per
+  `collect_liquidations()` call, threaded through every call within it.
+  Locked in by `test_reuses_one_s3_client_across_the_whole_call`.
+- **L2 (Low, deferred, not fixed)** — `CollectionResult.periods_unavailable`
+  counts DAYS for liquidations vs. the same-unit-as-`periods_fetched`
+  convention every sibling collector uses; already documented in
+  `collect_liquidations`'s own docstring, doesn't affect correctness, and
+  was explicitly scoped as optional. Left deferred per instruction.
+- 8 new tests. Full regression: **1,669 passed, 92 subtests, 0 failed.**
 
 ---
 
@@ -402,6 +447,23 @@ accordingly.)*
   retained via git history, not deleted); `ROADMAP.md` purged of all
   completed work; `MASTER_INDEX.md` given explicit Core/Reference/Archive
   tiering.
+- **[Session finding] Independent QA audit of Backlog 1.3 (2026-07-29)**
+  — a reviewer independent of the implementer audited the committed
+  `collect_liquidations()`/CLI work against this document's own
+  durability claims, rather than accepting them; found and evidenced 1
+  High (checkpoint could still outrun persisted data on a mid-day
+  interruption — the earlier per-day-flush fix reduced but did not close
+  the exposure), 1 Medium (CLI retry couldn't catch real S3 failures,
+  since `hyperliquid_s3.py` never translated them to `HistoricalDataError`),
+  and 3 Low findings (recovery flags unreachable from the CLI, a
+  reporting-field unit inconsistency, per-call client reconstruction).
+  All were independently re-verified (not accepted on the audit's word)
+  before any fix was written, and every fix confirmed red→green against
+  a dedicated regression test. Established precedent: this project's own
+  "independent reviewer, not the implementer" governance principle
+  (`RESEARCH_PLAYBOOK.md` §5) applies to engineering review as well as
+  research governance, and caught a real defect the implementer's own
+  first-pass fix and self-review missed twice.
 
 ---
 
@@ -450,6 +512,19 @@ accordingly.)*
              implementation, before commit) fixed to flush per calendar
              day instead of once at the end of the whole requested
              range. 1,661 tests passing.
+2026-07-29   Commit `26fc8e6` — PROJECT_STATE.md internal-staleness fixes
+             ahead of independent QA review (no code changed).
+2026-07-29   Independent QA audit of commit 9334d4f: found the per-day
+             flush above did not fully close the checkpoint-durability
+             defect (High), plus one Medium and three Low findings (see
+             Decision Register). Fixed in the following commit: checkpoint
+             now advances only after a day's flush succeeds, not per
+             hour during the fetch loop; S3 exceptions now translate to
+             HistoricalDataError so the CLI retry can actually catch
+             them; --force/--checkpoint-path exposed on the CLI; one S3
+             client reused per call instead of one per request. 8 new
+             tests, each confirmed to fail against the pre-fix code and
+             pass against the fix. 1,669 tests passing.
    ...        [next: Immediate Backlog items 1.4 → 1.6, then Campaign 06
               decision point]
 ```

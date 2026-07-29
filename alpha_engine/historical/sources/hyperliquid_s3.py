@@ -88,13 +88,22 @@ def list_hour_keys(
     """Every hourly object key for one YYYYMMDD date, sorted by hour.
 
     Sorted NUMERICALLY by hour, not lexicographically: the measured names
-    are unpadded, so a string sort would order 10 before 2."""
+    are unpadded, so a string sort would order 10 before 2.
+
+    Raises HistoricalDataError for a genuine S3/network failure -- mirrors
+    sources/binance.py's own HTTPError/URLError -> HistoricalDataError
+    translation, so a caller (e.g. the CLI backfill driver's retry loop)
+    catches exactly one exception type, never a raw botocore exception."""
     if not isinstance(date, str) or len(date) != 8 or not date.isdigit():
         raise HistoricalDataError(f"date must be YYYYMMDD, got {date!r}")
+    from botocore.exceptions import BotoCoreError, ClientError  # noqa: PLC0415 -- lazy, matches boto3/lz4 above
     s3 = client or _client(region)
-    resp = s3.list_objects_v2(
-        Bucket=bucket, Prefix=f"{prefix}{date}/", RequestPayer="requester"
-    )
+    try:
+        resp = s3.list_objects_v2(
+            Bucket=bucket, Prefix=f"{prefix}{date}/", RequestPayer="requester"
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise HistoricalDataError(f"{bucket}/{prefix}{date}/: S3 list failed: {exc}") from exc
     keys = [c["Key"] for c in resp.get("Contents", ())]
 
     def _hour(key: str) -> int:
@@ -209,15 +218,22 @@ def fetch_hour(
     symbols: Optional[Tuple[Symbol, ...]] = None,
     client: Any = None,
 ) -> Tuple[LiquidationObservation, ...]:
-    """Downloads and decodes exactly one hourly object (Requester Pays)."""
+    """Downloads and decodes exactly one hourly object (Requester Pays).
+
+    Raises HistoricalDataError for a genuine S3/network failure -- same
+    translation as list_hour_keys above."""
     try:
         import lz4.frame  # noqa: PLC0415 -- optional dependency, imported lazily by design
     except ImportError as exc:  # pragma: no cover - environment-dependent
         raise HistoricalDataError(
             "lz4 is required for the hyperliquid_s3 source but is not installed"
         ) from exc
+    from botocore.exceptions import BotoCoreError, ClientError  # noqa: PLC0415 -- lazy, matches boto3/lz4 above
     s3 = client or _client(region)
-    body = s3.get_object(Bucket=bucket, Key=key, RequestPayer="requester")["Body"].read()
+    try:
+        body = s3.get_object(Bucket=bucket, Key=key, RequestPayer="requester")["Body"].read()
+    except (BotoCoreError, ClientError) as exc:
+        raise HistoricalDataError(f"{key}: S3 get failed: {exc}") from exc
     return decode_liquidations(lz4.frame.decompress(body), key=key, symbols=symbols)
 
 

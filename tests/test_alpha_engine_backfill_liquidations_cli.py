@@ -41,8 +41,8 @@ class TestMainArgParsing(unittest.TestCase):
         self._real_collect = cli.collect_liquidations
         self._calls = []
 
-        def fake_collect(symbols, start, end, storage_root):
-            self._calls.append((symbols, start, end, storage_root))
+        def fake_collect(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            self._calls.append((symbols, start, end, storage_root, force, checkpoint_path))
             return tuple(_result(s.value) for s in symbols)
 
         cli.collect_liquidations = fake_collect
@@ -54,11 +54,13 @@ class TestMainArgParsing(unittest.TestCase):
         exit_code = cli.main(["--start", "2026-06-01", "--end", "2026-06-30"])
         self.assertEqual(exit_code, 0)
         self.assertEqual(len(self._calls), 1)
-        symbols, start, end, storage_root = self._calls[0]
+        symbols, start, end, storage_root, force, checkpoint_path = self._calls[0]
         self.assertEqual([s.value for s in symbols], ["BTC", "ETH", "SOL"])
         self.assertEqual(start, date(2026, 6, 1))
         self.assertEqual(end, date(2026, 6, 30))
         self.assertEqual(storage_root, "data/alpha_engine_historical")
+        self.assertFalse(force)
+        self.assertIsNone(checkpoint_path)
 
     def test_custom_symbols_and_storage_root(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -67,7 +69,7 @@ class TestMainArgParsing(unittest.TestCase):
                 "--start", "2026-06-01", "--end", "2026-06-01",
                 "--storage-root", tmp,
             ])
-            symbols, _, _, storage_root = self._calls[0]
+            symbols, _, _, storage_root, _, _ = self._calls[0]
             self.assertEqual([s.value for s in symbols], ["BTC", "ETH"])
             self.assertEqual(storage_root, tmp)
 
@@ -75,6 +77,18 @@ class TestMainArgParsing(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             cli.main(["--start", "2026-06-01"])  # --end missing
         self.assertNotEqual(ctx.exception.code, 0)
+
+    def test_force_flag_reaches_collect_liquidations(self):
+        cli.main(["--start", "2026-06-01", "--end", "2026-06-01", "--force"])
+        *_, force, _ = self._calls[0]
+        self.assertTrue(force)
+
+    def test_checkpoint_path_flag_reaches_collect_liquidations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cp = str(Path(tmp) / "custom_checkpoint.json")
+            cli.main(["--start", "2026-06-01", "--end", "2026-06-01", "--checkpoint-path", cp])
+            *_, checkpoint_path = self._calls[0]
+            self.assertEqual(checkpoint_path, cp)
 
 
 class TestRunRetry(unittest.TestCase):
@@ -90,7 +104,7 @@ class TestRunRetry(unittest.TestCase):
     def test_retries_on_transient_failure_then_succeeds(self):
         attempts = []
 
-        def flaky(symbols, start, end, storage_root):
+        def flaky(symbols, start, end, storage_root, force=False, checkpoint_path=None):
             attempts.append(1)
             if len(attempts) < 3:
                 raise HistoricalDataError("simulated transient failure")
@@ -102,12 +116,26 @@ class TestRunRetry(unittest.TestCase):
         self.assertEqual(len(attempts), 3)
 
     def test_exhausting_retries_returns_nonzero(self):
-        def always_fails(symbols, start, end, storage_root):
+        def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
             raise HistoricalDataError("permanent failure")
 
         cli.collect_liquidations = always_fails
         exit_code = cli.run(symbols=(Symbol("BTC"),), start=date(2026, 6, 1), end=date(2026, 6, 1))
         self.assertEqual(exit_code, 1)
+
+    def test_force_and_checkpoint_path_are_threaded_through_run(self):
+        calls = []
+
+        def spy(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            calls.append((force, checkpoint_path))
+            return tuple(_result(s.value) for s in symbols)
+
+        cli.collect_liquidations = spy
+        cli.run(
+            symbols=(Symbol("BTC"),), start=date(2026, 6, 1), end=date(2026, 6, 1),
+            force=True, checkpoint_path="/tmp/custom_cp.json",
+        )
+        self.assertEqual(calls, [(True, "/tmp/custom_cp.json")])
 
     def test_missing_dates_raises(self):
         with self.assertRaises(HistoricalDataError):

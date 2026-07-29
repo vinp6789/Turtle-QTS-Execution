@@ -507,19 +507,27 @@ def collect_liquidations(
     checkpoint and reprocesses the whole range (storage.merge_and_write
     is idempotent, so this cannot duplicate rows).
 
-    DURABILITY (matches the pilot backfill's own proven pattern, not a
-    new design): decoded rows are merge_and_write'n to disk once per
-    CALENDAR DAY, not once at the end of the whole requested range. The
-    checkpoint advances per-hour and is durable the instant it is
-    written (`sources.hyperliquid_s3.write_checkpoint`'s own
-    flush+fsync+replace+dir-fsync sequence); if writes were deferred
-    until the very end of a multi-month call, a process killed partway
-    through would leave the checkpoint durably ahead of what was ever
-    persisted to the CSV -- resume would then skip past those hours
-    forever, silently discarding already-decoded data. Flushing per day
-    bounds that exposure to at most one day's worth of in-flight rows,
-    exactly the granularity the one-month pilot backfill validated
-    end-to-end against a real interruption and resume (RD-13).
+    DURABILITY INVARIANT: the checkpoint may never advance past data that
+    is not yet durably on disk. Decoded rows for a calendar day are held
+    in memory only until every hour requested for that day has been
+    fetched; ONLY THEN are they merge_and_write'n to disk, and ONLY AFTER
+    that write succeeds does the checkpoint advance -- to the last key of
+    that day, written once. If fetch_hour raises partway through a day,
+    nothing is written and the checkpoint does not move: the ENTIRE day
+    is safely retried from scratch on the next call (merge_and_write is
+    idempotent, so re-fetching already-decoded hours costs a re-download,
+    never a duplicate row).
+
+    An earlier version of this function wrote the checkpoint per HOUR,
+    inside the fetch loop, while still batching the disk write to once
+    per day -- a process killed between an hour's checkpoint write and
+    the day's eventual flush left the checkpoint durably pointing at
+    hours whose rows existed only in memory, and resume then skipped
+    those hours forever without ever persisting them. Found by
+    independent QA review before Backlog 1.5 (the full 12-month
+    backfill) ran; fixed by moving the checkpoint write to strictly after
+    the flush, once per day. See
+    `test_mid_day_interruption_does_not_advance_checkpoint_past_unpersisted_rows`.
 
     `symbols` is plural, unlike every sibling collector's single
     `symbol` -- also intentional: one hourly object contains ALL symbols'
@@ -538,6 +546,11 @@ def collect_liquidations(
     root = Path(storage_root)
     cp_path = Path(checkpoint_path) if checkpoint_path is not None else root / ".liquidation_checkpoint.json"
     checkpoint = None if force else hyperliquid_s3.read_checkpoint(cp_path)
+    # One client for the whole call, not one per list/fetch: both
+    # sources.hyperliquid_s3 functions already accept `client` for exactly
+    # this reuse (the pilot driver did the same). Constructing it here
+    # also fails fast if boto3 is missing, rather than on the first day.
+    client = hyperliquid_s3._client(region)
 
     paths = {
         s.value: root / storage.series_filename("liquidation", s, hyperliquid_s3.SOURCE_NAME) for s in symbols
@@ -547,7 +560,9 @@ def collect_liquidations(
     current = start_date
     while current <= end_date:
         date_str = current.strftime("%Y%m%d")
-        keys = hyperliquid_s3.list_hour_keys(date=date_str, bucket=bucket, prefix=prefix, region=region)
+        keys = hyperliquid_s3.list_hour_keys(
+            date=date_str, bucket=bucket, prefix=prefix, region=region, client=client,
+        )
         if not keys:
             unavailable += 1
             current += timedelta(days=1)
@@ -559,15 +574,15 @@ def collect_liquidations(
         day_new_by_symbol: Dict[str, List[LiquidationObservation]] = {s.value: [] for s in symbols}
         for key in todo:
             fetched += 1
-            obs = hyperliquid_s3.fetch_hour(key, bucket=bucket, region=region, symbols=symbols)
+            obs = hyperliquid_s3.fetch_hour(key, bucket=bucket, region=region, symbols=symbols, client=client)
             for o in obs:
                 day_new_by_symbol[o.symbol.value].append(o)
-            hyperliquid_s3.write_checkpoint(cp_path, key)
-            checkpoint = key
 
-        # Flush this day's decoded rows BEFORE moving on -- see the
-        # DURABILITY note above for why this cannot wait until the loop
-        # over the whole requested range finishes.
+        # Flush this day's decoded rows, THEN advance the checkpoint --
+        # never the reverse. See the DURABILITY INVARIANT note above: if
+        # fetch_hour raised above, this block never runs, no checkpoint
+        # update happens for this day, and the whole day is safely
+        # retried on the next call.
         if todo:
             for symbol in symbols:
                 day_rows = tuple(day_new_by_symbol[symbol.value])
@@ -582,6 +597,8 @@ def collect_liquidations(
                         symbol.value, hyperliquid_s3.SOURCE_NAME, len(merge_result.conflict_keys),
                         date_str, merge_result.conflict_keys,
                     )
+            hyperliquid_s3.write_checkpoint(cp_path, todo[-1])
+            checkpoint = todo[-1]
         current += timedelta(days=1)
 
     results = []

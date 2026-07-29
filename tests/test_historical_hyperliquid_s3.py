@@ -204,6 +204,53 @@ def test_fetch_hour_sets_requester_pays():
     assert "requester" in fake.request_payers
 
 
+# --- M1 regression (independent QA audit finding, Medium severity) --------
+# list_hour_keys/fetch_hour must translate a genuine S3/network failure into
+# HistoricalDataError, mirroring sources/binance.py's own HTTPError/URLError
+# translation -- otherwise a raw botocore exception escapes past the CLI
+# backfill driver's retry loop, which only catches HistoricalDataError, and
+# the retry it exists for silently never fires.
+
+class _FakeS3RaisingOnList:
+    def list_objects_v2(self, **kw):
+        from botocore.exceptions import EndpointConnectionError
+        raise EndpointConnectionError(endpoint_url="https://s3.ap-northeast-1.amazonaws.com")
+
+
+class _FakeS3RaisingOnGet:
+    def get_object(self, **kw):
+        from botocore.exceptions import EndpointConnectionError
+        raise EndpointConnectionError(endpoint_url="https://s3.ap-northeast-1.amazonaws.com")
+
+
+def test_list_hour_keys_translates_botocore_connection_error():
+    pytest.importorskip("botocore")
+    with pytest.raises(HistoricalDataError):
+        hls.list_hour_keys(date="20260101", client=_FakeS3RaisingOnList())
+
+
+def test_fetch_hour_translates_botocore_connection_error():
+    pytest.importorskip("botocore")
+    key = "node_fills_by_block/hourly/20260101/3.lz4"
+    with pytest.raises(HistoricalDataError):
+        hls.fetch_hour(key, client=_FakeS3RaisingOnGet())
+
+
+def test_list_hour_keys_translates_botocore_client_error():
+    pytest.importorskip("botocore")
+    from botocore.exceptions import ClientError
+
+    class _FakeS3ClientError:
+        def list_objects_v2(self, **kw):
+            raise ClientError(
+                {"Error": {"Code": "SlowDown", "Message": "Please reduce your request rate."}},
+                "ListObjectsV2",
+            )
+
+    with pytest.raises(HistoricalDataError):
+        hls.list_hour_keys(date="20260101", client=_FakeS3ClientError())
+
+
 # --------------------------------------------------------------------------
 # checkpoint / incremental sync
 # --------------------------------------------------------------------------

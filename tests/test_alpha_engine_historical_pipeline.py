@@ -372,10 +372,12 @@ class TestCollectLiquidations(unittest.TestCase):
     def setUp(self):
         self._real_list_hour_keys = hyperliquid_s3.list_hour_keys
         self._real_fetch_hour = hyperliquid_s3.fetch_hour
+        self._real_client = hyperliquid_s3._client
 
     def tearDown(self):
         hyperliquid_s3.list_hour_keys = self._real_list_hour_keys
         hyperliquid_s3.fetch_hour = self._real_fetch_hour
+        hyperliquid_s3._client = self._real_client
 
     def _patch_source(self, hours_by_date, obs_by_key):
         def fake_list_hour_keys(*, date, bucket, prefix, region, client=None):
@@ -497,6 +499,77 @@ class TestCollectLiquidations(unittest.TestCase):
                 hyperliquid_s3.read_checkpoint(Path(tmp) / ".liquidation_checkpoint.json"), day1_key,
             )
 
+    def test_mid_day_interruption_does_not_advance_checkpoint_past_unpersisted_rows(self):
+        """H1 (independent QA audit finding, High severity): the checkpoint
+        must never point past data that is not yet durably on disk. This
+        reproduces the exact scenario the earlier implementation got
+        wrong -- a failure PARTWAY THROUGH a single day's hours, not
+        between two days (test_already_processed_days_survive_a_failure_
+        on_a_later_day above covers only the between-days case, which
+        already worked; this is the case that didn't).
+
+        Before the fix: the checkpoint advanced per successfully-fetched
+        hour while the flush to disk was batched to once per day, so a
+        crash after hour 2 of a 5-hour day left the checkpoint at hour 2
+        with ZERO rows ever written -- and because keys_after_checkpoint
+        treats hour <= checkpoint as done, resume skipped hours 0-2
+        forever. After the fix: the checkpoint only advances after that
+        day's flush succeeds, so a crash partway through a day leaves the
+        checkpoint untouched for that day, and the WHOLE day (including
+        the hours that had already decoded successfully) is safely
+        retried from scratch on resume -- extra re-download, never lost
+        data."""
+        with tempfile.TemporaryDirectory() as tmp:
+            keys = tuple(f"node_fills_by_block/hourly/20260601/{h}.lz4" for h in range(5))
+
+            def fake_list_hour_keys(*, date, bucket, prefix, region, client=None):
+                return keys if date == "20260601" else ()
+
+            def fake_fetch_hour_crash_at_3(key, *, bucket, region, symbols=None, client=None):
+                h = int(key.rsplit("/", 1)[1].split(".", 1)[0])
+                if h == 3:
+                    raise HistoricalDataError("simulated crash mid-day, at hour 3 of 5")
+                return (_fake_liquidation_obs("BTC", key, h, "B"), _fake_liquidation_obs("BTC", key, h, "A"))
+
+            hyperliquid_s3.list_hour_keys = fake_list_hour_keys
+            hyperliquid_s3.fetch_hour = fake_fetch_hour_crash_at_3
+
+            csv_path = Path(tmp) / "liquidation__BTC__hyperliquid_s3.csv"
+            cp_path = Path(tmp) / ".liquidation_checkpoint.json"
+
+            with self.assertRaises(HistoricalDataError):
+                collect_liquidations((Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, clock=_CLOCK)
+
+            # Nothing for this day may exist yet: neither a CSV nor a
+            # checkpoint entry. Hours 0-2 were successfully decoded before
+            # the crash at hour 3 -- they must NOT be silently discarded
+            # by a checkpoint that outran what was actually persisted.
+            self.assertFalse(csv_path.exists(), "rows were written before the day's fetch finished")
+            self.assertIsNone(
+                hyperliquid_s3.read_checkpoint(cp_path),
+                "checkpoint advanced into the interrupted day despite nothing being persisted",
+            )
+
+            # Resume, with the crash cleared: the ENTIRE day must be
+            # retried (including hours 0-2, which decoded fine before the
+            # crash) and every hour must end up on disk -- none silently
+            # lost.
+            def fake_fetch_hour_recovered(key, *, bucket, region, symbols=None, client=None):
+                h = int(key.rsplit("/", 1)[1].split(".", 1)[0])
+                return (_fake_liquidation_obs("BTC", key, h, "B"), _fake_liquidation_obs("BTC", key, h, "A"))
+
+            hyperliquid_s3.fetch_hour = fake_fetch_hour_recovered
+            collect_liquidations((Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, clock=_CLOCK)
+
+            # _fake_liquidation_obs's tid == the hour number here (see the
+            # fetch fakes above), so the set of tids present is exactly the
+            # set of hours whose data survived.
+            series = load(csv_path, LiquidationObservation)
+            hours_present = sorted({o.tid for o in series})
+            self.assertEqual(hours_present, [0, 1, 2, 3, 4], "at least one hour was permanently lost")
+            self.assertEqual(len(series), 10)  # 5 hours x 2 rows/liquidation
+            self.assertEqual(hyperliquid_s3.read_checkpoint(cp_path), keys[-1])
+
     def test_custom_checkpoint_path_is_honored(self):
         with tempfile.TemporaryDirectory() as tmp:
             key = "node_fills_by_block/hourly/20260601/0.lz4"
@@ -526,6 +599,43 @@ class TestCollectLiquidations(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(HistoricalDataError):
                 collect_liquidations((Symbol("BTC"),), date(2026, 6, 2), date(2026, 6, 1), tmp)
+
+    def test_reuses_one_s3_client_across_the_whole_call(self):
+        """L3 (independent QA audit finding, Low severity): a fresh boto3
+        client per hour fragments connection reuse against a remote
+        Requester-Pays region across a multi-day backfill. One client is
+        constructed per collect_liquidations() call and threaded through
+        every list_hour_keys/fetch_hour call, matching the pattern both
+        source functions already expose `client=` for."""
+        with tempfile.TemporaryDirectory() as tmp:
+            client_calls = []
+            real_client = hyperliquid_s3._client
+
+            def spy_client(region):
+                client_calls.append(region)
+                return real_client(region)
+
+            hyperliquid_s3._client = spy_client
+
+            key1 = "node_fills_by_block/hourly/20260601/0.lz4"
+            key2 = "node_fills_by_block/hourly/20260601/1.lz4"
+            key3 = "node_fills_by_block/hourly/20260602/0.lz4"
+
+            def fake_list_hour_keys(*, date, bucket, prefix, region, client=None):
+                self.assertIsNotNone(client, "list_hour_keys was not given the shared client")
+                return {"20260601": (key1, key2), "20260602": (key3,)}.get(date, ())
+
+            def fake_fetch_hour(key, *, bucket, region, symbols=None, client=None):
+                self.assertIsNotNone(client, "fetch_hour was not given the shared client")
+                h = int(key.rsplit("/", 1)[1].split(".", 1)[0])
+                return (_fake_liquidation_obs("BTC", key, h, "B"), _fake_liquidation_obs("BTC", key, h, "A"))
+
+            hyperliquid_s3.list_hour_keys = fake_list_hour_keys
+            hyperliquid_s3.fetch_hour = fake_fetch_hour
+
+            collect_liquidations((Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 2), tmp, clock=_CLOCK)
+
+            self.assertEqual(len(client_calls), 1, f"expected exactly one client construction, got {client_calls}")
 
 
 if __name__ == "__main__":

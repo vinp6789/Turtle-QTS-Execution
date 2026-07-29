@@ -46,10 +46,12 @@ def _parse_date(raw: str) -> date:
     return datetime.strptime(raw, "%Y-%m-%d").date()
 
 
-def _collect_with_retry(symbols, start, end, storage_root):
+def _collect_with_retry(symbols, start, end, storage_root, force, checkpoint_path):
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            return collect_liquidations(symbols, start, end, storage_root)
+            return collect_liquidations(
+                symbols, start, end, storage_root, force=force, checkpoint_path=checkpoint_path,
+            )
         except HistoricalDataError as exc:
             if attempt == _MAX_ATTEMPTS:
                 raise
@@ -62,11 +64,14 @@ def _collect_with_retry(symbols, start, end, storage_root):
             time.sleep(backoff)
 
 
-def run(symbols=_DEFAULT_SYMBOLS, start=None, end=None, storage_root=_DEFAULT_STORAGE_ROOT) -> int:
+def run(
+    symbols=_DEFAULT_SYMBOLS, start=None, end=None, storage_root=_DEFAULT_STORAGE_ROOT,
+    force=False, checkpoint_path=None,
+) -> int:
     if start is None or end is None:
         raise HistoricalDataError("start and end dates are required")
     try:
-        results = _collect_with_retry(symbols, start, end, storage_root)
+        results = _collect_with_retry(symbols, start, end, storage_root, force, checkpoint_path)
     except HistoricalDataError as exc:
         print(f"BACKFILL_FAILED after {_MAX_ATTEMPTS} attempts: {exc}", flush=True)
         return 1
@@ -103,9 +108,21 @@ def main(argv=None) -> int:
         "--storage-root", default=_DEFAULT_STORAGE_ROOT,
         help=f"historical data root (default: {_DEFAULT_STORAGE_ROOT})",
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="ignore any existing checkpoint and reprocess the whole range "
+             "(storage.merge_and_write is idempotent, so this cannot duplicate rows)",
+    )
+    parser.add_argument(
+        "--checkpoint-path", default=None,
+        help="override the checkpoint file location (default: <storage-root>/.liquidation_checkpoint.json)",
+    )
     args = parser.parse_args(argv)
     symbols = tuple(Symbol(s) for s in args.symbols)
-    return run(symbols=symbols, start=args.start, end=args.end, storage_root=args.storage_root)
+    return run(
+        symbols=symbols, start=args.start, end=args.end, storage_root=args.storage_root,
+        force=args.force, checkpoint_path=args.checkpoint_path,
+    )
 
 
 if __name__ == "__main__":
