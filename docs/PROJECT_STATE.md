@@ -64,11 +64,13 @@ by nor gating Alpha Engine research.
 
 ## Current Objective
 
-Close the verified Priority 0/1 defect chain, then determine — via an
-outcome-blind feasibility review, not intuition — whether a 12-month
-liquidation campaign is statistically viable at all before spending
-further engineering or research effort on it. See **Immediate Backlog**
-for the exact ordered chain.
+All Priority 0/1.1/1.2/1.3 defect-chain items are closed. Remaining:
+collect the outcome series (1.4), run the full 12-month liquidation
+backfill (1.5), then determine — via an outcome-blind feasibility
+review, not intuition — whether a 12-month liquidation campaign is
+statistically viable at all (1.6), before spending further engineering
+or research effort on it. See **Immediate Backlog** for the exact
+ordered chain.
 
 ---
 
@@ -140,7 +142,7 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
 - Full consolidation: `PROJECT_CONSTITUTION.md`, `RESEARCH_LEDGER.md`,
   `ALPHA_LIBRARY.md`, `WATCHLIST.md`, `RESEARCH_PLAYBOOK.md`,
   `REVIEW_PROTOCOL.md`, `MASTER_INDEX.md` — cross-referenced, indexed.
-- `RESEARCH_DECISIONS.md` — RD-01 through RD-12, append-only.
+- `RESEARCH_DECISIONS.md` — RD-01 through RD-13, append-only.
 - **This reorganization (2026-07-29):** `PROJECT_STATE.md` created as the
   single execution-state authority; `PROJECT_STATUS.md` and
   `PROJECT_DASHBOARD.md` deprecated in place; `ROADMAP.md` purged of
@@ -149,8 +151,9 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
 
 ### Operations
 - One-month outcome-blind liquidation pilot backfill executed and
-  completed (see Decision Register). Full regression: **1,640 passed, 91
-  subtests, 0 failed** (re-verified this session).
+  completed (see Decision Register). Current regression figure lives in
+  the Executive Summary and Active Work sections above — not duplicated
+  here to avoid exactly this kind of drift.
 
 ---
 
@@ -366,30 +369,33 @@ accordingly.)*
 - **Historical Validation deferred** — trigger is the first SUPPORTED
   campaign, not a calendar date; nothing built prematurely (§5 verified
   compliant).
-- **[Session finding, not yet a formal RD]** **Governance-inspection
-  discipline decayed.** CAMP-01 required the reviewer to inspect mean
-  directional return / expectancy sign at governance; CAMP-02–05 dropped
-  the clause. Not a compliance defect in the architecture — a practice
-  never codified in the Playbook that silently lapsed. Fix: documentation
-  only (Immediate Backlog 1.1).
-- **[Session finding] Campaign 06 sequencing changes** (three adversarial
-  passes) — staged 3–4-month backfill proposed, then reversed to a single
-  full 12-month pass (walk-forward requires chronological contiguity;
-  month-selection would be an un-pre-registered researcher choice);
-  mark-price extension reframed from "extend Binance" to "collect
-  Hyperliquid-native outcomes, Binance secondary" (Constitution §4 — CEX
-  is never the production reference); deep-history backfill moved off the
-  Campaign 06 critical path entirely (orthogonal — gates the next
-  funding/OI campaign instead); Live Sample Recorder promotion made then
-  withdrawn (1.5yr lead time, §5 violation, corrected).
-- **[Session finding] One-month liquidation pilot conclusions
-  (2026-07-28/29)** — 208,486 unique liquidation events, exactly 2.00
-  rows/event (perfect fill-pairing), 0 duplicates, 0 decode errors, 0
-  missing hours; 0.337% density; **measured cross-symbol correlation of
-  daily counts +0.85 to +0.90** → effective independent symbols ≈1.1, not
-  3; top-10-days carry 65% of all events; on this evidence, **Campaign 06
-  is more likely to be rejected by the feasibility gate than to pass it**
-  — considered the cheapest possible outcome, not a failure.
+- **RD-13 (2026-07-29)** — one-month outcome-blind liquidation pilot
+  record: 208,486 unique events, exactly 2.00 rows/event (perfect
+  fill-pairing), 0 duplicates, 0 decode errors, 0 missing hours; 0.337%
+  density; **measured cross-symbol correlation of daily counts +0.85 to
+  +0.90** → effective independent symbols ≈1.1, not 3; top-10-days carry
+  65% of all events — on this evidence, **Campaign 06 is more likely to
+  be rejected by the feasibility gate than to pass it**, the cheapest
+  possible outcome, not a failure. Corrects RD-12's stale "no backfill
+  executed" claim; updates Liquidations Data Status `NONE` →
+  `COLLECTING`; adds a self-activating N_eff/cross-instrument-correlation
+  feasibility-review requirement; and records the restoration of the
+  governance-inspection clause in `RESEARCH_PLAYBOOK.md` §5 (CAMP-01
+  required the reviewer to inspect mean directional return / expectancy
+  sign at governance; CAMP-02–05 dropped the clause — not a compliance
+  defect in the architecture, a practice never codified in the Playbook
+  that silently lapsed; now restored — **closed**, no longer open work).
+- **[Session finding, not yet a formal RD] Campaign 06 sequencing
+  changes** (three adversarial passes) — staged 3–4-month backfill
+  proposed, then reversed to a single full 12-month pass (walk-forward
+  requires chronological contiguity; month-selection would be an
+  un-pre-registered researcher choice); mark-price extension reframed
+  from "extend Binance" to "collect Hyperliquid-native outcomes, Binance
+  secondary" (Constitution §4 — CEX is never the production reference);
+  deep-history backfill moved off the Campaign 06 critical path entirely
+  (orthogonal — gates the next funding/OI campaign instead); Live Sample
+  Recorder promotion made then withdrawn (1.5yr lead time, §5 violation,
+  corrected).
 - **[Session finding] Documentation reorganization (2026-07-29)** —
   `PROJECT_STATE.md` created as sole execution-state authority;
   `PROJECT_STATUS.md`/`PROJECT_DASHBOARD.md` deprecated in place (content
@@ -434,6 +440,16 @@ accordingly.)*
 2026-07-29   Documentation reorganization — PROJECT_STATE.md created,
              ROADMAP.md re-synchronized, PROJECT_STATUS.md/
              PROJECT_DASHBOARD.md deprecated, MASTER_INDEX.md retiered
-   ...        [next: Immediate Backlog items 0.1 → 1.6, then Campaign 06
+2026-07-29   Commit `feb84d0` — Backlog 0.1/0.2/1.1/1.2 (evidence store
+             tracked, storage.py durability fix, governance-inspection
+             clause restored, RD-13 written) + the doc reorg above, all
+             in one reviewed commit. 1,644 tests passing.
+2026-07-29   Commit `9334d4f` — Backlog 1.3: collect_liquidations() + CLI
+             entry point (backfill_liquidations.py) + boto3/lz4 declared.
+             A deferred-write durability defect (found during
+             implementation, before commit) fixed to flush per calendar
+             day instead of once at the end of the whole requested
+             range. 1,661 tests passing.
+   ...        [next: Immediate Backlog items 1.4 → 1.6, then Campaign 06
               decision point]
 ```
