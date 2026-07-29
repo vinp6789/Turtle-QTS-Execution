@@ -27,12 +27,13 @@ Public API:
                                 CSV filename
     load, merge_and_write, MergeResult
                              -- incremental CSV storage (storage.py)
-    collect_open_interest, collect_funding_rate, CollectionResult
-                             -- the pipeline entry points (pipeline.py)
+    collect_open_interest, collect_funding_rate, collect_liquidations,
+    CollectionResult         -- the pipeline entry points (pipeline.py)
     HistoricalDataError      -- this package's error base
 
-    historical.sources.binance      -- primary source client
-    historical.sources.hyperliquid  -- secondary (venue-consistent) source client
+    historical.sources.binance         -- primary source client
+    historical.sources.hyperliquid     -- secondary (venue-consistent) source client
+    historical.sources.hyperliquid_s3  -- official Hyperliquid S3 fill/liquidation archive (RD-10/RD-12)
 """
 
 from .errors import HistoricalDataError
@@ -45,6 +46,7 @@ from .models import (
 from .pipeline import (
     CollectionResult,
     collect_funding_rate,
+    collect_liquidations,
     collect_mark_price,
     collect_metrics,
     collect_open_interest,
@@ -68,6 +70,7 @@ __all__ = [
     "collect_mark_price",
     "collect_metrics",
     "collect_funding_rate",
+    "collect_liquidations",
     "CollectionResult",
     "HistoricalDataError",
 ]

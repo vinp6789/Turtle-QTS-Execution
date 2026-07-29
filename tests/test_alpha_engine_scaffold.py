@@ -241,7 +241,7 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
                 "assess_quality", "DataQualityReport", "verify_checksum",
                 "series_filename", "load", "merge_and_write", "MergeResult",
                 "collect_open_interest", "collect_mark_price", "collect_metrics",
-                "collect_funding_rate", "CollectionResult", "HistoricalDataError",
+                "collect_funding_rate", "collect_liquidations", "CollectionResult", "HistoricalDataError",
             },
         )
 

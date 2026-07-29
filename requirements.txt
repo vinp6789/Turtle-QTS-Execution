@@ -18,3 +18,14 @@ eth-account>=0.13.5
 # bytes the venue re-computes. Mutation-path only; imported lazily, so the
 # frozen core and the read-only adapter import and run without it.
 msgpack>=1.0.0
+
+# boto3 + lz4 (RD-10/RD-12, Alpha Engine historical pipeline ONLY --
+# alpha_engine/historical/sources/hyperliquid_s3.py): read the official
+# Hyperliquid S3 fill/liquidation archive (Requester Pays). Both imported
+# lazily inside the functions that need them, so the frozen Execution
+# Engine core, the read-only adapter, and every other Alpha Engine module
+# import and run without either installed -- verified: the deployed
+# app.main entrypoint never imports alpha_engine/historical/. Research-
+# pipeline-only, not required for any live-trading path.
+boto3>=1.34.0
+lz4>=4.3.0

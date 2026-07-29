@@ -36,10 +36,10 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | Continue the P1 engineering chain (`collect_liquidations()` + CLI + outcome series), then run Campaign 06's outcome-blind feasibility review |
-| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items closed this session.** |
-| **Immediate next task** | `collect_liquidations()` in `pipeline.py` + `__main__` CLI entry + declare `boto3`/`lz4` (Backlog 1.3) |
-| **Full regression** | **1,644 passed, 91 subtests, 0 failed** (re-verified this session — 4 new durability tests added) |
+| **Current objective** | Collect the outcome series (Hyperliquid-native + Binance, 2025-07-27→present), then the full 12-month liquidation backfill, then Campaign 06's outcome-blind feasibility review |
+| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items and Backlog 1.3 closed.** |
+| **Immediate next task** | Outcome series 2025-07-27 → present: Hyperliquid-native daily candles (primary) + Binance metrics (secondary) (Backlog 1.4) |
+| **Full regression** | **1,661 passed, 92 subtests, 0 failed** (re-verified this session — `collect_liquidations()` + CLI added, 19 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -177,16 +177,38 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
   counts), and the correction to RD-12's now-stale "no backfill executed"
   claim. Liquidations Data Status: `NONE` → `COLLECTING`.
 - Full regression: **1,644 passed, 91 subtests, 0 failed.**
+- **Committed as `feb84d0`** (2026-07-29) — 50 files, +2591/-577. Working
+  tree clean.
 
-**Not yet committed** — staged/modified, ready for a single commit:
-`.gitignore`, `README.md`, `alpha_engine/historical/sources/hyperliquid_s3.py`,
-`alpha_engine/historical/storage.py`, `data/alpha_engine_research/*` (36
-files, new), `docs/HISTORICAL_DATA.md`, `docs/MASTER_INDEX.md`,
-`docs/PROJECT_DASHBOARD.md`, `docs/PROJECT_STATUS.md`,
-`docs/PROJECT_STATE.md` (new), `docs/RESEARCH_DECISIONS.md`,
-`docs/ROADMAP.md`, `docs/RESEARCH_PLAYBOOK.md`,
-`tests/test_alpha_engine_historical_storage.py`,
-`tests/test_historical_hyperliquid_s3.py`.
+**Backlog 1.3 closed (2026-07-29):**
+- `collect_liquidations()` added to `pipeline.py` — the 5th `collect_*`
+  entry point, deliberately hour-granularity/checkpoint-resumable rather
+  than day-covered (see the function's own DURABILITY docstring section)
+  and deliberately plural (`symbols: Tuple[Symbol, ...]`, not a single
+  `symbol`) since one hourly archive object serves every symbol at once.
+- **Durability defect found and fixed during implementation, before
+  commit:** the first draft only called `storage.merge_and_write` once
+  at the very end of the whole requested date range, while the
+  checkpoint (correctly) advances every hour. A process killed partway
+  through a multi-day call would have left the checkpoint durably ahead
+  of what was ever persisted to the CSV — resume would then skip those
+  already-checkpointed hours forever, silently discarding decoded data.
+  Fixed by flushing to disk once per calendar day, matching the granularity
+  the one-month pilot backfill itself already validated end-to-end
+  against a real interruption and resume. Locked in by
+  `test_already_processed_days_survive_a_failure_on_a_later_day`.
+- `alpha_engine/historical/backfill_liquidations.py` — the CLI entry
+  point (Constitution §5), retiring the scratchpad-only pilot driver.
+  `python -m alpha_engine.historical.backfill_liquidations --start ... --end ...`.
+  Bounded retry around a single `collect_liquidations()` call — no
+  day-chunking needed at the CLI level, since the function is already
+  safely interruptible/resumable via its own per-day flush + per-hour
+  checkpoint.
+- `boto3>=1.34.0` / `lz4>=4.3.0` declared in `requirements.txt`, scoped
+  to the historical pipeline only (both lazily imported; re-verified the
+  deployed `app.main` entrypoint still imports neither).
+- 19 new tests (11 `collect_liquidations`, 8 CLI). Full regression:
+  **1,661 passed, 92 subtests, 0 failed.**
 
 ---
 
@@ -196,10 +218,10 @@ files, new), `docs/HISTORICAL_DATA.md`, `docs/MASTER_INDEX.md`,
 |---|---|---|---|---|---|
 | ~~0.1~~ | ~~Track `data/alpha_engine_research/` in git~~ | — | — | — | **Done 2026-07-29** |
 | ~~0.2~~ | ~~Fix `storage.py::merge_and_write` atomic write~~ | — | — | — | **Done 2026-07-29** |
-| **0.3** | Commit the current staged diff (P0 fixes + this documentation reorganization) | 0.1, 0.2 done | No, but should precede further work | Minutes | **Next task** |
+| ~~0.3~~ | ~~Commit the current staged diff~~ | — | — | — | **Done 2026-07-29 (`feb84d0`)** |
 | ~~1.1~~ | ~~Restore the governance-inspection clause in `RESEARCH_PLAYBOOK.md` §5~~ | — | — | — | **Done 2026-07-29** |
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
-| **1.3** | `collect_liquidations()` in `pipeline.py` (5th sibling of the existing 4-function pattern) + `__main__` CLI entry + declare `boto3`/`lz4` in `requirements.txt` | 0.2 (done) | Yes — retires the scratchpad-only driver | ~4 hrs | Not started |
+| ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | **1.4** | Outcome series 2025-07-27 → present: **Hyperliquid-native daily candles (primary** — free, verified live to 2020-08-19, DEX-first per Constitution §4/§6) + Binance metrics (secondary cross-venue check, verified HTTP 200) | 1.3 | Yes — closes verified zero-overlap gap (mark price ends 2025-01-01, liquidation archive starts 2025-07-27) | ~4 hrs | Not started |
 | **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time; staged/partial backfill considered and rejected — walk-forward requires chronological contiguity, and month-selection would be an un-pre-registered researcher choice) | 0.2 (done), 1.3 | Yes, for Campaign 06 only | ~1 day wall-clock | Not started |
 | **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
@@ -226,8 +248,8 @@ files, new), `docs/HISTORICAL_DATA.md`, `docs/MASTER_INDEX.md`,
 
 **Technical**
 - ~~`storage.py::merge_and_write` durability~~ — **closed 2026-07-29.**
-- No CLI entry point for the liquidation collector — the only working driver is a gitignored scratchpad script with machine-local absolute paths. (Backlog 1.3)
-- `boto3`/`lz4` undeclared in `requirements.txt` — verified harmless today (the deployed `app.main` entrypoint never imports `alpha_engine/historical/`), becomes real once Backlog 1.3 lands.
+- ~~No CLI entry point for the liquidation collector~~ — **closed 2026-07-29**, `alpha_engine/historical/backfill_liquidations.py`.
+- ~~`boto3`/`lz4` undeclared~~ — **closed 2026-07-29**, declared in `requirements.txt`, scoped to the historical pipeline only.
 
 **Scientific**
 - Zero overlap between existing mark-price coverage (ends 2025-01-01) and the liquidation archive (starts 2025-07-27).
@@ -263,11 +285,11 @@ files, new), `docs/HISTORICAL_DATA.md`, `docs/MASTER_INDEX.md`,
 
 1. ~~Track `data/alpha_engine_research/` in git~~ — **done 2026-07-29.**
 2. ~~Fix `storage.py::merge_and_write` durability~~ — **done 2026-07-29**, 4 new tests, orphaned `.tmp` removed.
-3. **Commit** the staged diff (items 1–2, the governance clause, RD-13, and this documentation reorganization) as one reviewed commit. *(Current next task.)*
+3. ~~Commit the staged diff~~ — **done 2026-07-29 (`feb84d0`)**, 50 files, working tree clean.
 4. ~~Add the governance-inspection clause to `RESEARCH_PLAYBOOK.md`~~ — **done 2026-07-29**, landed in §5 (governance stage), not §2 (it's a review-time inspection, not a pre-registration criterion).
 5. ~~Write RD-13~~ — **done 2026-07-29**: pilot measurements, RD-12 correction, cross-symbol correlation finding, new feasibility-review requirement.
-6. Build `collect_liquidations()` in `pipeline.py` + `__main__` CLI entry; declare `boto3`/`lz4`. *(Next unstarted engineering task.)*
-7. Collect Hyperliquid-native daily candles 2025-07-27→present (verify point-in-time/revision safety first); collect Binance metrics for the same window as the secondary check.
+6. ~~Build `collect_liquidations()` + CLI entry; declare `boto3`/`lz4`~~ — **done 2026-07-29**, plus a real durability defect (deferred-write, not per-day flush) found and fixed before commit.
+7. Collect Hyperliquid-native daily candles 2025-07-27→present (verify point-in-time/revision safety first); collect Binance metrics for the same window as the secondary check. *(Next unstarted task.)*
 8. Execute the full 12-month liquidation backfill, single pass, all symbols retained.
 9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
 10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and move to the deep-history backfill (Backlog 2.1) ahead of the next funding/OI campaign.

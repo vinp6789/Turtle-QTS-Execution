@@ -36,15 +36,17 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from exchange_adapter import Symbol
 
 from .._time import parse_utc
 from . import storage
 from .errors import HistoricalDataError
-from .models import FundingRateObservation, MarkPriceObservation, OpenInterestObservation
-from .sources import binance, hyperliquid
+from .models import (
+    FundingRateObservation, LiquidationObservation, MarkPriceObservation, OpenInterestObservation,
+)
+from .sources import binance, hyperliquid, hyperliquid_s3
 from .validation import DataQualityReport, assess_quality
 
 _logger = logging.getLogger(__name__)
@@ -471,3 +473,137 @@ def _collect_funding_rate_hyperliquid(
         periods_unavailable=(1 if fetched and len(new_observations) == 0 else 0),
         rows_added=merge_result.added_count, quality_report=quality_report, collected_at_utc=clock(),
     )
+
+
+def collect_liquidations(
+    symbols: Tuple[Symbol, ...],
+    start_date: date,
+    end_date: date,
+    storage_root: Union[str, Path],
+    *,
+    checkpoint_path: Optional[Union[str, Path]] = None,
+    bucket: str = hyperliquid_s3.DEFAULT_BUCKET,
+    prefix: str = hyperliquid_s3.DEFAULT_PREFIX,
+    region: str = hyperliquid_s3.DEFAULT_REGION,
+    force: bool = False,
+    clock: Callable[[], str] = _now,
+) -> Tuple[CollectionResult, ...]:
+    """Collects liquidation events for `symbols` over [start_date,
+    end_date] (inclusive) from the official Hyperliquid S3 fill archive
+    (`sources.hyperliquid_s3`) into one series file per symbol.
+
+    Deliberately diverges from the day/month-skip pattern of every
+    sibling collect_*() above -- this is intentional, not an
+    inconsistency (see RD-13, `docs/PROJECT_STATE.md` Known Risks
+    "two-resume-mechanism divergence"). The underlying archive is one
+    object per HOUR (`sources.hyperliquid_s3.list_hour_keys`), and resume
+    uses the source module's own key-ordered checkpoint
+    (`read_checkpoint`/`write_checkpoint`), not a day-covered proxy --
+    checkpointing every hour keeps an interrupted multi-day backfill from
+    ever re-downloading a day's worth of Requester-Pays data it already
+    processed. `checkpoint_path` defaults to
+    `storage_root/.liquidation_checkpoint.json`, mirroring where the
+    bounded pilot backfill kept it. `force=True` ignores any existing
+    checkpoint and reprocesses the whole range (storage.merge_and_write
+    is idempotent, so this cannot duplicate rows).
+
+    DURABILITY (matches the pilot backfill's own proven pattern, not a
+    new design): decoded rows are merge_and_write'n to disk once per
+    CALENDAR DAY, not once at the end of the whole requested range. The
+    checkpoint advances per-hour and is durable the instant it is
+    written (`sources.hyperliquid_s3.write_checkpoint`'s own
+    flush+fsync+replace+dir-fsync sequence); if writes were deferred
+    until the very end of a multi-month call, a process killed partway
+    through would leave the checkpoint durably ahead of what was ever
+    persisted to the CSV -- resume would then skip past those hours
+    forever, silently discarding already-decoded data. Flushing per day
+    bounds that exposure to at most one day's worth of in-flight rows,
+    exactly the granularity the one-month pilot backfill validated
+    end-to-end against a real interruption and resume (RD-13).
+
+    `symbols` is plural, unlike every sibling collector's single
+    `symbol` -- also intentional: one hourly object contains ALL symbols'
+    fills, so `sources.hyperliquid_s3.fetch_hour` already decodes and
+    filters every requested symbol from a single download. Returns one
+    CollectionResult per symbol, in the given order; each result's
+    periods_requested/fetched/skipped are HOUR counts (matching the
+    checkpoint's own granularity), and periods_unavailable counts whole
+    DAYS the archive had no object for at all (e.g. before
+    `sources.hyperliquid_s3.EARLIEST_MEASURED_DATE`)."""
+    if not isinstance(symbols, tuple) or not symbols or not all(isinstance(s, Symbol) for s in symbols):
+        raise HistoricalDataError("symbols must be a non-empty tuple of Symbol")
+    if not isinstance(start_date, date) or not isinstance(end_date, date) or end_date < start_date:
+        raise HistoricalDataError("start_date/end_date must be date instances with end_date >= start_date")
+
+    root = Path(storage_root)
+    cp_path = Path(checkpoint_path) if checkpoint_path is not None else root / ".liquidation_checkpoint.json"
+    checkpoint = None if force else hyperliquid_s3.read_checkpoint(cp_path)
+
+    paths = {
+        s.value: root / storage.series_filename("liquidation", s, hyperliquid_s3.SOURCE_NAME) for s in symbols
+    }
+    requested = fetched = skipped = unavailable = 0
+    rows_added: Dict[str, int] = {s.value: 0 for s in symbols}
+    current = start_date
+    while current <= end_date:
+        date_str = current.strftime("%Y%m%d")
+        keys = hyperliquid_s3.list_hour_keys(date=date_str, bucket=bucket, prefix=prefix, region=region)
+        if not keys:
+            unavailable += 1
+            current += timedelta(days=1)
+            continue
+        todo = hyperliquid_s3.keys_after_checkpoint(keys, checkpoint)
+        requested += len(keys)
+        skipped += len(keys) - len(todo)
+
+        day_new_by_symbol: Dict[str, List[LiquidationObservation]] = {s.value: [] for s in symbols}
+        for key in todo:
+            fetched += 1
+            obs = hyperliquid_s3.fetch_hour(key, bucket=bucket, region=region, symbols=symbols)
+            for o in obs:
+                day_new_by_symbol[o.symbol.value].append(o)
+            hyperliquid_s3.write_checkpoint(cp_path, key)
+            checkpoint = key
+
+        # Flush this day's decoded rows BEFORE moving on -- see the
+        # DURABILITY note above for why this cannot wait until the loop
+        # over the whole requested range finishes.
+        if todo:
+            for symbol in symbols:
+                day_rows = tuple(day_new_by_symbol[symbol.value])
+                if not day_rows:
+                    continue
+                merge_result = storage.merge_and_write(paths[symbol.value], LiquidationObservation, day_rows)
+                rows_added[symbol.value] += merge_result.added_count
+                if merge_result.conflict_keys:
+                    _logger.warning(
+                        "liquidation merge for %s/%s found %d conflicting duplicate key(s) on %s; "
+                        "existing values kept: %s",
+                        symbol.value, hyperliquid_s3.SOURCE_NAME, len(merge_result.conflict_keys),
+                        date_str, merge_result.conflict_keys,
+                    )
+        current += timedelta(days=1)
+
+    results = []
+    for symbol in symbols:
+        path = paths[symbol.value]
+        full_series = storage.load(path, LiquidationObservation)
+        # No expected_interval_seconds: liquidations are event-driven, not
+        # periodic, so a fixed-cadence gap check would be meaningless. The
+        # duplicate/ordering checks below are still meaningful, EXCEPT
+        # that assess_quality's (symbol, observed_at_utc) key will report
+        # the two legitimate paired rows of every single liquidation
+        # (see models.LiquidationObservation) as a "duplicate" -- that is
+        # a known, structural false-positive of this general-purpose
+        # check against this one observation type's real key
+        # (symbol, observed_at_utc, tid, side), already correctly used by
+        # storage._dedup_key. Reported as-is rather than building a
+        # liquidation-specific quality check for one call site.
+        quality_report = assess_quality(full_series) if full_series else None
+        results.append(CollectionResult(
+            metric="liquidation", symbol_value=symbol.value, source=hyperliquid_s3.SOURCE_NAME, path=str(path),
+            periods_requested=requested, periods_fetched=fetched, periods_skipped=skipped,
+            periods_unavailable=unavailable, rows_added=rows_added[symbol.value],
+            quality_report=quality_report, collected_at_utc=clock(),
+        ))
+    return tuple(results)
