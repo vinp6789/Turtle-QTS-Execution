@@ -34,10 +34,30 @@ endpoint on the same venue -- POST https://api.hyperliquid.xyz/info
 "startTime": <ms>, "endTime": <ms>}}. Live-verified (2026-07-29): all
 price fields are string-encoded decimals; a 368-day single request
 returned every row with no pagination cap (unlike fundingHistory's
-500-record cap, no paging loop is needed here); a repeated call against
-an already-closed historical day returned byte-identical data across a
-2-second gap. Decoded into MarkPriceObservation using the candle's CLOSE
--- this is a DAILY CLOSE, not a point-in-time mark price (derivation-scope
+500-record cap, no paging loop is needed here); `endTime` is INCLUSIVE
+of a candle whose own `t` equals `endTime` exactly (the range is
+`[start_ms, end_ms]`, a CLOSED interval on both ends -- NOT the
+half-open `[start_ms, end_ms)` `fetch_funding_rate_range` above uses;
+copying that notation verbatim caused a real one-day-leak bug, fixed in
+`pipeline.py::_collect_mark_price_hyperliquid` with a -1ms adjustment).
+A repeated call against an already-closed historical day returned
+byte-identical data across a 2-second gap.
+
+STILL-FORMING CANDLES ARE NEVER RETURNED (found by independent QA
+review, Backlog 1.4 M1, after the boundary fix above): the endpoint
+happily returns today's not-yet-closed candle, which mutates as the day
+progresses. collect_mark_price's Hyperliquid path resumes from a
+high-water mark, so an in-progress candle collected once would
+otherwise be permanently frozen at its partial value -- storage.
+merge_and_write keeps the first-seen value on conflict, and the
+high-water mark means that timestamp is never requested again once
+stored. fetch_daily_candles compares each row's close time (`T`) against
+`clock()` and silently drops any row whose candle has not yet closed;
+this is normal (the caller may be asking for a still-in-progress day),
+never an error. See test_excludes_a_still_forming_candle.
+
+Decoded into MarkPriceObservation using the candle's CLOSE -- this is a
+DAILY CLOSE, not a point-in-time mark price (derivation-scope
 declaration, RD-11 A); reused as the same type because it is structurally
 identical (one Decimal value per symbol per timestamp), not because the
 two quantities mean the same thing. This is the DEX-first PRIMARY outcome
@@ -63,7 +83,7 @@ from typing import Any, Callable, Dict, List, Tuple
 
 from exchange_adapter import Symbol
 
-from ..._time import canonical_utc
+from ..._time import canonical_utc, parse_utc
 from ..errors import HistoricalDataError
 from ..models import FundingRateObservation, MarkPriceObservation
 
@@ -167,17 +187,26 @@ def fetch_daily_candles(
     timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
     clock: Callable[[], str] = _now,
 ) -> Tuple[MarkPriceObservation, ...]:
-    """Every daily candle's CLOSE price for `symbol` in [start_ms, end_ms),
-    via POST https://api.hyperliquid.xyz/info {"type": "candleSnapshot",
-    "req": {"coin": <SYMBOL>, "interval": "1d", "startTime": <ms>,
-    "endTime": <ms>}}. See this module's own docstring ("DAILY CANDLES")
-    for the live-verified response shape, pagination behavior, and the
-    daily-close-is-not-a-mark-price derivation-scope note.
+    """Every CLOSED daily candle's CLOSE price for `symbol` in
+    [start_ms, end_ms] -- a CLOSED interval (INCLUSIVE of end_ms; see
+    this module's own docstring, "DAILY CANDLES", for why this differs
+    from fetch_funding_rate_range's half-open range above) -- via POST
+    https://api.hyperliquid.xyz/info {"type": "candleSnapshot", "req":
+    {"coin": <SYMBOL>, "interval": "1d", "startTime": <ms>,
+    "endTime": <ms>}}.
 
-    Returns an empty tuple if Hyperliquid has no coverage in this range
-    (before the venue's own launch, or a future range) -- normal, not an
-    error. Raises HistoricalDataError for a malformed response or a
-    non-HTTP-404 transport failure."""
+    A candle whose close time (`T`) has not yet passed `clock()` is
+    STILL FORMING and is silently excluded -- never returned, never an
+    error (see this module's docstring, "STILL-FORMING CANDLES ARE NEVER
+    RETURNED", for why: an in-progress candle collected once would
+    otherwise be permanently frozen at its partial value by
+    collect_mark_price's high-water-mark resume).
+
+    Returns an empty tuple if Hyperliquid has no CLOSED coverage in this
+    range (before the venue's own launch, a future range, or every
+    candle in range is still forming) -- normal, not an error. Raises
+    HistoricalDataError for a malformed response or a non-HTTP-404
+    transport failure."""
     if not isinstance(symbol, Symbol):
         raise HistoricalDataError(f"symbol must be a Symbol, got {type(symbol).__name__}")
     if not isinstance(start_ms, int) or isinstance(start_ms, bool) or start_ms < 0:
@@ -186,6 +215,7 @@ def fetch_daily_candles(
         raise HistoricalDataError("end_ms must be an int >= start_ms")
 
     ingested_at_utc = clock()
+    now_ms = int(parse_utc(ingested_at_utc).timestamp() * 1000)
     payload = {
         "type": "candleSnapshot",
         "req": {"coin": symbol.value, "interval": "1d", "startTime": start_ms, "endTime": end_ms},
@@ -204,6 +234,14 @@ def fetch_daily_candles(
     observations: List[MarkPriceObservation] = []
     for row in body:
         try:
+            candle_close_ms = row["T"]
+            if not isinstance(candle_close_ms, int):
+                raise TypeError(f"T must be an int, got {type(candle_close_ms).__name__}")
+        except (KeyError, TypeError) as exc:
+            raise HistoricalDataError(f"{source_detail}: malformed row {row!r}: {exc}") from exc
+        if candle_close_ms >= now_ms:
+            continue  # still forming -- not yet valid historical data (see docstring)
+        try:
             observed_at_utc = canonical_utc(
                 datetime.fromtimestamp(row["t"] / 1000, tz=timezone.utc).isoformat()
             )
@@ -217,7 +255,8 @@ def fetch_daily_candles(
 
     if len(observations) == 0:
         _logger.info(
-            "hyperliquid daily candles empty for %s in [%d, %d) -- likely before venue coverage",
+            "hyperliquid daily candles empty (no closed candles) for %s in [%d, %d] "
+            "-- likely before venue coverage, or every candle in range is still forming",
             symbol.value, start_ms, end_ms,
         )
     return tuple(observations)

@@ -319,9 +319,15 @@ class TestCollectMarkPriceHyperliquid(unittest.TestCase):
                     t += 86400000
                 return out
 
+            # NOT _CLOCK (2024-06-01): these candles are dated 2026-06, so a
+            # fixed "now" before them would make fetch_daily_candles's own
+            # still-forming-candle exclusion (Backlog 1.4 M1) filter every
+            # one out -- this test is about the boundary/leak behavior, not
+            # that filter, so "now" must be safely after all of them.
+            future_clock = lambda: "2030-01-01T00:00:00+00:00"
             collect_mark_price(
                 Symbol("BTC"), date(2026, 6, 1), date(2026, 6, 5), tmp,
-                source="hyperliquid", transport=transport, clock=_CLOCK,
+                source="hyperliquid", transport=transport, clock=future_clock,
             )
             obs = load(Path(tmp) / "mark_price__BTC__hyperliquid.csv", MarkPriceObservation)
             days_present = sorted(o.observed_at_utc[:10] for o in obs)
@@ -335,6 +341,51 @@ class TestCollectMarkPriceHyperliquid(unittest.TestCase):
                 requested_end_times[0], june5_midnight_ms + 86400000 - 1,
                 "endTime must be 1ms before the start of the day AFTER end_date",
             )
+
+    def test_a_still_forming_candle_is_not_permanently_frozen_at_its_partial_value(self):
+        """M1 (independent QA audit finding, Medium severity), at the
+        collect_mark_price integration level (source-level coverage is
+        test_excludes_a_still_forming_candle in
+        test_alpha_engine_historical_sources_hyperliquid.py). Without the
+        fix in fetch_daily_candles, collecting through "today" while
+        today's candle is still forming would store its partial close;
+        the high-water-mark resume then never asks for that timestamp
+        again, and storage.merge_and_write keeps the first-seen value on
+        conflict -- so the partial value would be frozen forever, even
+        after the candle genuinely closes and later re-collection runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            today = date(2026, 6, 10)
+            today_ms = int(datetime(2026, 6, 10, tzinfo=timezone.utc).timestamp() * 1000)
+            # "now" = noon on the SAME day as the candle -- genuinely
+            # mid-day, not just "far in the past" by coincidence.
+            mid_day_clock = lambda: "2026-06-10T12:00:00+00:00"
+
+            def transport_partial(url, payload, timeout_seconds):
+                # Simulate collecting mid-day: today's candle is still
+                # forming, reported close-so-far is 111.
+                return [_candle(today_ms, "111.0")]
+
+            collect_mark_price(
+                Symbol("BTC"), today, today, tmp,
+                source="hyperliquid", transport=transport_partial, clock=mid_day_clock,
+            )
+            rows = load(Path(tmp) / "mark_price__BTC__hyperliquid.csv", MarkPriceObservation)
+            self.assertEqual(len(rows), 0, "a still-forming candle must not be stored at all")
+
+            # Re-collect later, after the candle has genuinely closed at 222.
+            future_clock = lambda: "2030-01-01T00:00:00+00:00"
+
+            def transport_final(url, payload, timeout_seconds):
+                return [_candle(today_ms, "222.0")]
+
+            result = collect_mark_price(
+                Symbol("BTC"), today, today, tmp,
+                source="hyperliquid", force=True, transport=transport_final, clock=future_clock,
+            )
+            rows = load(Path(tmp) / "mark_price__BTC__hyperliquid.csv", MarkPriceObservation)
+            self.assertEqual(result.rows_added, 1)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].value, Decimal("222.0"), "final close must not be shadowed by a stale partial value")
 
 
 class TestCollectMetrics(unittest.TestCase):

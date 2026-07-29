@@ -37,9 +37,9 @@ they're found, never silently carried forward.
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
 | **Current objective** | Full 12-month liquidation backfill (Backlog 1.5), then Campaign 06's outcome-blind feasibility review (1.6) |
-| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items, Backlog 1.3, and Backlog 1.4 closed.** |
+| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items, Backlog 1.3, and Backlog 1.4 (incl. a Medium-severity QA finding) closed.** |
 | **Immediate next task** | Full 12-month liquidation backfill, single pass, all symbols retained (Backlog 1.5) |
-| **Full regression** | **1,683 passed, 92 subtests, 0 failed** (re-verified this session — Backlog 1.4: Hyperliquid daily-candle mark price + Binance dual-source `collect_mark_price`, 14 new tests) |
+| **Full regression** | **1,687 passed, 92 subtests, 0 failed** (re-verified this session — independent QA audit of Backlog 1.4 + fixes, 4 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -262,7 +262,12 @@ pre-fix code and passes against the fix).
 - `sources/hyperliquid.py::fetch_daily_candles()` — new function, live-verified against the real `candleSnapshot` endpoint (2026-07-29): all price fields string-encoded decimals, no pagination cap up to a 368-day single request (unlike `fundingHistory`'s 500-record cap), a repeated call against an already-closed day returned byte-identical data (point-in-time stable). Decodes into `MarkPriceObservation` using the candle CLOSE — a **daily close, not a point-in-time mark price** (derivation-scope note, RD-11 A), documented in both the function's docstring and `MarkPriceObservation`'s own.
 - `pipeline.py::collect_mark_price()` split into a dispatcher + `_collect_mark_price_binance`/`_collect_mark_price_hyperliquid`, mirroring `collect_funding_rate`'s existing two-source pattern exactly (same high-water-mark resume shape for the Hyperliquid side). `_SUPPORTED_MARK_PRICE_SOURCES` extended to `("binance", "hyperliquid")`.
 - **Boundary defect found and fixed before committing, via a real end-to-end run against the live API (not caught by unit tests with fakes alone):** `_collect_mark_price_hyperliquid`'s `end_ms` computation copied `collect_funding_rate`'s "+1 day, exclusive" formula verbatim. Live-verified that `candleSnapshot`'s `endTime` is **inclusive** of a candle whose own `t` equals `endTime` exactly — safe for hourly funding settlements (which essentially never land exactly on a day boundary) but not for daily candles (whose `t` always does), so the copied formula silently included one extra day beyond the caller's requested range. First real run for BTC 2025-07-27→2026-07-28 pulled in a 369th, still-forming row for 2026-07-29. Fixed with a `-1ms` adjustment; locked in by `test_end_date_boundary_does_not_leak_the_following_days_candle`, confirmed to fail against the pre-fix formula (leaks a day) and pass against the fix. The erroneous data was deleted and the collection re-run cleanly.
-- **Real end-to-end collection executed** (not just tested against fakes): Hyperliquid daily candles for BTC/ETH/SOL, 2025-07-27→2026-07-28 — **367/367/367 rows**, dates and values verified. Binance secondary-source backfill (via `collect_metrics`, chunked weekly with retry, mirroring `research/campaign_01_open_interest/collect_backfill.py`'s established pattern) verified correct on every completed chunk, zero errors; continuing in the background past this session's end — its completion is a data-volume matter, not an open code question, and is not required for Backlog 1.4's capability to be considered done (same distinction as Backlog 1.3's collector vs. 1.5's full-scale run). Per the pre-existing, deliberate `data/` gitignore policy, none of this collected data is committed — only the code and tests are.
+- **Real end-to-end collection executed** (not just tested against fakes): Hyperliquid daily candles for BTC/ETH/SOL, 2025-07-27→2026-07-28 — **367/367/367 rows**, dates and values verified. Binance secondary-source backfill (via `collect_metrics`, chunked weekly with retry, mirroring `research/campaign_01_open_interest/collect_backfill.py`'s established pattern) **completed** — 159 chunks, 0 failures, 275,601 rows/metric — full coverage now Binance `2023-07-01..2026-07-27` (917 days), Hyperliquid `2025-07-27..2026-07-28` (367 days) per symbol; the one-day asymmetry is normal archive-publication lag (`unavailable=1`), not an error. Per the pre-existing, deliberate `data/` gitignore policy, none of this collected data is committed — only the code and tests are.
+- **Independent QA audit of Backlog 1.4, then fixes (2026-07-29):** found one Medium and two Low findings; the Medium was independently re-verified with a fresh, self-authored probe (not accepted on the audit's word) before any fix was written, and the fix confirmed red→green.
+  - **M1 (Medium, closed) — a still-forming daily candle was silently frozen at its partial value, permanently.** `fetch_daily_candles` returned Hyperliquid's in-progress "today" candle, which mutates as the day continues; `_collect_mark_price_hyperliquid`'s high-water-mark resume then never re-requested that timestamp once stored, and `storage.merge_and_write` keeps the first-seen value on conflict — so a partial close, once collected, could never self-correct. Reproduced directly: collecting mid-day stored close=111; re-collecting after the candle genuinely closed at 222 still returned the stale 111 (`rows_added=0`), no error, no warning. **Root cause:** the funding-settlement pattern (final the instant it's emitted) was reused for candles (not final until the day closes) without accounting for that difference — the same class of "pattern copied where the semantics differ" as the boundary bug already fixed once in this backlog item. **Fix:** `fetch_daily_candles` now compares each row's close time (`T`) against `clock()` and silently excludes any candle that has not yet closed — never an error, since the caller may legitimately be asking for an in-progress day. Verified against the real live API (not just fakes): a request through the end of today correctly returned only fully-closed candles, excluding today's. **Verified NOT present in the already-shipped data** — re-fetched all three symbols from the live API, 0 mismatches, because the manual collection driver used yesterday as `end_date`; the defect was latent, not manifested, and required no data correction.
+  - **L1 (Low, closed) — `fetch_daily_candles`'s docstring and log message described the interval as half-open `[start_ms, end_ms)`**, contradicting the live-verified inclusive `endTime` the sibling boundary fix already depends on (copied from `fetch_funding_rate_range`, where it's accurate). Corrected to `[start_ms, end_ms]`, with an explicit note on why this endpoint differs from the funding one.
+  - **L2 (informational, closed)** — this document's own "continuing in the background past this session's end" note for the Binance backfill was stale (it has since completed); corrected above.
+- 4 new tests (3 source-level in `test_alpha_engine_historical_sources_hyperliquid.py`, 1 integration-level in `test_alpha_engine_historical_pipeline.py`), each confirmed to fail against the pre-fix code and pass against the fix. Full regression: **1,687 passed, 92 subtests, 0 failed.**
 - `docs/HISTORICAL_DATA.md` §0/§1 updated: Mark Price added as its own row (both sources) to the source-comparison table; the DEX-first section's "Funding Rate is the only currently-collected metric where Hyperliquid-replicate is executable" claim corrected to scope it to feature metrics (mark price is an outcome series, not a feature, so it was never covered by that claim and didn't need venue-transfer validation — but the zero-overlap gap it closes is recorded).
 - 14 new tests (9 `fetch_daily_candles`, 5 `collect_mark_price` Hyperliquid-path incl. the boundary regression). Full regression: **1,683 passed, 92 subtests, 0 failed.**
 
@@ -472,6 +477,21 @@ accordingly.)*
   (`RESEARCH_PLAYBOOK.md` §5) applies to engineering review as well as
   research governance, and caught a real defect the implementer's own
   first-pass fix and self-review missed twice.
+- **[Session finding] Independent QA audit of Backlog 1.4 (2026-07-29)**
+  — found 1 Medium (a still-forming daily candle silently frozen at its
+  partial value forever, since the high-water-mark resume never asks
+  for that timestamp again once stored) and 2 Low findings (the source
+  function's own docstring described the wrong interval semantics; this
+  document's Binance-backfill status had gone stale). The Medium was
+  independently re-verified with a fresh, self-authored probe before any
+  fix was written — not accepted on the audit's word — and confirmed
+  not present in the already-shipped data via a live re-fetch. Same
+  precedent as the Backlog 1.3 audit: a pattern (funding settlements,
+  final the instant they're emitted) was reused a second time
+  (candles, not final until the day closes) without accounting for the
+  difference — this is now the second confirmed instance of that exact
+  failure shape within this one backlog item, worth watching for
+  whenever a future collector borrows an existing pattern verbatim.
 
 ---
 
@@ -533,22 +553,36 @@ accordingly.)*
              client reused per call instead of one per request. 8 new
              tests, each confirmed to fail against the pre-fix code and
              pass against the fix. 1,669 tests passing.
-2026-07-29   Backlog 1.4: collect_mark_price() extended to a Hyperliquid
-             daily-candle source (fetch_daily_candles, new), mirroring
-             collect_funding_rate's existing two-source pattern. A real
-             end-date boundary defect (candleSnapshot's endTime is
-             inclusive, unlike the hourly-funding formula it was copied
-             from) found via a live end-to-end run against the real API,
-             not by unit tests with fakes alone -- fixed with a -1ms
-             adjustment before committing. Real collection executed:
-             Hyperliquid daily candles for BTC/ETH/SOL, 2025-07-27 to
-             2026-07-28, 367/367/367 rows -- full overlap with the
-             liquidation archive's window, closing that blocker. Binance
-             secondary-source coverage for the same window continued
-             filling in past this session (data-volume matter, not an
-             open code question; per the pre-existing gitignore policy,
-             none of the collected data itself is committed). 14 new
-             tests. 1,683 tests passing.
+2026-07-29   Commit `6bf8452` -- Backlog 1.4: collect_mark_price()
+             extended to a Hyperliquid daily-candle source
+             (fetch_daily_candles, new), mirroring collect_funding_rate's
+             existing two-source pattern. A real end-date boundary
+             defect (candleSnapshot's endTime is inclusive, unlike the
+             hourly-funding formula it was copied from) found via a live
+             end-to-end run against the real API, not by unit tests with
+             fakes alone -- fixed with a -1ms adjustment before
+             committing. Real collection executed: Hyperliquid daily
+             candles for BTC/ETH/SOL, 2025-07-27 to 2026-07-28,
+             367/367/367 rows -- full overlap with the liquidation
+             archive's window, closing that blocker. 14 new tests. 1,683
+             tests passing.
+2026-07-29   Binance secondary-source backfill (started during the
+             commit above) completed in the background: 159 chunks, 0
+             failures, 275,601 rows/metric. Final coverage: Binance
+             2023-07-01..2026-07-27 (917 days), Hyperliquid
+             2025-07-27..2026-07-28 (367 days), per symbol.
+2026-07-29   Independent QA audit of commit 6bf8452: found the
+             still-forming-candle interaction with high-water-mark
+             resume (Medium -- a partial close, once collected, could
+             never self-correct) plus two Low findings. Medium
+             independently re-verified with a fresh probe before any fix
+             was written, and confirmed absent from the already-shipped
+             data via a live re-fetch (0 mismatches). Fixed:
+             fetch_daily_candles now excludes any candle whose close
+             time has not yet passed "now"; docstring/log wording
+             corrected to the verified inclusive interval. 4 new tests,
+             each confirmed to fail against the pre-fix code and pass
+             against the fix. 1,687 tests passing.
    ...        [next: Immediate Backlog item 1.5, then 1.6, then Campaign
               06 decision point]
 ```
