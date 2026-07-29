@@ -233,6 +233,109 @@ def test_checkpoint_write_is_atomic_no_tmp_left(tmp_path):
     assert not (tmp_path / "c.json.tmp").exists()
 
 
+# --- durability regression (post-mortem of the pilot-backfill interruption) ---
+# The pilot process was killed mid-run and left a 68-byte checkpoint of pure
+# NUL bytes: os.replace had published a directory entry whose data blocks were
+# still unflushed page cache. These tests pin the fix.
+
+def test_checkpoint_survives_normal_completion(tmp_path):
+    p = tmp_path / "cp.json"
+    key = "node_fills_by_block/hourly/20260625/0.lz4"
+    hls.write_checkpoint(p, key)
+    assert hls.read_checkpoint(p) == key
+    # bytes are real on disk, not a zero-filled placeholder
+    raw = p.read_bytes()
+    assert raw and b"\x00" not in raw
+    assert json.loads(raw.decode("utf-8"))["last_processed_key"] == key
+
+
+def test_file_is_fsynced_before_replace(monkeypatch, tmp_path):
+    """The invariant that prevents the zero-fill: data must be fsync'd
+    BEFORE the rename publishes the directory entry."""
+    calls = []
+    real_fsync, real_replace = hls.os.fsync, hls.os.replace
+
+    def spy_fsync(fd):
+        calls.append("fsync")
+        return real_fsync(fd)
+
+    def spy_replace(a, b):
+        calls.append("replace")
+        return real_replace(a, b)
+
+    monkeypatch.setattr(hls.os, "fsync", spy_fsync)
+    monkeypatch.setattr(hls.os, "replace", spy_replace)
+    hls.write_checkpoint(tmp_path / "cp.json", "a/b/20260625/0.lz4")
+
+    assert "fsync" in calls, "file was never fsync'd"
+    assert calls.index("fsync") < calls.index("replace"), (
+        f"fsync must precede replace, got order: {calls}"
+    )
+
+
+def test_interruption_after_replace_cannot_leave_zero_filled_checkpoint(tmp_path):
+    """Simulates the observed failure: the process dies immediately after
+    os.replace returns. Because the data was fsync'd first, the published
+    file must already hold complete, readable bytes."""
+    p = tmp_path / "cp.json"
+    key = "node_fills_by_block/hourly/20260625/7.lz4"
+    real_replace = hls.os.replace
+    captured = {}
+
+    def replace_then_die(a, b):
+        real_replace(a, b)
+        captured["bytes"] = Path(b).read_bytes()   # state at the instant of "death"
+        raise KeyboardInterrupt("process killed immediately after replace")
+
+    original = hls.os.replace
+    hls.os.replace = replace_then_die
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            hls.write_checkpoint(p, key)
+    finally:
+        hls.os.replace = original
+
+    raw = captured["bytes"]
+    assert raw, "checkpoint was empty at the moment of interruption"
+    assert b"\x00" not in raw, "checkpoint contained NUL bytes (the observed corruption)"
+    assert json.loads(raw.decode("utf-8"))["last_processed_key"] == key
+    assert hls.read_checkpoint(p) == key
+
+
+def test_corrupt_checkpoint_still_fails_loudly(tmp_path):
+    """Reproduces the exact observed corruption: 68 NUL bytes. Must raise,
+    never silently resume from a bogus position."""
+    p = tmp_path / "cp.json"
+    p.write_bytes(b"\x00" * 68)
+    with pytest.raises(HistoricalDataError):
+        hls.read_checkpoint(p)
+
+
+def test_existing_checkpoints_remain_readable(tmp_path):
+    """A checkpoint written by the PREVIOUS implementation (plain write_text,
+    no fsync) must still load -- the on-disk format is unchanged."""
+    p = tmp_path / "cp.json"
+    key = "node_fills_by_block/hourly/20260620/13.lz4"
+    p.write_text(json.dumps({"last_processed_key": key}, sort_keys=True), encoding="utf-8")
+    assert hls.read_checkpoint(p) == key
+
+
+def test_directory_fsync_is_best_effort_and_never_raises(monkeypatch, tmp_path):
+    """Windows cannot fsync a directory; that must not fail the write."""
+    def boom(*a, **k):
+        raise OSError("directory fsync unsupported on this platform")
+
+    monkeypatch.setattr(hls.os, "open", boom)
+    hls.write_checkpoint(tmp_path / "cp.json", "a/b/20260625/0.lz4")
+    assert hls.read_checkpoint(tmp_path / "cp.json") == "a/b/20260625/0.lz4"
+
+
+def test_no_tmp_file_remains_after_successful_write(tmp_path):
+    p = tmp_path / "cp.json"
+    hls.write_checkpoint(p, "a/b/20260625/0.lz4")
+    assert not (tmp_path / "cp.json.tmp").exists()
+
+
 def test_sort_key_orders_by_date_then_numeric_hour():
     base = "node_fills_by_block/hourly/"
     keys = [base + "20260102/1.lz4", base + "20260101/10.lz4", base + "20260101/2.lz4"]

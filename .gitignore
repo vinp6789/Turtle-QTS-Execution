@@ -32,7 +32,19 @@ env/
 *.log
 
 # Productization: runtime state, secrets, scratch
-data/
+# NOTE: data/ is ignored at the file level (not the directory level) so
+# the research evidence store below can be explicitly re-included -- git
+# will not descend into a directory ignored via a trailing-slash pattern
+# to evaluate per-file negations.
+data/*
+# Research evidence store (Experiment Registry JSONL): sealed, checksummed,
+# content-fingerprinted campaign evidence -- append-only scientific record,
+# small (sub-1MB), and the only durable witness that evidence was written
+# contemporaneously rather than reconstructed later. Tracked deliberately;
+# everything else under data/ (historical CSVs, event store, checkpoints,
+# logs) remains ignored.
+!data/alpha_engine_research/
+!data/alpha_engine_research/**
 .env
 .env.*
 !.env.example

@@ -235,6 +235,26 @@ Interest, as of this writing — see `docs/HISTORICAL_DATA.md` §0), this
 is a standing structural blocker to promotion, not a checkbox to satisfy
 later; the evidence package's `known_limitations` must say so explicitly.
 
+**Expectancy-sign inspection (restored — `PROJECT_CONSTITUTION.md` §7).**
+Constitution §7 states plainly: "a candidate with a favorable hit rate but
+non-positive expectancy is still a rejection." The reviewer must inspect
+`mean_directional_return` (sealed into every evidence package by the
+five-stage gate, `alpha_engine/validation/models.py`) alongside hit rate
+at every governance decision — a hit rate clearing `min_hit_rate` with a
+non-positive or negligible mean directional return is not a pass on
+magnitude grounds, even though the runner's own recognized acceptance
+keys (`min_hit_rate`, `min_signaled_samples`) do not encode this
+mechanically. **This restores, as an explicit rule, a practice Campaign
+01's own pre-registered acceptance criteria already applied** ("a >55%
+hit rate with negative expectancy is a rejection, not a pass" —
+`RESEARCH_CAMPAIGN_01_open_interest.md`, "Acceptance criteria" §, the
+"Plus" clause) but which was not carried forward into a written Playbook
+rule and was not consistently reapplied in Campaigns 02–05.
+Deliberately a **human inspection at this one judgment gate**, not a new
+`runner.py` acceptance key — mechanizing it would migrate judgment out of
+the one deliberately human-owned stage in the pipeline (see the trade-off
+recorded in `RESEARCH_DECISIONS.md`).
+
 **Execution-parameter prerequisite for APPROVE (`RESEARCH_DECISIONS.md`
 RD-11 C).** No hypothesis may reach **APPROVED** unless its specification
 contains every execution-required risk parameter the execution bridge

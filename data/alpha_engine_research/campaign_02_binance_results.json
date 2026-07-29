@@ -1,0 +1,222 @@
+{
+  "BTC": {
+    "sample_count": 486,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 486,
+      "skip_no_funding": 63,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-binance-BTC-contrarian",
+        "direction_convention": "contrarian",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 35,
+        "hit_rate": "0.3142857142857142857142857143",
+        "mean_directional_return": "-0.01098249481276206722503064330",
+        "boot_mean_hit_rate": "0.3131759595869387661651425627",
+        "boot_min_hit_rate": "0.1",
+        "boot_max_hit_rate": "0.6",
+        "boot_fraction_meeting_bar": "0.003",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "f0342f90432395a8703bc1ffd158b5eae655396ae6a96bb7cb0ab68b1cd9e02e",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-binance-BTC-momentum",
+        "direction_convention": "momentum",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 35,
+        "hit_rate": "0.6857142857142857142857142857",
+        "mean_directional_return": "0.01098249481276206722503064330",
+        "boot_mean_hit_rate": "0.6868240404130612338348574369",
+        "boot_min_hit_rate": "0.4",
+        "boot_max_hit_rate": "0.9",
+        "boot_fraction_meeting_bar": "0.969",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "d6a34a09190e41a00c94ae3ef55bc98fcfc1396c1a556d295c026bbb21385b1c",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "ETH": {
+    "sample_count": 486,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 486,
+      "skip_no_funding": 63,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-binance-ETH-contrarian",
+        "direction_convention": "contrarian",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 44,
+        "hit_rate": "0.5227272727272727272727272727",
+        "mean_directional_return": "0.002409059281149968950378962607",
+        "boot_mean_hit_rate": "0.523229159823566267001259696",
+        "boot_min_hit_rate": "0.2407407407407407407407407407",
+        "boot_max_hit_rate": "0.78125",
+        "boot_fraction_meeting_bar": "0.376",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "6329bf4eefd05e3add1e27fa189f0bece711f3717ec426d8117a7a82a541c590",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-binance-ETH-momentum",
+        "direction_convention": "momentum",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 44,
+        "hit_rate": "0.4772727272727272727272727273",
+        "mean_directional_return": "-0.002409059281149968950378962607",
+        "boot_mean_hit_rate": "0.476770840176433732998740304",
+        "boot_min_hit_rate": "0.21875",
+        "boot_max_hit_rate": "0.7592592592592592592592592593",
+        "boot_fraction_meeting_bar": "0.165",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "ea83f9f8ec19afd585b7be6c84d6530155484b1addb662fe23d86b9b117aa084",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "SOL": {
+    "sample_count": 486,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 486,
+      "skip_no_funding": 63,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-binance-SOL-contrarian",
+        "direction_convention": "contrarian",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 62,
+        "hit_rate": "0.4516129032258064516129032258",
+        "mean_directional_return": "-0.001424247663617699387074292956",
+        "boot_mean_hit_rate": "0.4507909169985162615915410651",
+        "boot_min_hit_rate": "0.2631578947368421052631578947",
+        "boot_max_hit_rate": "0.6615384615384615384615384615",
+        "boot_fraction_meeting_bar": "0.068",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "27f0fd43845b93d75191905af4ab0aedd0ec0c5c40609015b093786417a7fba9",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-binance-SOL-momentum",
+        "direction_convention": "momentum",
+        "source": "binance",
+        "total_samples": 486,
+        "signaled_samples": 62,
+        "hit_rate": "0.5483870967741935483870967742",
+        "mean_directional_return": "0.001424247663617699387074292956",
+        "boot_mean_hit_rate": "0.5492090830014837384084589351",
+        "boot_min_hit_rate": "0.3384615384615384615384615385",
+        "boot_max_hit_rate": "0.7368421052631578947368421053",
+        "boot_fraction_meeting_bar": "0.488",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "9e598c277c419e095ad35b4e3eb792eef33e163677066a05c2cf06022fcc32cc",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "combined": {
+    "sample_count": 1458,
+    "diagnostics": {
+      "symbols": 3,
+      "grid_points": 1647,
+      "built": 1458,
+      "skip_no_funding": 189,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-binance-combined-contrarian",
+        "direction_convention": "contrarian",
+        "source": "binance",
+        "total_samples": 1458,
+        "signaled_samples": 141,
+        "hit_rate": "0.4397163120567375886524822695",
+        "mean_directional_return": "-0.002600652944825326816014215064",
+        "boot_mean_hit_rate": "0.440033753701753563736873221",
+        "boot_min_hit_rate": "0.2867647058823529411764705882",
+        "boot_max_hit_rate": "0.5866666666666666666666666667",
+        "boot_fraction_meeting_bar": "0.006",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "02d0e0db30439934f6ece371495b034952695f8848df18bc126e5f8fd406bbf5",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": "REJECTED (reviewer!=researcher, fingerprint verified)",
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-binance-combined-momentum",
+        "direction_convention": "momentum",
+        "source": "binance",
+        "total_samples": 1458,
+        "signaled_samples": 141,
+        "hit_rate": "0.5602836879432624113475177305",
+        "mean_directional_return": "0.002600652944825326816014215064",
+        "boot_mean_hit_rate": "0.5599662462982464362631267789",
+        "boot_min_hit_rate": "0.4133333333333333333333333333",
+        "boot_max_hit_rate": "0.7132352941176470588235294118",
+        "boot_fraction_meeting_bar": "0.584",
+        "single_pass_passed": true,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "1fd5d92a2fb9da51ea45427859fd62752c8d15fce405b08f312fb461d103c394",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": "REJECTED (reviewer!=researcher, fingerprint verified)",
+        "error": null
+      }
+    ]
+  }
+}

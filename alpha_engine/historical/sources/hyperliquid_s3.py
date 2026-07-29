@@ -44,6 +44,7 @@ requires the optional AWS dependency.
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -241,20 +242,50 @@ def read_checkpoint(path: Union[str, Path]) -> Optional[str]:
     return key if isinstance(key, str) and key else None
 
 
+def _fsync_dir(directory: Path) -> None:
+    """fsync the DIRECTORY entry so the rename itself is durable.
+
+    POSIX-only in practice: Windows cannot open a directory for fsync, and
+    NTFS does not require it for rename durability. Deliberately
+    best-effort and never raises -- a failure here cannot corrupt the file,
+    which write_checkpoint has already fsync'd before renaming."""
+    try:
+        fd = os.open(str(directory), getattr(os, "O_RDONLY", 0))
+    except (OSError, AttributeError, ValueError):
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
 def write_checkpoint(path: Union[str, Path], last_processed_key: str) -> None:
-    """Persists the checkpoint atomically (temp file + os.replace), so an
-    interrupted write can never leave a truncated checkpoint behind."""
+    """Persists the checkpoint durably: write -> flush -> fsync(file) ->
+    atomic os.replace -> best-effort fsync(parent directory).
+
+    WHY THE fsync IS LOAD-BEARING (measured, not theoretical): an earlier
+    version wrote the temp file and renamed it WITHOUT fsync. os.replace is
+    atomic at the rename level, but the file's data blocks were still in
+    the OS page cache -- so when the pilot backfill process was killed, the
+    directory entry survived with the correct SIZE while the contents were
+    never flushed, leaving a 68-byte checkpoint of pure NUL bytes and an
+    unrecoverable resume point. fsync'ing the data BEFORE the rename is
+    what makes the rename publish durable bytes rather than a promise of
+    them."""
     if not isinstance(last_processed_key, str) or not last_processed_key.strip():
         raise HistoricalDataError("last_processed_key must be a non-empty string")
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps({"last_processed_key": last_processed_key}, sort_keys=True),
-        encoding="utf-8",
-    )
-    import os  # noqa: PLC0415 -- stdlib, used only for the atomic replace
+    payload = json.dumps({"last_processed_key": last_processed_key}, sort_keys=True)
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(tmp, p)
+    _fsync_dir(p.parent)
 
 
 def sort_key(key: str) -> Tuple[str, int]:

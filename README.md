@@ -65,9 +65,9 @@ strategy would use. It has never modified any frozen module here (a test
 enforces this) and has not yet been wired into a running deployment.
 **Start at [`docs/PROJECT_CONSTITUTION.md`](docs/PROJECT_CONSTITUTION.md)**
 for the full picture, or
-[`docs/PROJECT_DASHBOARD.md`](docs/PROJECT_DASHBOARD.md) for current
-status — as of this writing, one research campaign has run (Open
-Interest), closing with zero approved models.
+[`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) for current status and
+execution state (the single authoritative status document — see its own
+banner for why `PROJECT_STATUS.md`/`PROJECT_DASHBOARD.md` are deprecated).
 
 ## Status
 
@@ -80,7 +80,7 @@ Interest), closing with zero approved models.
 - All nine modules frozen; Module 3 re-frozen as **Module 3.1** after a
   critical Windows defect correction (v1.0.1), and Module 1 re-frozen as
   **Module 1.1** after an additive evolution (v1.1.0, optional
-  `wallet_key_ref`). See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
+  `wallet_key_ref`). See [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
   and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Modules

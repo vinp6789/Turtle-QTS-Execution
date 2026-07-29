@@ -134,5 +134,99 @@ class TestMergeAndWrite(unittest.TestCase):
                 load(path, OpenInterestObservation)
 
 
+class TestMergeAndWriteDurability(unittest.TestCase):
+    """Mirrors tests/test_historical_hyperliquid_s3.py's checkpoint
+    durability suite exactly, applied to merge_and_write's CSV write path
+    (alpha_engine/historical/storage.py). Same underlying defect class:
+    os.replace is atomic at the rename level, but without an fsync of the
+    data FIRST, a crash immediately after a successful-looking write can
+    leave a durable directory entry pointing at data that was never
+    actually flushed -- the exact failure measured and fixed in
+    write_checkpoint() during the liquidation pilot."""
+
+    def test_no_tmp_file_remains_after_successful_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "series.csv"
+            merge_and_write(path, OpenInterestObservation, (_obs(0),))
+            self.assertFalse((Path(tmp) / "series.csv.tmp").exists())
+
+    def test_file_is_fsynced_before_replace(self):
+        import alpha_engine.historical.storage as storage_module
+
+        calls = []
+        real_fsync, real_replace = storage_module.os.fsync, storage_module.os.replace
+
+        def spy_fsync(fd):
+            calls.append("fsync")
+            return real_fsync(fd)
+
+        def spy_replace(a, b):
+            calls.append("replace")
+            return real_replace(a, b)
+
+        storage_module.os.fsync = spy_fsync
+        storage_module.os.replace = spy_replace
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                merge_and_write(Path(tmp) / "series.csv", OpenInterestObservation, (_obs(0),))
+        finally:
+            storage_module.os.fsync = real_fsync
+            storage_module.os.replace = real_replace
+
+        self.assertIn("fsync", calls, "CSV was never fsync'd")
+        self.assertLess(
+            calls.index("fsync"), calls.index("replace"),
+            f"fsync must precede replace, got order: {calls}",
+        )
+
+    def test_interruption_after_replace_cannot_leave_zero_filled_csv(self):
+        """Simulates the pilot's observed failure: the process dies
+        immediately after os.replace returns. Because the data was
+        fsync'd first, the published file must already hold complete,
+        readable bytes -- not a correctly-sized but NUL-filled file."""
+        import alpha_engine.historical.storage as storage_module
+
+        real_replace = storage_module.os.replace
+        captured = {}
+
+        def replace_then_die(a, b):
+            real_replace(a, b)
+            captured["bytes"] = Path(b).read_bytes()
+            raise KeyboardInterrupt("process killed immediately after replace")
+
+        storage_module.os.replace = replace_then_die
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "series.csv"
+                with self.assertRaises(KeyboardInterrupt):
+                    merge_and_write(path, OpenInterestObservation, (_obs(0), _obs(1)))
+                raw = captured["bytes"]
+                self.assertTrue(raw, "CSV was empty at the moment of interruption")
+                self.assertNotIn(b"\x00", raw, "CSV contained NUL bytes (the observed corruption)")
+                # the published file must already be a fully loadable series
+                loaded = load(path, OpenInterestObservation)
+                self.assertEqual(len(loaded), 2)
+        finally:
+            storage_module.os.replace = real_replace
+
+    def test_directory_fsync_is_best_effort_and_never_raises(self):
+        """Windows cannot fsync a directory; that must not fail the write."""
+        import alpha_engine.historical.storage as storage_module
+
+        real_open = storage_module.os.open
+
+        def boom(*a, **k):
+            raise OSError("directory fsync unsupported on this platform")
+
+        storage_module.os.open = boom
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "series.csv"
+                merge_and_write(path, OpenInterestObservation, (_obs(0),))
+                self.assertEqual(len(load(path, OpenInterestObservation)), 1)
+        finally:
+            storage_module.os.open = real_open
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,10 +26,17 @@ to the caller to log, mirroring this project's "never silently
 overwrite prior evidence" discipline (e.g. the Experiment Registry's
 evidence-attaches-once rule).
 
-Writes are atomic: to a temporary file in the same directory, then an
-OS-level rename -- a crash mid-write can never leave a torn, half-written
-CSV in place of a good one.
-"""
+Writes are durable, not just atomic: to a temporary file in the same
+directory, flushed and fsync'd, then an OS-level rename, then a
+best-effort fsync of the containing directory -- a crash mid-write can
+never leave a torn, half-written CSV in place of a good one, AND a crash
+immediately after a successful-looking write cannot silently discard data
+that was still sitting in the OS page cache (the same failure mode
+measured and fixed in
+`alpha_engine/historical/sources/hyperliquid_s3.py::write_checkpoint` --
+`os.replace` is atomic at the rename level, but without an fsync first
+the renamed directory entry can point at data that was never actually
+flushed to disk)."""
 
 import csv
 import os
@@ -42,6 +49,28 @@ from exchange_adapter import Symbol
 
 from .errors import HistoricalDataError
 from .models import FundingRateObservation, LiquidationObservation, OpenInterestObservation
+
+def _fsync_dir(directory: Path) -> None:
+    """fsync the DIRECTORY entry so the rename itself is durable.
+
+    Mirrors `sources/hyperliquid_s3.py::_fsync_dir` exactly -- duplicated
+    rather than imported/shared, since these are the only two call sites
+    (Constitution SS5: no abstraction ahead of a third concrete need).
+    POSIX-only in practice: Windows cannot open a directory for fsync, and
+    NTFS does not require it for rename durability. Deliberately
+    best-effort and never raises -- a failure here cannot corrupt the
+    file, which merge_and_write has already fsync'd before renaming."""
+    try:
+        fd = os.open(str(directory), getattr(os, "O_RDONLY", 0))
+    except (OSError, AttributeError, ValueError):
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
 
 _FIELDNAMES = ("observed_at_utc", "symbol", "value", "source", "source_detail", "ingested_at_utc")
 
@@ -227,7 +256,10 @@ def merge_and_write(
         writer.writeheader()
         for obs in merged:
             writer.writerow(_observation_to_row(obs))
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp_path, file_path)
+    _fsync_dir(file_path.parent)
 
     return MergeResult(
         existing_count=existing_count,

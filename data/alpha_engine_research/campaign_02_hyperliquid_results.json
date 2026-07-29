@@ -1,0 +1,222 @@
+{
+  "BTC": {
+    "sample_count": 549,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 549,
+      "skip_no_funding": 0,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-hyperliquid-BTC-contrarian",
+        "direction_convention": "contrarian",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 2,
+        "hit_rate": "0",
+        "mean_directional_return": "-0.0316673199376990053400942755",
+        "boot_mean_hit_rate": "0",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "0",
+        "boot_fraction_meeting_bar": "0",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "c810075f7389b74224e2fa601d775750744f051fe4679c7b2b4644d6f61d3186",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-hyperliquid-BTC-momentum",
+        "direction_convention": "momentum",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 2,
+        "hit_rate": "1",
+        "mean_directional_return": "0.0316673199376990053400942755",
+        "boot_mean_hit_rate": "1",
+        "boot_min_hit_rate": "1",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.857",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "94e0012657c4a1b157baa8bd8ea765b5eda423745e0c5dda7ba8ba4e596af164",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "ETH": {
+    "sample_count": 549,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 549,
+      "skip_no_funding": 0,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-hyperliquid-ETH-contrarian",
+        "direction_convention": "contrarian",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 1,
+        "hit_rate": "1",
+        "mean_directional_return": "0.0206788288547046284271252085",
+        "boot_mean_hit_rate": "1",
+        "boot_min_hit_rate": "1",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.634",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "f2486d4b52716de2939e90350904e4bda788d02ca37a2d29fe02fb6fe5068bee",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-hyperliquid-ETH-momentum",
+        "direction_convention": "momentum",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 1,
+        "hit_rate": "0",
+        "mean_directional_return": "-0.0206788288547046284271252085",
+        "boot_mean_hit_rate": "0",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "0",
+        "boot_fraction_meeting_bar": "0",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "25ec6e65b651e375fc01c21d75e639ba7a0a76f19b12a0145511a7aee9fce0b2",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "SOL": {
+    "sample_count": 549,
+    "diagnostics": {
+      "symbols": 1,
+      "grid_points": 549,
+      "built": 549,
+      "skip_no_funding": 0,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-hyperliquid-SOL-contrarian",
+        "direction_convention": "contrarian",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 6,
+        "hit_rate": "0.3333333333333333333333333333",
+        "mean_directional_return": "-0.02669207828440417298432734528",
+        "boot_mean_hit_rate": "0.3392718587357865914980143411",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.144",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "6f83f3d88307acd9b19115771617ec7af79f9d262ff70a358746ec5b50c78af1",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-hyperliquid-SOL-momentum",
+        "direction_convention": "momentum",
+        "source": "hyperliquid",
+        "total_samples": 549,
+        "signaled_samples": 6,
+        "hit_rate": "0.6666666666666666666666666667",
+        "mean_directional_return": "0.02669207828440417298432734528",
+        "boot_mean_hit_rate": "0.6607281412642134085019856590",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.721",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "42367f28bb08ee937f218e22c4b77745be6a1859ff8de6391bd4ee225ef63c35",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": null,
+        "error": null
+      }
+    ]
+  },
+  "combined": {
+    "sample_count": 1647,
+    "diagnostics": {
+      "symbols": 3,
+      "grid_points": 1647,
+      "built": 1647,
+      "skip_no_funding": 0,
+      "skip_no_mark_t": 0,
+      "skip_no_mark_forward": 0
+    },
+    "experiments": [
+      {
+        "experiment_id": "camp02-hyperliquid-combined-contrarian",
+        "direction_convention": "contrarian",
+        "source": "hyperliquid",
+        "total_samples": 1647,
+        "signaled_samples": 9,
+        "hit_rate": "0.3333333333333333333333333333",
+        "mean_directional_return": "-0.02253425341412426890655860158",
+        "boot_mean_hit_rate": "0.3390598244614412485069519806",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.107",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "051df9d90ed8e0d00be24a51518e2deaf2500d36da2ced39a48f35536cd459b2",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": "REJECTED (reviewer!=researcher, fingerprint verified)",
+        "error": null
+      },
+      {
+        "experiment_id": "camp02-hyperliquid-combined-momentum",
+        "direction_convention": "momentum",
+        "source": "hyperliquid",
+        "total_samples": 1647,
+        "signaled_samples": 9,
+        "hit_rate": "0.6666666666666666666666666667",
+        "mean_directional_return": "0.02253425341412426890655860158",
+        "boot_mean_hit_rate": "0.6609401755385587514930480200",
+        "boot_min_hit_rate": "0",
+        "boot_max_hit_rate": "1",
+        "boot_fraction_meeting_bar": "0.763",
+        "single_pass_passed": false,
+        "causality_passed": true,
+        "walk_forward_passed": false,
+        "regime_passed": false,
+        "evidence_fingerprint": "f99575814fb8e18acd87cdf775c096306f96889d9f479da4ce822b442d86dd9d",
+        "overall_verdict": "REJECTED",
+        "governance_outcome": "REJECTED (reviewer!=researcher, fingerprint verified)",
+        "error": null
+      }
+    ]
+  }
+}

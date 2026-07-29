@@ -273,6 +273,149 @@ until then).
 - **Supersedes / superseded-by:** — (E corrects an in-review overstatement
   that was never recorded as a decision.)
 
+## RD-12 — RD-10 Steps 1 and 2 complete: liquidation archive measured and source implemented
+
+- **Date:** 2026-07-28 · **Author:** researcher · **Reviewer:** pending · **Category:** data-acquisition-capability · **Status:** active
+- **Scope:** records the measured outcome of the RD-10 Step 1 probe and the completion of RD-10 Step 2. **Revises two RD-10 premises with measurement.** No campaign, methodology, or governance rule is changed.
+
+### Step 1 — measured facts (authenticated probe, one object)
+
+- **Layout:** `s3://hl-mainnet-node-data/node_fills_by_block/hourly/YYYYMMDD/H.lz4` — one object per hour, hour **unpadded** (`3.lz4`, not `03.lz4`), region `ap-northeast-1`, Requester Pays.
+- **Earliest coverage: 2025-07-27** (partial, from hour 10); first complete day 2025-07-28; 367 contiguous date prefixes ≈ **~12 months**.
+- **Compression:** LZ4 frame, ~4.8× (10.08 MB → 48.74 MB measured).
+- **Volume:** 24 objects/day; ~300 MB–1 GB/day compressed, growing ~3× across the window.
+- **Schema:** NDJSON, one block per line — `{local_time, block_time, block_number, events:[[address, fill], …]}`.
+- **Liquidation field PRESENT and POPULATED:** 328 of 107,066 fills in the sampled hour (**0.31%**); **100% of occurrences non-null** — the key is absent when inapplicable, never null-filled. Structure `{liquidatedUser, markPx, method}` as documented.
+- **One liquidation surfaces as TWO paired fills sharing one `tid`** (liquidator side + liquidated side). This is a structural property of the data, not an artifact.
+- **Probe cost:** < $0.01 (2 GETs, ~10 bounded LISTs).
+
+### Premises revised (supersede the RD-10 estimates)
+
+| Premise | RD-10 assumed | **Measured** |
+|---|---|---|
+| Coverage start | ~Jan 2025 (community-sourced) | **2025-07-27** — ~6 months shorter |
+| Archive size | ~2.75 TB (5 GB/day assumption) | **~240 GB** (367 days × ~650 MB) |
+| Backfill cost | ~$300 laptop egress | **~$27** laptop, **~$0** same-region |
+
+Cost is confirmed **not** a research blocker. The binding constraint is now **window length**, not money.
+
+### Step 2 — implemented (additive only)
+
+- `LiquidationObservation` — a **third** concrete historical observation type. It cannot reuse the existing scalar shape: a liquidation is irreducibly multi-field (price, size, side, direction, method, liquidated account, venue `tid`), and collapsing that to one `value` would discard the metric's content.
+- `alpha_engine/historical/sources/hyperliquid_s3.py` — discovery, incremental download, decode, and a key-ordered checkpoint. Ten plain functions, **zero new classes**; no generic S3 layer, no recorder, no transport abstraction (Constitution §5).
+- **`storage.py` extended additively** — honest note: "reuse the pipeline completely" was not fully achievable. The existing CSV is a fixed 6-field single-`value` shape whose merge dedups on `(symbol, observed_at_utc)`; the measured paired fills share both, so that key would have **silently discarded half of every liquidation**. Two concrete row shapes are now enumerated explicitly (`_fieldnames_for`, `_dedup_key`) — not a generic schema mechanism. Existing behaviour byte-identical; all four on-disk series re-verified.
+- **Platform independence** (§5): credentials resolve via boto3's default chain, so identical code authenticates from env vars (Railway/Docker/K8s) or a shared credentials file (laptop/VPS). Bucket/prefix/region/checkpoint-path are parameters. No `os.name`/`sys.platform` branch. `boto3`/`lz4` imported lazily.
+- **Validated end-to-end on the real archive:** 192 liquidations decoded from one hour = 96 unique `tid`s (exactly 2 rows each), checkpoint resume excluded the processed hour, re-merge added 0. 31 unit tests; full regression 1,633 passed.
+
+### Consequences
+
+- Liquidations remains **Research LOCKED / Data NONE** — the capability exists, **no backfill has been executed**. The blocker is no longer credential- or cost-gated; it is simply **not yet authorized**. **[Corrected by RD-13, 2026-07-29]:** a bounded one-month pilot backfill was subsequently authorized and executed; this sentence was accurate only as of this entry's own date (2026-07-28) — see RD-13 for the measured outcome and the current Data Status.
+- **New constraint for any future liquidation campaign:** the ~12-month window is shorter than the 18-month window every prior campaign used, which directly limits achievable statistical power. This must be established in that campaign's mandatory feasibility review before any specification is locked.
+- **Undeclared runtime dependencies:** `boto3` and `lz4` are not yet in project dependency metadata. Non-blocking for research; must be declared before any deployment.
+- **Revisit triggers:** authorization of a bounded backfill; or a decision that the 12-month window is too short to support a campaign.
+- **Supersedes / superseded-by:** revises RD-10's coverage/size/cost estimates (RD-10 otherwise stands).
+
+## RD-13 — One-month liquidation pilot: measured feasibility signal; RD-12's "no backfill executed" corrected; governance-inspection clause restored
+
+- **Date:** 2026-07-29 · **Author:** researcher · **Reviewer:** pending · **Category:** data-acquisition-capability, methodology-refinement · **Status:** active
+- **Scope:** records the measured outcome of the bounded, outcome-blind, one-month liquidation pilot backfill authorized after RD-12; corrects RD-12's now-stale claim that "no backfill has been executed"; records a decayed governance practice found and restored. **No campaign is pre-registered here. No hypothesis is tested. No methodology is changed beyond what §C below states.**
+
+### A — Pilot execution (measured facts)
+
+Bounded backfill, watchlist symbols only (BTC/ETH/SOL), full calendar
+month **2026-06-01 → 2026-06-30**, executed via a one-off scratchpad
+driver against the already-implemented `hyperliquid_s3` source and
+`storage.merge_and_write`. Interrupted mid-run by a hard process kill;
+resumed cleanly from the last durable checkpoint after the RD-12 §Step-2
+durability fix; completed 30/30 days.
+
+| Metric | Measured |
+|---|---|
+| Total fills scanned | 47,280,012 (resume window alone) |
+| Liquidation rows written (watchlist) | 416,972 |
+| Unique liquidation events (by `tid`) | **208,486** |
+| Rows per event | **exactly 2.00** — perfect fill-pairing, zero orphans |
+| Duplicate rows | **0** |
+| Decode errors | **0** |
+| Missing hours | **0** |
+| All-symbol liquidation density | **0.337%** of all fills (RD-12's Step-1 single-hour probe measured 0.31% — consistent) |
+| Method | 100% `market`, 0% `backstop` |
+| Side balance | exactly 37,114 / 37,114 |
+| Per-symbol split | BTC 141,356 (67.8%) · ETH 38,264 (18.4%) · SOL 28,866 (13.8%) |
+| Per-day range | min 1,006 · median 5,021 · mean 6,950 · max 22,941 (every one of 30 days had ≥1 event) |
+
+### B — Statistical structure (measured, outcome-blind — no return or profitability inspected)
+
+- **Within-symbol lag-1 autocorrelation of daily event counts:** BTC
+  +0.525, ETH +0.463, SOL +0.362.
+- **Cross-symbol correlation of daily event counts:** BTC–ETH +0.853,
+  BTC–SOL +0.899, ETH–SOL +0.874 — i.e. the three watchlist symbols behave
+  as roughly **1.1 effective independent symbols, not 3**, on this metric.
+- **Concentration:** the top 1 day carries 11.0% of the month's events,
+  top 3 = 29.6%, top 5 = 43.2%, top 10 = 65.2%.
+- **Projected, at a p60 daily-count threshold, 3-symbol pooled, n_folds=3:**
+  ~146 nominal signalled/fold (clears the existing `min_signaled_samples =
+  100` floor unchanged) but **≈53/fold after applying the measured
+  cross-symbol correlation as a haircut** (does not clear it). The gap
+  between these two numbers is the finding — raw pooled counts overstate
+  true statistical power for this metric by roughly 2.5–3×, the same
+  failure shape as RD-04's Funding Persistence deferral, one level up
+  (there: within-symbol autocorrelation; here: cross-symbol).
+
+### C — Consequences and rule changes
+
+- **RD-12's "no backfill has been executed" is corrected by this entry.**
+  A one-month, outcome-blind pilot has been executed and is recorded here
+  in full. The 12-month full backfill remains **not executed**.
+- **Liquidations family Data Status updated:** LOCKED / **NONE** →
+  LOCKED / **COLLECTING** (see Appendix table below).
+- **New feasibility-review requirement (methodology refinement,
+  effective immediately, self-activating exactly like RD-11 B):** any
+  future feasibility review for a metric whose samples may share
+  cross-instrument dependence (this pilot is the first measured instance)
+  must report **effective sample size (N_eff) and cross-symbol/
+  cross-instrument correlation**, not raw pooled signalled counts alone.
+  This does not change `min_signaled_samples = 100` or any existing
+  campaign's already-closed result — it adds a reporting requirement to
+  the feasibility review stage (`RESEARCH_PLAYBOOK.md` §2) that Campaigns
+  01–05 did not need, since none pooled across instruments with measured
+  dependence of this magnitude.
+- **Governance-inspection clause restored (`RESEARCH_PLAYBOOK.md` §5):**
+  independently of the pilot, this session's review found that Campaign
+  01's pre-registered acceptance criteria required governance to inspect
+  `mean_directional_return` alongside hit rate ("a >55% hit rate with
+  negative expectancy is a rejection, not a pass") — a practice not
+  carried forward into a written Playbook rule and not consistently
+  reapplied in Campaigns 02–05's governance write-ups, even though
+  `PROJECT_CONSTITUTION.md` §7 states the same requirement in general
+  terms. Restored as an explicit Playbook §5 clause. **Not retrofitted**
+  onto Campaigns 01–05's already-closed, immutable verdicts — each was
+  independently reviewed under its own pre-registered criteria at the
+  time, and none would change: all five were rejected outright on hit
+  rate, not on a marginal magnitude call this clause would have altered.
+- **Considered and rejected: mechanizing this as a `runner.py` acceptance
+  key (`min_mean_directional_return`).** Would migrate judgment out of
+  the one deliberately human-owned gate in the pipeline
+  (`RESEARCH_PLAYBOOK.md` §5's own stated design). The evidence package
+  already carries `mean_directional_return`; the fix is a reviewing
+  practice, not new machinery.
+- **Full 12-month backfill: still not authorized.** Sequencing per
+  `ROADMAP.md` §1.1 unchanged by this entry — storage durability, CLI
+  entry point, and a Hyperliquid-native (not Binance-only) outcome series
+  for 2025-07-27→present remain the prerequisites before the full
+  backfill runs. When it does, it runs **single pass, all symbols
+  retained** — a staged/partial backfill was considered and rejected:
+  walk-forward validation requires chronological contiguity, and
+  selecting which months to sample would itself be an un-pre-registered
+  researcher judgment call.
+- **Revisit triggers:** authorization and completion of the full
+  12-month backfill; the feasibility review itself (may reject Campaign
+  06 outright — the cheapest possible outcome of the gate, not a failure
+  of it).
+- **Supersedes / superseded-by:** corrects RD-12's "no backfill has been
+  executed" claim; RD-12's archive measurements (coverage, size, cost)
+  otherwise stand unchanged.
+
 ---
 
 ## Appendix — Research Family State (current)
@@ -286,7 +429,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
 | Open Interest | ACTIVE | READY (Binance only) | cap | Level (CAMP-01) and **Velocity (CAMP-05)** both rejected. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
-| Liquidations | LOCKED | **NONE** | — | **RD-10:** Historical data exists through official Hyperliquid S3 archives but has not been acquired. Access requires authenticated AWS Requester Pays credentials. Earliest coverage remains unverified. |
+| Liquidations | LOCKED | **COLLECTING** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill: 2025-07-27 → present (~12 months), ~240 GB, ~$27 (~$0 same-region), **not yet executed**. |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |
