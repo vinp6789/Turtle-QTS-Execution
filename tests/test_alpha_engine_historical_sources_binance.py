@@ -51,6 +51,36 @@ class _FakeTransport:
         return response
 
 
+class TestTimeoutTranslation(unittest.TestCase):
+    """A stalled read on an already-open connection surfaces from
+    urlopen as a bare TimeoutError, not urllib.error.URLError -- unlike
+    a connection-establishment failure, it is NOT wrapped. Every
+    fetch_* function must translate it into HistoricalDataError (like
+    any other non-404 transport failure) so callers' HistoricalDataError-
+    only retry loops (research/campaign_01_open_interest/collect_backfill.py,
+    research/campaign_02_funding_rate/collect_backfill.py,
+    research/deep_history_backfill/collect_backfill.py) actually catch
+    and retry it, instead of the process crashing uncaught."""
+
+    def test_zip_fetch_timeout_raises_historical_data_error_not_timeout_error(self):
+        transport = _FakeTransport()
+        base = "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2021-01.zip"
+        transport.set(base, TimeoutError("The read operation timed out"))
+
+        with self.assertRaises(HistoricalDataError):
+            binance.fetch_funding_rate_month(Symbol("BTC"), 2021, 1, transport=transport, clock=_CLOCK)
+
+    def test_checksum_fetch_timeout_raises_historical_data_error_not_timeout_error(self):
+        zip_bytes = _zip_bytes("x.csv", "calc_time,symbol,last_funding_rate,funding_interval_hours\n")
+        transport = _FakeTransport()
+        base = "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2021-01.zip"
+        transport.set(base, zip_bytes)
+        transport.set(base + ".CHECKSUM", TimeoutError("The read operation timed out"))
+
+        with self.assertRaises(HistoricalDataError):
+            binance.fetch_funding_rate_month(Symbol("BTC"), 2021, 1, transport=transport, clock=_CLOCK)
+
+
 class TestFetchOpenInterestDay(unittest.TestCase):
     def test_available_day_parses_rows(self):
         zip_name = "BTCUSDT-metrics-2024-01-15.zip"

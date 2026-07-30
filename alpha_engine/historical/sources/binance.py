@@ -70,9 +70,11 @@ _logger = logging.getLogger(__name__)
 
 # TransportFn: (url, timeout_seconds) -> raw response bytes. Raises
 # urllib.error.HTTPError (with .code) for a non-2xx response, or
-# urllib.error.URLError for a connection-level failure -- exactly
-# urllib.request.urlopen's own behavior, so the default transport below
-# needs no translation layer.
+# urllib.error.URLError for a connection-level failure. A stall on an
+# already-open connection (the read of the response status line/body
+# itself timing out) is NOT wrapped into URLError by urlopen -- it
+# surfaces as a bare TimeoutError -- so _fetch_zip_csv below must catch
+# that separately.
 TransportFn = Callable[[str, float], bytes]
 
 
@@ -107,12 +109,14 @@ def _fetch_zip_csv(
         if exc.code == 404:
             return None
         raise HistoricalDataError(f"{zip_url}: HTTP {exc.code}: {exc}") from exc
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError) as exc:
+        # TimeoutError (a stalled read on an already-open connection) is
+        # not a urllib.error.URLError -- see the TransportFn comment above.
         raise HistoricalDataError(f"{zip_url}: transport failure: {exc}") from exc
 
     try:
         checksum_bytes = transport(checksum_url, timeout_seconds)
-    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
         raise HistoricalDataError(f"{checksum_url}: could not fetch checksum: {exc}") from exc
     expected_hex = checksum_bytes.decode("utf-8").split()[0]
     if not verify_checksum(zip_bytes, expected_hex):
