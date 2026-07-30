@@ -39,7 +39,7 @@ they're found, never silently carried forward.
 | **Current objective** | Full 12-month liquidation backfill (Backlog 1.5) **— running detached, 13.4% complete**; then Campaign 06's outcome-blind feasibility review (1.6) |
 | **Current blocker** | No single blocker. **All four P0 items, Backlog 1.3, and Backlog 1.4 closed.** Backlog 1.5 is executing; an operational (not pipeline) weakness that killed its first attempt has been fixed — see Active Work. |
 | **Immediate next task** | Let the detached backfill finish, then validate completeness (Backlog 1.5). Check with `python scripts/job_status.py liq_backfill` and `python scripts/liquidation_backfill_progress.py`. |
-| **Full regression** | **1,703 passed, 92 subtests, 0 failed** (re-verified this session — long-running-job hardening, 16 new tests) |
+| **Full regression** | **1,717 passed, 92 subtests, 0 failed** (re-verified this session — QA findings M1/M2/L1/L3 on the job tooling closed, 14 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -281,6 +281,15 @@ pre-fix code and passes against the fix).
   - `docs/LONG_RUNNING_JOBS.md` — the runbook: start, check, recover, reboot, and the explicit "never do this to recover" list.
 - **A real defect was found and fixed by these tests, in the new tooling itself:** `run_detached_job.start()` leaked the parent's log file handle, which on Windows locked the log against readers and cleanup. Fixed by closing the parent handle once the child has inherited its own.
 - Backfill **relaunched detached** and verified resuming from day 49 (not restarting). 16 new tests. Full regression: **1,703 passed, 92 subtests, 0 failed.**
+
+**Independent QA audit of the job tooling, then fixes (2026-07-30) — the running backfill was never interrupted:**
+- **M1 (Medium, closed) — the duplicate-job guard failed OPEN.** `is_running()` returned `False` on *any* probe error (tasklist timeout, `OSError`), so a failing probe let `start()` spawn a second copy of a genuinely-live job. Reproduced end-to-end. This mattered because `storage.merge_and_write` is read-modify-write with **no inter-process lock** (verified) — two collectors on the same CSVs silently lose one writer's rows. **Fix:** split the two uses. `is_running()` stays fail-open but is now display-only; a new tri-state `liveness()` drives the guard and **refuses to start when liveness cannot be determined**, naming the pid it could not verify.
+- **M2 (Medium, closed) — liveness was pid-only, with no identity check.** An OS-recycled pid belonging to an unrelated process read as "the job is still running" forever: `job_status.py` showed `RUNNING` (even displaying the backfill's `cmd`), and `start()` refused to resume. Reproduced by writing an unrelated live pid into a job's `pid` file. **Fix:** `liveness()` compares the live process's command line against the recorded `cmd`, distinguishing `ALIVE_AND_MATCHES` / `RECYCLED` / `GONE` / `UNKNOWN`. Verified the check still correctly identifies the **currently running** backfill as `alive_and_matches`, so protection was strengthened, never weakened.
+- **L1 (Low, closed) — check-then-start race.** The guard read the pid file before spawning and wrote the new pid after, so two near-simultaneous starts could both pass. **Fix:** an `O_CREAT|O_EXCL` `lock` file makes claiming a job atomic; a lock from a provably-dead holder is reclaimed, one from an unverifiable holder is not. Released on every refusal path (verified — no stale lock left behind).
+- **L3 / I1 (Low, closed) —** the side-balance check compared only the counts *present*, so a wholly one-sided series (every `A` row lost) passed both sanity checks with a clean `rows/event=2.00`; and a checkpoint outside the expected window printed a negative day count beside a correctly-clamped percentage. Both fixed.
+- **Windows liveness hardening:** the pid match was a bare substring test against `tasklist` output; now matches the pid as its own column, and `PermissionError` on POSIX is correctly read as "alive" rather than "gone".
+- **Nothing in the pipeline, storage, checkpoint semantics, or research logic was touched** — verified: the commit contains no `alpha_engine/` or `research/` file.
+- **The running backfill was never interrupted.** Same pid throughout; its checkpoint advanced from day 52 to day 54 *during* this work, proving it kept collecting. A live duplicate-launch attempt was correctly refused. 14 new tests, each confirmed to fail against the pre-fix code. Full regression: **1,717 passed, 92 subtests, 0 failed.**
 
 ---
 

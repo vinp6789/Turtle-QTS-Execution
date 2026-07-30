@@ -132,6 +132,148 @@ class TestDetachedJobLifecycle(unittest.TestCase):
                 run_detached_job.start("unit_f", [], runtime_dir=tmp)
 
 
+class TestGuardFailsClosed(unittest.TestCase):
+    """M1 (independent QA audit, Medium): the duplicate-job guard must fail
+    CLOSED. `storage.merge_and_write` is read-modify-write with no
+    inter-process lock, so two collectors on the same CSVs produce a
+    silent lost update -- if we cannot tell whether the recorded job is
+    alive, refusing to start is the only safe answer."""
+
+    def setUp(self):
+        self._real_run = subprocess.run
+
+    def tearDown(self):
+        subprocess.run = self._real_run
+
+    def _break_the_probe(self):
+        def failing(*a, **k):
+            raise subprocess.TimeoutExpired(cmd="tasklist", timeout=15)
+        subprocess.run = failing
+
+    def test_liveness_is_unknown_when_the_probe_fails(self):
+        import os
+        self._break_the_probe()
+        if os.name == "nt":
+            self.assertEqual(run_detached_job.liveness(os.getpid(), ["python", "-c", "x"]),
+                             run_detached_job.UNKNOWN)
+
+    def test_start_refuses_when_liveness_cannot_be_determined(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            d = run_detached_job.job_dir("m1", tmp)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "pid").write_text(str(os.getpid()), encoding="utf-8")
+            (d / "cmd").write_text('["python", "-m", "some.module"]', encoding="utf-8")
+            self._break_the_probe()
+            rc = run_detached_job.start("m1", [sys.executable, "-c", "pass"], runtime_dir=tmp)
+            self.assertEqual(rc, 1, "guard failed OPEN -- a second concurrent copy was allowed")
+
+    def test_a_refused_start_does_not_leave_the_lock_behind(self):
+        """A refusal must not wedge the job so later legitimate starts fail."""
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            d = run_detached_job.job_dir("m1b", tmp)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "pid").write_text(str(os.getpid()), encoding="utf-8")
+            (d / "cmd").write_text('["python", "-m", "some.module"]', encoding="utf-8")
+            self._break_the_probe()
+            run_detached_job.start("m1b", [sys.executable, "-c", "pass"], runtime_dir=tmp)
+            subprocess.run = self._real_run
+            self.assertFalse((d / "lock").exists(), "refusal left a stale lock behind")
+
+
+class TestProcessIdentity(unittest.TestCase):
+    """M2 (independent QA audit, Medium): a pid alone does not identify a
+    job. An OS-recycled pid belonging to an unrelated process must not be
+    reported as the job still running."""
+
+    def test_recycled_pid_is_not_mistaken_for_the_job(self):
+        import os
+        # This test process is alive but is emphatically NOT the recorded job.
+        state = run_detached_job.liveness(os.getpid(), ["python", "-m", "totally.different.module"])
+        self.assertEqual(state, run_detached_job.RECYCLED)
+
+    def test_matching_pid_and_argv_is_recognised_as_the_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_detached_job.start(
+                "ident", [sys.executable, "-c", "import time; time.sleep(20)"], runtime_dir=tmp,
+            )
+            d = run_detached_job.job_dir("ident", tmp)
+            pid = int((d / "pid").read_text(encoding="utf-8").strip())
+            import json as _json
+            argv = _json.loads((d / "cmd").read_text(encoding="utf-8"))
+            try:
+                self.assertEqual(run_detached_job.liveness(pid, argv),
+                                 run_detached_job.ALIVE_AND_MATCHES)
+            finally:
+                subprocess.run(
+                    (["taskkill", "/PID", str(pid), "/F"] if sys.platform == "win32"
+                     else ["kill", "-9", str(pid)]),
+                    capture_output=True,
+                )
+                _wait_for_job_exit(tmp, "ident")
+
+    def test_a_recycled_pid_does_not_block_a_legitimate_restart(self):
+        """The practical harm of M2: a dead job whose pid was recycled must
+        still be restartable."""
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            d = run_detached_job.job_dir("m2", tmp)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "pid").write_text(str(os.getpid()), encoding="utf-8")  # unrelated live process
+            (d / "cmd").write_text('["python", "-m", "the.real.job"]', encoding="utf-8")
+            rc = run_detached_job.start("m2", [sys.executable, "-c", "print('resumed')"], runtime_dir=tmp)
+            self.assertEqual(rc, 0, "a recycled pid wrongly blocked a legitimate restart")
+            _wait_for_job_exit(tmp, "m2")
+
+    def test_liveness_without_recorded_argv_is_unknown_not_a_match(self):
+        import os
+        self.assertEqual(run_detached_job.liveness(os.getpid(), None), run_detached_job.UNKNOWN)
+
+    def test_dead_pid_is_gone_regardless_of_argv(self):
+        self.assertEqual(run_detached_job.liveness(999_999_999, ["python"]), run_detached_job.GONE)
+
+
+class TestStartLock(unittest.TestCase):
+    """L1 (independent QA audit, Low): the guard reads the pid file before
+    spawning and writes the new pid after, so without an atomic claim two
+    near-simultaneous starts could both pass."""
+
+    def test_a_held_lock_blocks_a_second_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = run_detached_job.job_dir("lock1", tmp)
+            d.mkdir(parents=True, exist_ok=True)
+            import os
+            # A lock naming a live holder whose identity cannot be confirmed.
+            (d / "lock").write_text(str(os.getpid()), encoding="utf-8")
+            rc = run_detached_job.start("lock1", [sys.executable, "-c", "pass"], runtime_dir=tmp)
+            self.assertEqual(rc, 1, "an actively held lock did not block a second start")
+
+    def test_a_stale_lock_from_a_dead_holder_is_reclaimed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = run_detached_job.job_dir("lock2", tmp)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "lock").write_text("999999999", encoding="utf-8")  # definitively dead
+            rc = run_detached_job.start("lock2", [sys.executable, "-c", "print('ok')"], runtime_dir=tmp)
+            self.assertEqual(rc, 0, "a stale lock from a dead holder wedged the job permanently")
+            _wait_for_job_exit(tmp, "lock2")
+
+    def test_successful_start_records_the_holder_in_the_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_detached_job.start("lock3", [sys.executable, "-c", "import time; time.sleep(5)"], runtime_dir=tmp)
+            d = run_detached_job.job_dir("lock3", tmp)
+            self.assertTrue((d / "lock").is_file())
+            self.assertEqual((d / "lock").read_text(encoding="utf-8").strip(),
+                             (d / "pid").read_text(encoding="utf-8").strip())
+            pid = int((d / "pid").read_text(encoding="utf-8").strip())
+            subprocess.run(
+                (["taskkill", "/PID", str(pid), "/F"] if sys.platform == "win32"
+                 else ["kill", "-9", str(pid)]),
+                capture_output=True,
+            )
+            _wait_for_job_exit(tmp, "lock3")
+
+
 class TestIsRunning(unittest.TestCase):
     def test_current_process_is_running(self):
         import os
@@ -214,6 +356,62 @@ class TestLiquidationBackfillProgress(unittest.TestCase):
 
     def test_contiguous_runs_empty_input(self):
         self.assertEqual(liquidation_backfill_progress._contiguous_runs(set()), [])
+
+    def test_a_wholly_one_sided_series_is_flagged(self):
+        """L3 (independent QA audit, Low): comparing only the side counts
+        that happen to be PRESENT lets an entirely one-sided series pass --
+        a single distinct count is trivially 'balanced'. Both A and B must
+        be present and equal."""
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "liquidation__BTC__hyperliquid_s3.csv"
+            header = ("observed_at_utc,symbol,price,size,side,direction,method,"
+                      "liquidated_user,mark_price,tid,source,source_detail,ingested_at_utc\n")
+            # 2 rows sharing one tid -- so rows/event is a clean 2.00 -- but
+            # BOTH are side "B"; a real liquidation pair is always B and A.
+            rows = "".join(
+                f"2025-07-27T00:00:0{i}.000000+00:00,BTC,5,0.1,B,Close Short,market,0xa,5,1,"
+                f"hyperliquid_s3,k.lz4,2026-01-01T00:00:00+00:00\n" for i in range(2)
+            )
+            path.write_text(header + rows, encoding="utf-8")
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                liquidation_backfill_progress.report(str(root), date(2025, 7, 27), date(2026, 7, 28))
+            out = buf.getvalue()
+            self.assertIn("rows/event=2.00", out, "precondition: rows/event must look clean")
+            self.assertIn("not a balanced A/B pair", out,
+                          "a wholly one-sided series passed both sanity checks unflagged")
+
+    def test_balanced_pair_produces_no_warning(self):
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_liquidation_csv(root / "liquidation__BTC__hyperliquid_s3.csv", ["2025-07-27"])
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                liquidation_backfill_progress.report(str(root), date(2025, 7, 27), date(2026, 7, 28))
+            self.assertNotIn("WARNING", buf.getvalue())
+
+    def test_checkpoint_outside_the_expected_window_clamps_the_day_count(self):
+        """I1: the percentage was already clamped, but the raw day count
+        could print negative alongside it."""
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".liquidation_checkpoint.json").write_text(
+                '{"last_processed_key": "node_fills_by_block/hourly/20250101/23.lz4"}', encoding="utf-8",
+            )
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                liquidation_backfill_progress.report(str(root), date(2025, 7, 27), date(2026, 7, 28))
+            out = buf.getvalue()
+            self.assertNotIn("-206/", out, "negative day count printed")
+            self.assertIn("0/367 days", out)
+            self.assertIn("outside the expected window", out)
 
 
 if __name__ == "__main__":

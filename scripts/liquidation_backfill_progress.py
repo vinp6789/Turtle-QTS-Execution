@@ -68,9 +68,16 @@ def report(root: str, expected_start: date, expected_end: date) -> int:
         if len(digits) == 8:
             cp_day = date(int(digits[:4]), int(digits[4:6]), int(digits[6:]))
             total = (expected_end - expected_start).days + 1
-            done = (cp_day - expected_start).days + 1
-            pct = max(0.0, min(100.0, done / total * 100)) if total > 0 else 0.0
+            # Clamp the count as well as the percentage: a checkpoint
+            # outside the expected window (e.g. a narrower --expected-start
+            # than the run actually used) otherwise prints a negative or
+            # over-total day count next to a correctly-clamped percentage.
+            done = max(0, min(total, (cp_day - expected_start).days + 1))
+            pct = (done / total * 100) if total > 0 else 0.0
             print(f"            last completed day = {cp_day}  ({done}/{total} days, {pct:.1f}%)")
+            if not (expected_start <= cp_day <= expected_end):
+                print(f"            NOTE: checkpoint is outside the expected window "
+                      f"{expected_start}..{expected_end} -- counts are clamped for display")
             if cp_day < expected_end:
                 print(f"            next day to fetch  = {cp_day + timedelta(days=1)}")
             else:
@@ -101,8 +108,12 @@ def report(root: str, expected_start: date, expected_end: date) -> int:
         if abs(ratio - 2.0) > 1e-9:
             print(f"    WARNING: rows/event is {ratio:.4f}, expected exactly 2.00 "
                   f"(one liquidation = two paired fills sharing a tid)")
-        if len(set(sides.values())) > 1:
-            print(f"    WARNING: side counts are unbalanced: {dict(sides)}")
+        # Both sides must be PRESENT and equal. Checking only the counts
+        # that happen to appear would silently pass a wholly one-sided
+        # series (e.g. every "A" row lost), since a single distinct count
+        # is trivially "balanced".
+        if rows and (set(sides) != {"A", "B"} or len(set(sides.values())) > 1):
+            print(f"    WARNING: side counts are not a balanced A/B pair: {dict(sides)}")
         for start, end, count in _contiguous_runs(as_dates):
             print(f"    {start} .. {end}  ({count} days)")
 

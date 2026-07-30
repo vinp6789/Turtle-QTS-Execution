@@ -73,22 +73,113 @@ def _detach_kwargs() -> dict:
     return {"start_new_session": True}
 
 
+def _recorded_argv(d: Path):
+    """The argv recorded for this job's last start, or None."""
+    try:
+        return json.loads((d / "cmd").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _acquire_lock(d: Path):
+    """Atomically claim the right to start this job, or return None.
+
+    Closes the check-then-start race: the guard below reads the pid file
+    and only writes the new pid AFTER the child is spawned, so without
+    this two near-simultaneous invocations (two shells, two Claude
+    sessions) could both pass the guard. O_CREAT|O_EXCL makes claiming
+    the lock a single atomic step that exactly one caller can win.
+
+    A lock left behind by a job that has since exited is reclaimed, but
+    ONLY when its holder is provably gone -- never when liveness is
+    merely undeterminable.
+    """
+    lock_path = d / "lock"
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+        return lock_path
+    except FileExistsError:
+        pass
+    except OSError:
+        return None
+
+    holder_raw = ""
+    try:
+        holder_raw = lock_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    holder_pid = int(holder_raw) if holder_raw.isdigit() else -1
+    if holder_pid > 0 and liveness(holder_pid, _recorded_argv(d)) != GONE:
+        return None  # a live (or unverifiable) holder -- do not steal the lock
+    try:
+        lock_path.unlink()
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+        return lock_path
+    except OSError:
+        return None
+
+
 def start(name: str, argv, runtime_dir: str = _DEFAULT_RUNTIME_DIR) -> int:
     if not argv:
         raise SystemExit("no command given after `--`")
     d = job_dir(name, runtime_dir)
     d.mkdir(parents=True, exist_ok=True)
 
+    lock_path = _acquire_lock(d)
+    if lock_path is None:
+        print(
+            f"job {name!r}: another start is in progress, or a previous run still holds the lock "
+            f"and its state could not be confirmed -- refusing to start.\n"
+            f"Use `python scripts/job_status.py {name}` to inspect it.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        return _start_locked(name, argv, d, lock_path)
+    except BaseException:
+        _release(lock_path)
+        raise
+
+
+def _release(lock_path: Path) -> None:
+    try:
+        lock_path.unlink()
+    except OSError:
+        pass
+
+
+def _start_locked(name: str, argv, d: Path, lock_path: Path) -> int:
     pid_file = d / "pid"
     if pid_file.is_file():
         existing = pid_file.read_text(encoding="utf-8").strip()
-        if existing.isdigit() and is_running(int(existing)):
-            print(
-                f"job {name!r} already running as pid {existing} -- refusing to start a second copy.\n"
-                f"Use `python scripts/job_status.py {name}` to inspect it.",
-                file=sys.stderr,
-            )
-            return 1
+        if existing.isdigit():
+            state = liveness(int(existing), _recorded_argv(d))
+            if state == ALIVE_AND_MATCHES:
+                _release(lock_path)
+                print(
+                    f"job {name!r} already running as pid {existing} -- refusing to start a second copy.\n"
+                    f"Use `python scripts/job_status.py {name}` to inspect it.",
+                    file=sys.stderr,
+                )
+                return 1
+            if state == UNKNOWN:
+                # Cannot confirm the recorded pid is gone. Starting anyway
+                # could put two collectors on the same CSVs, so refuse.
+                _release(lock_path)
+                print(
+                    f"job {name!r}: could not determine whether pid {existing} is still running "
+                    f"(process probe failed) -- refusing to start rather than risk a second "
+                    f"concurrent copy writing the same data.\n"
+                    f"Re-run once the machine is responsive, or confirm by hand and remove\n"
+                    f"  {pid_file}\n"
+                    f"if that pid is definitely gone.",
+                    file=sys.stderr,
+                )
+                return 1
+            # GONE or RECYCLED -> the recorded job is not running; safe to start.
 
     log_path = d / "log"
     # Append, never truncate: a resumed run's output belongs with the
@@ -114,9 +205,15 @@ def start(name: str, argv, runtime_dir: str = _DEFAULT_RUNTIME_DIR) -> int:
             **_detach_kwargs(),
         )
 
-    pid_file.write_text(str(proc.pid), encoding="utf-8")
+    # cmd BEFORE pid: the identity check reads `cmd` to decide whether a
+    # live pid really is this job, so it must never see a new pid paired
+    # with the previous run's argv.
     (d / "cmd").write_text(json.dumps(argv), encoding="utf-8")
     (d / "started").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    pid_file.write_text(str(proc.pid), encoding="utf-8")
+    # The lock now names its holder, so a later start() can tell a live
+    # holder from one left behind by a job that has since exited.
+    lock_path.write_text(str(proc.pid), encoding="utf-8")
 
     print(f"started job {name!r} as pid {proc.pid}, detached from this shell")
     print(f"  log:    {log_path}")
@@ -125,7 +222,23 @@ def start(name: str, argv, runtime_dir: str = _DEFAULT_RUNTIME_DIR) -> int:
 
 
 def is_running(pid: int) -> bool:
-    """True if `pid` is a live process. Best-effort and never raises."""
+    """True if `pid` is a live process, False if not or if UNDETERMINABLE.
+
+    DISPLAY-ONLY. `job_status.py` uses this to render RUNNING / NOT
+    RUNNING, where guessing "not running" on a probe failure is harmless.
+
+    **Never use this to decide whether it is safe to start a job.** It
+    cannot distinguish "definitely dead" from "could not tell", and it
+    does not check process IDENTITY -- a recycled pid belonging to an
+    unrelated process reads as alive. `liveness()` below answers both of
+    those questions properly; `start()` uses it, not this.
+    """
+    return _probe_alive(pid) is True
+
+
+def _probe_alive(pid: int):
+    """Tri-state liveness: True (alive), False (definitely gone), None
+    (could not determine -- the probe itself failed)."""
     if pid <= 0:
         return False
     try:
@@ -134,11 +247,94 @@ def is_running(pid: int) -> bool:
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
                 capture_output=True, timeout=15,
             )
-            return str(pid) in out.stdout.decode("utf-8", "ignore")
+            text = out.stdout.decode("utf-8", "ignore")
+            if "No tasks are running" in text:
+                return False
+            # Match the pid as its own whitespace-delimited column, not as a
+            # bare substring -- a memory figure like "14,356 K" must not be
+            # mistaken for the pid.
+            for line in text.splitlines():
+                fields = line.split()
+                if len(fields) >= 2 and fields[1] == str(pid):
+                    return True
+            return False
         os.kill(pid, 0)  # signal 0 = existence check only
         return True
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except ProcessLookupError:
         return False
+    except PermissionError:
+        # Exists but owned by another user -- definitively alive.
+        return True
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None  # probe failed; caller must NOT assume "dead"
+
+
+def _command_line(pid: int):
+    """The live process's full command line, or None if undeterminable."""
+    try:
+        if os.name == "nt":
+            out = subprocess.run(
+                ["wmic", "process", "where", f"ProcessId={pid}", "get", "CommandLine", "/format:list"],
+                capture_output=True, timeout=20,
+            )
+            text = out.stdout.decode("utf-8", "ignore")
+            if "CommandLine=" not in text:
+                return None
+            value = text.split("CommandLine=", 1)[1].strip()
+            return value or None
+        proc_cmdline = Path("/proc") / str(pid) / "cmdline"
+        if proc_cmdline.is_file():
+            raw = proc_cmdline.read_bytes().replace(b"\0", b" ").decode("utf-8", "ignore").strip()
+            return raw or None
+        out = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "args="], capture_output=True, timeout=20,
+        )
+        value = out.stdout.decode("utf-8", "ignore").strip()
+        return value or None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+# liveness() outcomes
+ALIVE_AND_MATCHES = "alive_and_matches"     # this pid IS the recorded job -> refuse to start
+GONE = "gone"                               # definitively not running -> safe to start
+RECYCLED = "recycled"                       # pid alive but is a DIFFERENT process -> safe to start
+UNKNOWN = "unknown"                         # could not determine -> refuse to start (fail closed)
+
+
+def liveness(pid: int, expected_argv=None) -> str:
+    """Is `pid` still the job we recorded? Tri-state plus identity.
+
+    WHY THIS IS SEPARATE FROM is_running(): `start()`'s duplicate guard
+    protects against the one genuinely dangerous mistake in this workflow
+    -- two collection jobs writing the same CSVs at once, which
+    `storage.merge_and_write` (read-modify-write, no inter-process lock)
+    would turn into a silent lost update. A guard for that must fail
+    CLOSED: if we cannot tell whether the job is alive, we must refuse to
+    start, never assume it is safe. It must also verify IDENTITY, because
+    an OS-recycled pid belonging to an unrelated process would otherwise
+    read as "the job is still running" forever.
+    """
+    alive = _probe_alive(pid)
+    if alive is None:
+        return UNKNOWN
+    if alive is False:
+        return GONE
+    if not expected_argv:
+        # Alive, but we have nothing to compare against -- cannot rule out
+        # a recycled pid, so do not claim a match. Fail closed.
+        return UNKNOWN
+    actual = _command_line(pid)
+    if actual is None:
+        # Alive but identity unverifiable -- fail closed rather than risk
+        # a duplicate collection run.
+        return UNKNOWN
+    # Skip argv[0] (the interpreter): it may be recorded as a bare name
+    # but reported as an absolute path, or vice versa.
+    tokens = [t for t in list(expected_argv)[1:] if t]
+    if tokens and all(token in actual for token in tokens):
+        return ALIVE_AND_MATCHES
+    return RECYCLED
 
 
 def main(argv=None) -> int:

@@ -49,7 +49,30 @@ the chat session, or the browser. State lands in
 
 Starting the same `--name` twice while it is running is **refused**. This
 is deliberate and important: two backfills writing the same CSVs
-concurrently is the one genuinely dangerous mistake in this workflow.
+concurrently is the one genuinely dangerous mistake in this workflow —
+`storage.merge_and_write` is read-modify-write with no inter-process
+lock, so two writers silently lose one writer's rows.
+
+**How the guard decides (it fails closed):**
+
+| What it finds | Decision |
+|---|---|
+| Recorded pid alive **and** its command line matches the recorded `cmd` | **Refuse** — the job really is running |
+| Recorded pid alive but a **different** process (OS recycled the pid) | Start — the job is genuinely gone |
+| Recorded pid definitively gone | Start |
+| **Cannot tell** (process probe failed/timed out) | **Refuse** — see below |
+
+The last row matters: if the machine is too loaded or locked-down for the
+probe to answer, the guard refuses rather than gambling. It will tell you
+exactly which pid it could not verify. Re-run once the machine is
+responsive; only if you have confirmed by hand that the pid is truly gone
+should you delete the job's `pid` file to unblock it.
+
+A `lock` file makes claiming a job atomic, so two near-simultaneous
+starts (two shells, two Claude sessions) cannot both slip through. A lock
+left by a job that has since exited is reclaimed automatically — but only
+when its holder is *provably* gone, never when liveness is merely
+unverifiable.
 
 ## Checking on it — from any session, any time
 
@@ -69,6 +92,14 @@ reboot.
 For the liquidation backfill specifically, the CLI prints only at the
 very end, so an empty log mid-run is normal — **use the checkpoint, not
 the log, to judge progress.**
+
+`job_status.py`'s `RUNNING` verdict is a *display* check: it asks only
+whether some process holds that pid, and on a probe failure it renders
+`NOT RUNNING`. It is deliberately not the authority on whether starting
+is safe — `run_detached_job.py` applies the stricter identity-and-
+fail-closed logic above for that. So when it matters, confirm progress
+with `liquidation_backfill_progress.py` (a checkpoint that is not
+advancing is the real signal), not with the `RUNNING` label alone.
 
 ## Recovering after any interruption
 
