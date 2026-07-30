@@ -201,6 +201,81 @@ class TestFetchMarkPriceDay(unittest.TestCase):
         transport.set(base, urllib.error.HTTPError(base, 404, "Not Found", None, None))
         self.assertIsNone(binance.fetch_mark_price_day(Symbol("BTC"), date(2019, 1, 1), transport=transport, clock=_CLOCK))
 
+    def test_zero_oi_value_row_skipped_not_fabricated(self):
+        """Reproduces the real Binance archive anomaly independently
+        verified on 2023-04-10 (BTC/ETH/SOL, clustered within the same
+        few minutes): sum_open_interest > 0 but sum_open_interest_value
+        == "0E-8". price = oi_value / oi would be exactly 0, which
+        MarkPriceObservation's constructor correctly rejects -- the row
+        must be skipped, not fabricated, mirroring the existing oi <= 0
+        skip."""
+        zip_name = "BTCUSDT-metrics-2023-04-10.zip"
+        csv_text = (
+            "create_time,symbol,sum_open_interest,sum_open_interest_value\n"
+            "2023-04-10 08:25:00,BTCUSDT,106675.40600000,0E-8\n"
+            "2023-04-10 08:30:00,BTCUSDT,106680.00000000,4480000000.00000000\n"
+        )
+        zip_bytes = _zip_bytes("x.csv", csv_text)
+        checksum = _checksum_bytes(zip_bytes, zip_name)
+        transport = _FakeTransport()
+        base = "https://data.binance.vision/data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-2023-04-10.zip"
+        transport.set(base, zip_bytes)
+        transport.set(base + ".CHECKSUM", checksum)
+
+        result = binance.fetch_mark_price_day(Symbol("BTC"), date(2023, 4, 10), transport=transport, clock=_CLOCK)
+        self.assertEqual(len(result), 1)  # the 0E-8 row skipped, not turned into a $0 observation
+        self.assertGreater(result[0].value, 0)
+
+
+class TestFetchMetricsDay(unittest.TestCase):
+    def test_zero_oi_value_row_keeps_oi_but_skips_mark(self):
+        """Same anomaly as TestFetchMarkPriceDay, through the combined
+        fetch_metrics_day path collect_metrics() actually uses in
+        production. The open-interest observation must be kept
+        (its own count is unaffected) -- only the derived mark price
+        for that timestamp is unavailable and must be skipped."""
+        zip_name = "BTCUSDT-metrics-2023-04-10.zip"
+        csv_text = (
+            "create_time,symbol,sum_open_interest,sum_open_interest_value\n"
+            "2023-04-10 08:25:00,BTCUSDT,106675.40600000,0E-8\n"
+            "2023-04-10 08:30:00,BTCUSDT,106680.00000000,4480000000.00000000\n"
+        )
+        zip_bytes = _zip_bytes("x.csv", csv_text)
+        checksum = _checksum_bytes(zip_bytes, zip_name)
+        transport = _FakeTransport()
+        base = "https://data.binance.vision/data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-2023-04-10.zip"
+        transport.set(base, zip_bytes)
+        transport.set(base + ".CHECKSUM", checksum)
+
+        oi_rows, mark_rows = binance.fetch_metrics_day(
+            Symbol("BTC"), date(2023, 4, 10), transport=transport, clock=_CLOCK,
+        )
+        self.assertEqual(len(oi_rows), 2)  # both OI rows kept, including the anomalous one
+        self.assertEqual(len(mark_rows), 1)  # only the anomalous row's mark price skipped
+        self.assertGreater(mark_rows[0].value, 0)
+
+    def test_zero_oi_row_still_skips_mark_but_keeps_oi(self):
+        """The pre-existing oi <= 0 case must keep working identically
+        after this change (both conditions in the same `or`, not a
+        replacement)."""
+        zip_name = "BTCUSDT-metrics-2024-01-15.zip"
+        csv_text = (
+            "create_time,symbol,sum_open_interest,sum_open_interest_value\n"
+            "2024-01-15 00:00:00,BTCUSDT,0,0\n"
+        )
+        zip_bytes = _zip_bytes("x.csv", csv_text)
+        checksum = _checksum_bytes(zip_bytes, zip_name)
+        transport = _FakeTransport()
+        base = "https://data.binance.vision/data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-2024-01-15.zip"
+        transport.set(base, zip_bytes)
+        transport.set(base + ".CHECKSUM", checksum)
+
+        oi_rows, mark_rows = binance.fetch_metrics_day(
+            Symbol("BTC"), date(2024, 1, 15), transport=transport, clock=_CLOCK,
+        )
+        self.assertEqual(len(oi_rows), 1)
+        self.assertEqual(len(mark_rows), 0)
+
 
 class TestFetchFundingRateMonth(unittest.TestCase):
     def test_available_month_parses_rows(self):

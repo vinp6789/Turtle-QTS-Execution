@@ -185,8 +185,12 @@ def fetch_mark_price_day(
     derived from the SAME daily metrics file as fetch_open_interest_day()
     via price = sum_open_interest_value / sum_open_interest (the OI units
     cancel, recovering the venue mark). Returns None if the date is not
-    available. A row with zero open interest (no valuation basis for a
-    price) is skipped rather than fabricated -- it cannot yield a mark.
+    available. A row with zero open interest, or zero open-interest value
+    (a rare but real Binance archive anomaly -- observed clustered across
+    multiple symbols within the same few minutes on 2023-04-10, likely a
+    transient valuation-service hiccup on Binance's own side, not a
+    per-symbol market event) has no valuation basis for a price and is
+    skipped rather than fabricated -- it cannot yield a mark.
 
     Downloads the metrics file independently of fetch_open_interest_day():
     a research backfill collecting both series therefore fetches each
@@ -217,8 +221,11 @@ def fetch_mark_price_day(
             oi_value = Decimal(row["sum_open_interest_value"])
         except (KeyError, ValueError, InvalidOperation) as exc:
             raise HistoricalDataError(f"{source_detail}: malformed row {row!r}: {exc}") from exc
-        if oi <= 0:
-            continue  # no valuation basis -> no derivable mark; skip, never fabricate
+        if oi <= 0 or oi_value <= 0:
+            # No valuation basis -> no derivable mark; skip, never fabricate.
+            # A zero oi_value alongside oi > 0 is a real (if rare) archive
+            # anomaly, not just the oi <= 0 case -- see fetch_metrics_day.
+            continue
         price = oi_value / oi
         observations.append(MarkPriceObservation(
             symbol=symbol, observed_at_utc=observed_at_utc, value=price,
@@ -271,7 +278,13 @@ def fetch_metrics_day(
             symbol=symbol, observed_at_utc=observed_at_utc, value=oi,
             source=_SOURCE_NAME, source_detail=oi_detail, ingested_at_utc=ingested_at_utc,
         ))
-        if oi > 0:
+        if oi > 0 and oi_value > 0:
+            # Mirrors fetch_mark_price_day's skip -- a genuine (if rare)
+            # Binance archive anomaly reports oi_value == 0 alongside a
+            # normal oi > 0 for a handful of 5-minute snapshots; that is
+            # no valuation basis for a mark, so it is skipped, never
+            # fabricated. The open-interest observation above is kept
+            # unconditionally -- only the derived price is unavailable.
             mark_observations.append(MarkPriceObservation(
                 symbol=symbol, observed_at_utc=observed_at_utc, value=oi_value / oi,
                 source=_SOURCE_NAME, source_detail=mark_detail, ingested_at_utc=ingested_at_utc,
