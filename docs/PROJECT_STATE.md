@@ -36,10 +36,10 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5), then Campaign 06's outcome-blind feasibility review (1.6) |
-| **Current blocker** | No single blocker — a short, ordered chain of verified prerequisites, none of which is an open research question. **All four P0 items, Backlog 1.3, and Backlog 1.4 (incl. a Medium-severity QA finding) closed.** |
-| **Immediate next task** | Full 12-month liquidation backfill, single pass, all symbols retained (Backlog 1.5) |
-| **Full regression** | **1,687 passed, 92 subtests, 0 failed** (re-verified this session — independent QA audit of Backlog 1.4 + fixes, 4 new tests) |
+| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5) **— running detached, 13.4% complete**; then Campaign 06's outcome-blind feasibility review (1.6) |
+| **Current blocker** | No single blocker. **All four P0 items, Backlog 1.3, and Backlog 1.4 closed.** Backlog 1.5 is executing; an operational (not pipeline) weakness that killed its first attempt has been fixed — see Active Work. |
+| **Immediate next task** | Let the detached backfill finish, then validate completeness (Backlog 1.5). Check with `python scripts/job_status.py liq_backfill` and `python scripts/liquidation_backfill_progress.py`. |
+| **Full regression** | **1,703 passed, 92 subtests, 0 failed** (re-verified this session — long-running-job hardening, 16 new tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -271,6 +271,17 @@ pre-fix code and passes against the fix).
 - `docs/HISTORICAL_DATA.md` §0/§1 updated: Mark Price added as its own row (both sources) to the source-comparison table; the DEX-first section's "Funding Rate is the only currently-collected metric where Hyperliquid-replicate is executable" claim corrected to scope it to feature metrics (mark price is an outcome series, not a feature, so it was never covered by that claim and didn't need venue-transfer validation — but the zero-overlap gap it closes is recorded).
 - 14 new tests (9 `fetch_daily_candles`, 5 `collect_mark_price` Hyperliquid-path incl. the boundary regression). Full regression: **1,683 passed, 92 subtests, 0 failed.**
 
+**Backlog 1.5 IN PROGRESS + long-running-job hardening (2026-07-29/30):**
+- **First attempt died with its parent chat session** after 49 of 367 days. The output file was **empty** — no `BACKFILL_COMPLETE`, no `BACKFILL_FAILED`, no traceback — the signature of external teardown, not a crash. **The defect was operational, never in the pipeline:** a job's lifetime was coupled to a chat session's lifetime.
+- **Zero committed work was lost.** The Backlog 1.3 H1 durability invariant did exactly its job: checkpoint at `20250913/23.lz4`, collected days **2025-07-27 → 2025-09-13 contiguous (49 days)**, identical across all three symbols, `rows/event` exactly 2.00 everywhere, pilot month (2026-06) untouched. 974,096 rows survived. At most one *partial* day was discarded — by design, since the checkpoint only advances after a day's flush succeeds. **No `--force`, no manual data edits, no restart from scratch.**
+- **Operational hardening (no pipeline/storage/checkpoint/research changes):**
+  - `scripts/run_detached_job.py` — starts a job detached from the calling shell (POSIX `start_new_session`; Windows `DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP`). Records pid/cmd/started/log under `data/runtime/jobs/<name>/`. **Refuses a second concurrent copy of the same job** — the one genuinely dangerous mistake here is two backfills writing the same CSVs at once.
+  - `scripts/job_status.py` — the reattach path. You never reattach to the *process* (a detached job has no terminal by design); you reattach to its observable state. **Strictly read-only.**
+  - `scripts/liquidation_backfill_progress.py` — % complete, contiguous-run map, and data-sanity checks (`rows/event`, side balance) from durable on-disk state alone. **Strictly read-only**, safe mid-flight and from parallel sessions.
+  - `docs/LONG_RUNNING_JOBS.md` — the runbook: start, check, recover, reboot, and the explicit "never do this to recover" list.
+- **A real defect was found and fixed by these tests, in the new tooling itself:** `run_detached_job.start()` leaked the parent's log file handle, which on Windows locked the log against readers and cleanup. Fixed by closing the parent handle once the child has inherited its own.
+- Backfill **relaunched detached** and verified resuming from day 49 (not restarting). 16 new tests. Full regression: **1,703 passed, 92 subtests, 0 failed.**
+
 ---
 
 ## Immediate Backlog
@@ -284,7 +295,7 @@ pre-fix code and passes against the fix).
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
-| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time; staged/partial backfill considered and rejected — walk-forward requires chronological contiguity, and month-selection would be an un-pre-registered researcher choice) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | Not started |
+| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 49/367 days (13.4%) durable at last check** |
 | **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
 | **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | Not started |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
@@ -351,7 +362,7 @@ pre-fix code and passes against the fix).
 5. ~~Write RD-13~~ — **done 2026-07-29**: pilot measurements, RD-12 correction, cross-symbol correlation finding, new feasibility-review requirement.
 6. ~~Build `collect_liquidations()` + CLI entry; declare `boto3`/`lz4`~~ — **done 2026-07-29**, plus a real durability defect (deferred-write, not per-day flush) found and fixed before commit.
 7. ~~Collect Hyperliquid-native daily candles 2025-07-27→present + Binance metrics secondary check~~ — **done 2026-07-29**, plus a real end-date boundary defect found via live run and fixed (see Active Work).
-8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(Next unstarted task.)*
+8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(IN PROGRESS — running detached; check with `python scripts/job_status.py liq_backfill`.)*
 9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
 10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and move to the deep-history backfill (Backlog 2.1) ahead of the next funding/OI campaign.
 

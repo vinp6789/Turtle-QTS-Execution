@@ -45,6 +45,7 @@ document, not for understanding current state.
 | `CLAUDE_ONBOARDING.md` | Standing onboarding prompt for Execution Engine sessions |
 | `DEPLOYMENT.md` | How to run the app layer (Windows/Docker/VPS/Railway) |
 | `OPERATIONS.md` | Runbook: endpoints, monitoring, emergency stop, Telegram, backups |
+| `LONG_RUNNING_JOBS.md` | Runbook for jobs that outlive a chat session: detached start, reattach/monitor, recovery after any interruption, reboot behaviour. Read before starting or recovering a multi-hour/multi-day collection job. |
 | `PRODUCTION_CHECKLIST.md` | Pre-deploy / pre-live-trading checklist |
 | `../FINAL_PRODUCTION_AUDIT.md` | Final independent production audit (2026-07-21) — regression, fix-by-fix verification, verdict. Still active reference: outstanding SEC-1/OBS-1 items are cited directly by `ROADMAP.md` §4. |
 | `../MODULE_10_FREEZE.md` | Module 10 (Hyperliquid Adapter) freeze package — architecture, known limitations, runbook, validation evidence. Still the authoritative Module 10 reference. |
