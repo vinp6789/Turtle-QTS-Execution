@@ -36,10 +36,10 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5) **— running detached, 13.4% complete**; then Campaign 06's outcome-blind feasibility review (1.6) |
-| **Current blocker** | No single blocker. **All four P0 items, Backlog 1.3, and Backlog 1.4 closed.** Backlog 1.5 is executing; an operational (not pipeline) weakness that killed its first attempt has been fixed — see Active Work. |
-| **Immediate next task** | Let the detached backfill finish, then validate completeness (Backlog 1.5). Check with `python scripts/job_status.py liq_backfill` and `python scripts/liquidation_backfill_progress.py`. |
-| **Full regression** | **1,717 passed, 92 subtests, 0 failed** (re-verified this session — QA findings M1/M2/L1/L3 on the job tooling closed, 14 new tests) |
+| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5) **— running detached, 15.3% complete**; deep-history backfill (Backlog 2.1) **also running detached, started 2026-07-30**; then Campaign 06's outcome-blind feasibility review (1.6) |
+| **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
+| **Immediate next task** | Let both detached backfills continue. Check with `python scripts/job_status.py <name>` (`liq_backfill` / `deep_history_backfill`) and `python scripts/liquidation_backfill_progress.py`. |
+| **Full regression** | **1,729 passed, 92 subtests, 0 failed** (12 new tests for the Backlog 2.1 driver; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
 
@@ -64,13 +64,16 @@ by nor gating Alpha Engine research.
 
 ## Current Objective
 
-All Priority 0/1.1/1.2/1.3 defect-chain items are closed. Remaining:
-collect the outcome series (1.4), run the full 12-month liquidation
-backfill (1.5), then determine — via an outcome-blind feasibility
-review, not intuition — whether a 12-month liquidation campaign is
-statistically viable at all (1.6), before spending further engineering
-or research effort on it. See **Immediate Backlog** for the exact
-ordered chain.
+All Priority 0/1.1/1.2/1.3/1.4 defect-chain items are closed. The full
+12-month liquidation backfill (1.5) is running detached; once it
+finishes, determine — via an outcome-blind feasibility review, not
+intuition — whether a 12-month liquidation campaign is statistically
+viable at all (1.6), before spending further engineering or research
+effort on it. **In parallel** (orthogonal, gates only the *next*
+funding/OI campaign, not Campaign 06): the deep-history backfill (2.1)
+is also running detached, extending funding/OI/mark-price coverage back
+to 2020–2021 via Binance's public archive. See **Immediate Backlog** for
+the exact ordered chain.
 
 ---
 
@@ -285,11 +288,24 @@ pre-fix code and passes against the fix).
 **Independent QA audit of the job tooling, then fixes (2026-07-30) — the running backfill was never interrupted:**
 - **M1 (Medium, closed) — the duplicate-job guard failed OPEN.** `is_running()` returned `False` on *any* probe error (tasklist timeout, `OSError`), so a failing probe let `start()` spawn a second copy of a genuinely-live job. Reproduced end-to-end. This mattered because `storage.merge_and_write` is read-modify-write with **no inter-process lock** (verified) — two collectors on the same CSVs silently lose one writer's rows. **Fix:** split the two uses. `is_running()` stays fail-open but is now display-only; a new tri-state `liveness()` drives the guard and **refuses to start when liveness cannot be determined**, naming the pid it could not verify.
 - **M2 (Medium, closed) — liveness was pid-only, with no identity check.** An OS-recycled pid belonging to an unrelated process read as "the job is still running" forever: `job_status.py` showed `RUNNING` (even displaying the backfill's `cmd`), and `start()` refused to resume. Reproduced by writing an unrelated live pid into a job's `pid` file. **Fix:** `liveness()` compares the live process's command line against the recorded `cmd`, distinguishing `ALIVE_AND_MATCHES` / `RECYCLED` / `GONE` / `UNKNOWN`. Verified the check still correctly identifies the **currently running** backfill as `alive_and_matches`, so protection was strengthened, never weakened.
-- **L1 (Low, closed) — check-then-start race.** The guard read the pid file before spawning and wrote the new pid after, so two near-simultaneous starts could both pass. **Fix:** an `O_CREAT|O_EXCL` `lock` file makes claiming a job atomic; a lock from a provably-dead holder is reclaimed, one from an unverifiable holder is not. Released on every refusal path (verified — no stale lock left behind).
+- **L1 (Low) — check-then-start race. Claimed closed here; a follow-up independent audit found the fix incomplete — see the dated entry below, corrected the moment it was found, not silently carried forward.** The guard read the pid file before spawning and wrote the new pid after, so two near-simultaneous starts could both pass. **Attempted fix:** an `O_CREAT|O_EXCL` `lock` file was meant to make claiming a job atomic. It does not: the lock is created *empty* and only stamped with the real pid after `Popen` succeeds, leaving an empty-lock window a second concurrent caller can still steal (see Current Blockers → Operational).
 - **L3 / I1 (Low, closed) —** the side-balance check compared only the counts *present*, so a wholly one-sided series (every `A` row lost) passed both sanity checks with a clean `rows/event=2.00`; and a checkpoint outside the expected window printed a negative day count beside a correctly-clamped percentage. Both fixed.
 - **Windows liveness hardening:** the pid match was a bare substring test against `tasklist` output; now matches the pid as its own column, and `PermissionError` on POSIX is correctly read as "alive" rather than "gone".
 - **Nothing in the pipeline, storage, checkpoint semantics, or research logic was touched** — verified: the commit contains no `alpha_engine/` or `research/` file.
 - **The running backfill was never interrupted.** Same pid throughout; its checkpoint advanced from day 52 to day 54 *during* this work, proving it kept collecting. A live duplicate-launch attempt was correctly refused. 14 new tests, each confirmed to fail against the pre-fix code. Full regression: **1,717 passed, 92 subtests, 0 failed.**
+
+**Final independent QA audit of the job tooling (2026-07-30) — found the L1 fix above incomplete, running backfill never interrupted:**
+- **H1 (renamed from L1; not closed) — the `lock` file is created empty and only stamped with the real pid after `Popen` succeeds.** An empty lock is indistinguishable from "no holder" to the steal-path logic, so two concurrent `_acquire_lock()` calls can both succeed. Reproduced end-to-end: two concurrent `start()` calls both actually spawned live child processes. Measured window ~0.25s (tasklist+wmic latency) up to ~35s under load (internal timeouts: 15s tasklist, 20s wmic). **Only bites on a fresh START/RESUME race** — while a job is genuinely alive, any racing caller correctly resolves it as `ALIVE_AND_MATCHES` and refuses, so a job already running (like both `liq_backfill` and, from today, `deep_history_backfill`) is not exposed.
+- **H2 (not closed) — both `docs/LONG_RUNNING_JOBS.md` and this document (in the L1 bullet above, now corrected in place) asserted an atomicity guarantee that does not hold.** Left as-is in `LONG_RUNNING_JOBS.md` itself per the decision below (not touching operational-tooling docs/code today); flagged here so the claim is not trusted.
+- Also found: no test exercises the actual empty-lock state (L1/new), no test uses concurrency/threading (L2/new), and an informational note that Windows liveness checks depend on the deprecated `wmic` (I1/new).
+- **Decision (2026-07-30): stop spending further time on operational-framework QA today.** Do not fix H1/H2 now, do not interrupt `liq_backfill`, do not touch `run_detached_job.py` / `job_status.py` / `liquidation_backfill_progress.py` / `LONG_RUNNING_JOBS.md`. Recorded as open technical debt (Current Blockers → Operational), to be closed **before the next long-running collection campaign is *started*** — not before Backlog 2.1, which was already past the vulnerable fresh-start window by the time it was launched (verified: no concurrent start was attempted against either job name). Project execution resumed instead — see Backlog 2.1 below.
+
+**Backlog 2.1 started (2026-07-30) — deep-history backfill, orthogonal to Campaign 06:**
+- Identified as the highest-priority backlog item with no dependency on 1.5/1.6 and no need to touch the running liquidation backfill or the operational tooling (Backlog 2.2, the Railway-volume config item, was the only other candidate with no open dependency; 2.1 ranks first in the Immediate Backlog and gates the next funding/OI campaign — a concrete future deliverable — vs. 2.2's config-only, no-current-urgency scope).
+- Spot-verified via a scratch-root probe (not the production data root) before committing to the full multi-year job: Binance's public archive does have data at every one of the ROADMAP-declared boundary months (BTC/ETH funding 2020-01, SOL funding 2020-09 — and confirmed SOL funding 2020-08 correctly reports `unavailable` pre-listing; BTC metrics 2021-01, ETH/SOL metrics 2022-01). Confirms the ROADMAP's "verified free and available" claim rather than trusting it from memory.
+- **New driver, zero changes to any tested collection code:** `research/deep_history_backfill/collect_backfill.py` — calls only the existing, already-tested `collect_funding_rate`/`collect_metrics`, one month at a time per symbol (mirrors `research/campaign_01_open_interest/collect_backfill.py` and `campaign_02_funding_rate/collect_backfill.py`'s established resumable-chunking pattern exactly). Per-symbol start months are asymmetric by design (SOL's Binance futures listing postdates BTC/ETH) and are read from module-level constants sourced directly from `docs/ROADMAP.md` §1.2, not re-derived. Re-running over already-covered months (2023-07 onward) is intentional and cheap — both underlying collectors skip anything already on disk.
+- 12 new tests (`tests/test_research_deep_history_backfill.py`) covering month-range dispatch (each symbol starts from its own declared month), retry/backoff on transient `HistoricalDataError`, retry-exhaustion recorded as failed without aborting the run, and `BACKFILL_COMPLETE`/`BACKFILL_INCOMPLETE` reporting — each confirmed to fail against a deliberately-broken copy of the dispatch logic and pass against the real code. Full regression: **1,729 passed, 92 subtests, 0 failed.**
+- **Launched detached** as job `deep_history_backfill` (distinct pid, distinct job name from `liq_backfill` — no shared lock, no shared output files) via the existing `scripts/run_detached_job.py`; this is *using* the operational tooling as designed, not modifying it. Verified starting: first 9 months (BTC funding 2020-01→2020-09) fetched successfully within the first 15 seconds; `liq_backfill` re-checked immediately after and confirmed still running, same pid, unaffected.
 
 ---
 
@@ -304,9 +320,9 @@ pre-fix code and passes against the fix).
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
-| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 49/367 days (13.4%) durable at last check** |
+| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 56/367 days (15.3%) durable at last check (2026-07-30)** |
 | **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
-| **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | Not started |
+| **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | **IN PROGRESS — started 2026-07-30, running detached as job `deep_history_backfill`; check with `python scripts/job_status.py deep_history_backfill`** |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
 
 ---
@@ -339,6 +355,7 @@ pre-fix code and passes against the fix).
 **Operational**
 - ~~Evidence store gitignored~~ — **closed 2026-07-29**, `data/alpha_engine_research/` now tracked. `data/alpha_engine_historical/` (243 MB CSVs) remains deliberately gitignored — reconstructible from public archives, not the provenance-critical asset the evidence store is.
 - `railway.json` declares no persistent volume; `data/` is ephemeral on Railway today (affects future live deployment, not current research). (Backlog 2.2)
+- **OPEN — launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`), deferred by explicit decision (2026-07-30).** The duplicate-start guard's `lock` file is created empty and stamped with the real pid only after `Popen` succeeds; a second concurrent `start()` call can steal the empty lock before that stamp lands. Reproduced end-to-end (two concurrent starts, both spawned live children); measured window ~0.25s–35s. **Does not affect either currently running job** (`liq_backfill`, `deep_history_backfill`) — a job that is genuinely alive is unambiguously refused via `ALIVE_AND_MATCHES` regardless of this race; the exposure is scoped strictly to two callers racing to start/resume the *same job name* at the same moment while it is dead. Fix designed but not implemented: stamp the starting process's own pid into the lock at creation (same `os.open()` call, before any slow work), overwrite with the child's pid after `Popen`. **To be closed before the next long-running collection campaign is started**, not before 1.5/2.1 (already launched, not raced). Also open: `docs/LONG_RUNNING_JOBS.md` and this document's own Active Work (L1 bullet, corrected in place) both once asserted an atomicity guarantee this does not actually provide — treat that claim as false until H1/H2 close.
 
 **Documentation**
 - ~~RD-12's stale "no backfill has been executed" claim~~ — **corrected 2026-07-29** via RD-13, with an inline pointer left at RD-12 itself.
@@ -371,9 +388,11 @@ pre-fix code and passes against the fix).
 5. ~~Write RD-13~~ — **done 2026-07-29**: pilot measurements, RD-12 correction, cross-symbol correlation finding, new feasibility-review requirement.
 6. ~~Build `collect_liquidations()` + CLI entry; declare `boto3`/`lz4`~~ — **done 2026-07-29**, plus a real durability defect (deferred-write, not per-day flush) found and fixed before commit.
 7. ~~Collect Hyperliquid-native daily candles 2025-07-27→present + Binance metrics secondary check~~ — **done 2026-07-29**, plus a real end-date boundary defect found via live run and fixed (see Active Work).
-8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(IN PROGRESS — running detached; check with `python scripts/job_status.py liq_backfill`.)*
+8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(IN PROGRESS — 56/367 days, 15.3%; running detached; check with `python scripts/job_status.py liq_backfill`.)*
+8a. Deep-history backfill (Backlog 2.1), orthogonal to Campaign 06. *(IN PROGRESS — started 2026-07-30, running detached as `deep_history_backfill`; check with `python scripts/job_status.py deep_history_backfill`.)*
 9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
-10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and move to the deep-history backfill (Backlog 2.1) ahead of the next funding/OI campaign.
+10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and proceed with the next funding/OI campaign, by then unblocked by Backlog 2.1.
+11. Before starting any *future* long-running collection job beyond the two currently in flight: close the launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`) — see Current Blockers → Operational.
 
 ---
 
@@ -512,6 +531,26 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **[Session finding] Final independent QA audit of the job tooling, and
+  the diminishing-returns decision (2026-07-30)** — a second independent
+  audit re-verified the M1/M2/L1/L3/I1 fixes above rather than trusting
+  the claim, and found the L1 fix incomplete: the `lock` file is created
+  empty and only stamped with the real pid after `Popen` succeeds, so an
+  empty lock remains stealable for a measured ~0.25s–35s window; two
+  concurrent `start()` calls were reproduced both spawning live
+  collectors end-to-end. Also found: both `docs/LONG_RUNNING_JOBS.md`
+  and this document asserted an atomicity guarantee that does not hold;
+  no test covered the empty-lock state or concurrent starts. Given this
+  only bites a fresh start/resume race on a *dead* job (a live job is
+  unambiguously refused regardless), and the running `liq_backfill` was
+  never at risk, the decision was made to **defer the fix rather than
+  spend further time on operational QA today**: recorded as open
+  technical debt (Current Blockers → Operational), not fixed, not
+  documented as closed, to be resolved before the next long-running
+  campaign is *started*. Project execution then resumed with Backlog
+  2.1 (deep-history backfill), launched detached under a distinct job
+  name with no exposure to this race (verified: no concurrent start was
+  attempted against either job name).
 
 ---
 
@@ -603,6 +642,29 @@ accordingly.)*
              corrected to the verified inclusive interval. 4 new tests,
              each confirmed to fail against the pre-fix code and pass
              against the fix. 1,687 tests passing.
-   ...        [next: Immediate Backlog item 1.5, then 1.6, then Campaign
-              06 decision point]
+2026-07-29   Commit `9334d4f` — Backlog 1.3 committed (see above); commit
+             `508d4b4` — Backlog 1.3 QA fixes committed (see above);
+             commit `6bf8452` — Backlog 1.4 committed (see above).
+2026-07-30   Backlog 1.5 relaunched detached after the parent-session-
+             death incident; first independent QA audit of the job
+             tooling (M1/M2/L1/L3/I1) found and fixed (commit `e01dcae`).
+             1,717 tests passing.
+2026-07-30   Final independent QA audit of the job tooling: the L1 fix
+             found incomplete (empty-lock stealable window, reproduced
+             end-to-end), plus a false atomicity claim in two documents
+             and untested concurrency paths. Decision: defer the fix
+             (diminishing returns on operational QA today), record as
+             open technical debt, resume project execution. `liq_backfill`
+             re-confirmed running throughout, never interrupted, day
+             55→56.
+2026-07-30   Backlog 2.1 started: deep-history backfill driver
+             (`research/deep_history_backfill/collect_backfill.py`, zero
+             changes to any tested collection code) built, 12 new tests
+             red→green, launched detached as `deep_history_backfill`
+             (distinct pid/job name from `liq_backfill`, no shared lock
+             or output files). 1,729 tests passing.
+   ...        [next: Backlog 1.5 and 2.1 continue running detached; then
+              1.6 (Campaign 06 feasibility review) and the next
+              funding/OI campaign; close the launcher concurrency race
+              before any *future* long-running job beyond these two]
 ```
