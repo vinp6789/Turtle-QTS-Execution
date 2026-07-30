@@ -663,6 +663,9 @@ accordingly.)*
              red→green, launched detached as `deep_history_backfill`
              (distinct pid/job name from `liq_backfill`, no shared lock
              or output files). 1,729 tests passing.
+2026-07-30   Commit `33e7dff` — Backlog 2.1 driver + tests +
+             PROJECT_STATE.md update committed. 4 files changed
+             (+423/-18). Working tree clean.
    ...        [next: Backlog 1.5 and 2.1 continue running detached; then
               1.6 (Campaign 06 feasibility review) and the next
               funding/OI campaign; close the launcher concurrency race
