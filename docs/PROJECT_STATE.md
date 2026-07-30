@@ -307,6 +307,14 @@ pre-fix code and passes against the fix).
 - 12 new tests (`tests/test_research_deep_history_backfill.py`) covering month-range dispatch (each symbol starts from its own declared month), retry/backoff on transient `HistoricalDataError`, retry-exhaustion recorded as failed without aborting the run, and `BACKFILL_COMPLETE`/`BACKFILL_INCOMPLETE` reporting — each confirmed to fail against a deliberately-broken copy of the dispatch logic and pass against the real code. Full regression: **1,729 passed, 92 subtests, 0 failed.**
 - **Launched detached** as job `deep_history_backfill` (distinct pid, distinct job name from `liq_backfill` — no shared lock, no shared output files) via the existing `scripts/run_detached_job.py`; this is *using* the operational tooling as designed, not modifying it. Verified starting: first 9 months (BTC funding 2020-01→2020-09) fetched successfully within the first 15 seconds; `liq_backfill` re-checked immediately after and confirmed still running, same pid, unaffected.
 
+**Both jobs found stopped after an unattended interval (2026-07-30); neither was killed or restarted by any action taken — both exited through their own existing failure/completion paths:**
+- **`liq_backfill`:** `BACKFILL_FAILED after 6 attempts` — genuine transient Hyperliquid S3 connectivity failures (`Read timeout`, `Could not connect to the endpoint URL`), the CLI's own already-tested exponential-backoff retry exhausted. Checkpoint at the time: day 60/367 (16.3%), all three symbols' CSVs contiguous and clean (`rows/event` exactly 2.00), no partial day. **Resumed** via the identical documented command; new pid, checkpoint untouched at day 60 (proving no restart-from-scratch), progressed cleanly through day 63/367 (17.2%) with no further errors.
+- **`deep_history_backfill`:** actually completed its full scheduled month range (ended `BACKFILL_INCOMPLETE`, not a crash — its log runs ~100 minutes past `liq_backfill`'s failure). 5 months flagged: `ETH 2022-06`/`2022-07` (transient DNS failure, `getaddrinfo failed`) and **`BTC/ETH/SOL 2023-04`** (deterministic `MarkPriceObservation.value must be strictly positive, got 0` — see below). Verified on disk: all 5 months cleanly absent (zero rows), immediate neighboring months fully intact — the atomic-merge-per-month design held exactly as intended, no partial/corrupt data anywhere.
+- **Investigation (no code changed during this phase):** independently re-fetched the real Binance archive for April 2023 (checksum-verified, outside the production data root). Confirmed genuine, live, reproducible archive data: `sum_open_interest > 0` with `sum_open_interest_value` literally `"0E-8"` in the raw file, clustered within the same few minutes across BTC/ETH/SOL on **2023-04-10** — a transient valuation-service hiccup on Binance's own side (open-interest counts continue moving normally through the same window), not a market event, not a parsing defect, not a checksum/corruption issue.
+- **Fix (`alpha_engine/historical/sources/binance.py`):** `fetch_mark_price_day` and `fetch_metrics_day` both extended from skipping only `oi <= 0` to skipping `oi <= 0 or oi_value <= 0` before constructing a `MarkPriceObservation` — mirroring the function's own pre-existing "skip rather than fabricate a mark it cannot yield" principle exactly, no new semantics. `MarkPriceObservation`'s strict-positivity validation is untouched. In `fetch_metrics_day`, the open-interest observation for the same timestamp is kept unconditionally — only the derived price is skipped. 3 new regression tests (one reproducing the exact 2023-04-10 row shape), each confirmed to fail against the pre-fix code with the exact production error, and to pass against the fix. Full regression: **1,734 passed, 92 subtests, 0 failed.** Independently re-verified against the live archive for all three symbols post-fix (BTC/ETH/SOL 2023-04-10, read-only, no storage writes): 0 exceptions, 12/10/10 rows correctly skipped respectively.
+- **Both fixes committed separately:** `75f9353` (raw `TimeoutError` → `HistoricalDataError` translation, closing the earlier `deep_history_backfill` crash) and `8667cb2` (the `oi_value` skip fix above).
+- **`deep_history_backfill` resumed** via the identical documented command (new pid). Verified: the entire funding-rate phase re-walked with `skipped=1, rows_added=0` for every month (funding CSVs' row counts unchanged: BTC/ETH 7120, SOL 6425 lines, before and after), then the metrics phase resumed and is correctly skipping every already-collected month (`fetched=0, skipped=N` for months already on disk) without re-fetching any of them.
+
 ---
 
 ## Immediate Backlog
@@ -320,9 +328,9 @@ pre-fix code and passes against the fix).
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
-| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 56/367 days (15.3%) durable at last check (2026-07-30)** |
+| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 63/367 days (17.2%) durable at last check (2026-07-30); resumed once already after a transient S3 connectivity exhaustion, no data lost** |
 | **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
-| **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | **IN PROGRESS — started 2026-07-30, running detached as job `deep_history_backfill`; check with `python scripts/job_status.py deep_history_backfill`** |
+| **2.1** | Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL); zero new code, verified free via Binance's public archive | None | No — gates the **next funding/OI campaign**, not Campaign 06 (orthogonal; corrected after being mis-sequenced in an earlier pass) | ~1 day | **IN PROGRESS — funding phase complete for all 3 symbols; metrics phase resumed 2026-07-30 after fixing a real Binance archive anomaly (oi_value==0 on 2023-04-10); check with `python scripts/job_status.py deep_history_backfill`** |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
 
 ---
@@ -666,6 +674,39 @@ accordingly.)*
 2026-07-30   Commit `33e7dff` — Backlog 2.1 driver + tests +
              PROJECT_STATE.md update committed. 4 files changed
              (+423/-18). Working tree clean.
+2026-07-30   Commit `3894421` — documentation-only follow-up recording
+             `33e7dff`'s own hash in the timeline (had not been
+             committed before an API disconnect).
+2026-07-30   Both `liq_backfill` and `deep_history_backfill` found
+             stopped after an unattended interval -- neither killed nor
+             restarted by any action taken. `liq_backfill`:
+             BACKFILL_FAILED after 6 attempts, transient S3
+             connectivity, checkpoint clean at day 60/367. Resumed.
+             `deep_history_backfill`: completed its full scheduled
+             range (not a crash), flagged 5 months -- 2 transient DNS
+             failures, 3 (BTC/ETH/SOL 2023-04) a deterministic
+             MarkPriceObservation zero-value rejection.
+2026-07-30   Commit `75f9353` — translate raw TimeoutError to
+             HistoricalDataError in binance.py (root cause of the
+             earlier deep_history_backfill crash at the metrics-phase
+             boundary). 2 new tests, red→green verified. 1,731 tests
+             passing.
+2026-07-30   Investigation (no code changed): independently re-fetched
+             the live Binance archive for April 2023 -- confirmed a
+             genuine, checksum-verified, reproducible archive anomaly
+             (sum_open_interest_value == "0E-8" alongside sum_open_
+             interest > 0), clustered across BTC/ETH/SOL within the
+             same few minutes on 2023-04-10. Not a parsing defect, not
+             corruption, not a market event.
+2026-07-30   Commit `8667cb2` — fetch_mark_price_day/fetch_metrics_day
+             extended to skip (not fabricate) a mark price when
+             oi_value <= 0, mirroring the existing oi <= 0 skip exactly.
+             3 new tests including the exact 2023-04-10 shape, each
+             confirmed to fail against the pre-fix code with the exact
+             production error. Full regression: 1,734 tests passing.
+             `deep_history_backfill` resumed; funding phase re-verified
+             all-skip (no recollection), metrics phase resumed skipping
+             already-covered months correctly.
    ...        [next: Backlog 1.5 and 2.1 continue running detached; then
               1.6 (Campaign 06 feasibility review) and the next
               funding/OI campaign; close the launcher concurrency race
