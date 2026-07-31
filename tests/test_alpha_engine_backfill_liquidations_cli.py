@@ -142,5 +142,199 @@ class TestRunRetry(unittest.TestCase):
             cli.run(symbols=(Symbol("BTC"),), start=None, end=date(2026, 6, 1))
 
 
+class TestRetryPolicyConfiguration(unittest.TestCase):
+    """The retry policy is configurable rather than hard-coded, and its
+    defaults tolerate a multi-minute outage. The original hard-coded
+    policy (6 attempts, 2+4+8+16+32 = 62s) was shorter than the real
+    outages that repeatedly killed the Backlog 1.5 backfill."""
+
+    def test_default_backoff_matches_the_original_progression(self):
+        # The change must EXTEND the old behaviour, not alter its shape:
+        # the first five backoffs are exactly what they always were.
+        policy = cli.RetryPolicy()
+        self.assertEqual(
+            [policy.backoff_for(a) for a in range(1, 6)], [2.0, 4.0, 8.0, 16.0, 32.0],
+        )
+
+    def test_backoff_is_capped(self):
+        policy = cli.RetryPolicy(backoff_base_seconds=2.0, max_backoff_seconds=120.0)
+        self.assertEqual(policy.backoff_for(7), 120.0)   # 2*2**6 = 128 -> capped
+        self.assertEqual(policy.backoff_for(20), 120.0)  # never grows past the cap
+
+    def test_default_budget_tolerates_at_least_ten_minutes(self):
+        """The stated purpose of the change: survive ~10-15 min outages."""
+        policy = cli.RetryPolicy()
+        total = 0.0
+        for attempt in range(1, policy.max_attempts):
+            nxt = policy.backoff_for(attempt)
+            if total + nxt > policy.max_total_seconds:
+                break
+            total += nxt
+        self.assertGreaterEqual(total, 600.0)  # >= 10 minutes
+        self.assertLessEqual(total, 900.0)     # and within the stated budget
+
+    def test_invalid_configuration_is_rejected(self):
+        for kwargs in (
+            {"max_attempts": 0},
+            {"max_attempts": -1},
+            {"backoff_base_seconds": -1.0},
+            {"max_backoff_seconds": -1.0},
+            {"max_total_seconds": -1.0},
+        ):
+            with self.subTest(**kwargs):
+                with self.assertRaises(HistoricalDataError):
+                    cli.RetryPolicy(**kwargs)
+
+    def test_cli_flags_parse_into_the_policy(self):
+        seen = {}
+        real_run = cli.run
+
+        def spy_run(**kwargs):
+            seen.update(kwargs)
+            return 0
+
+        cli.run = spy_run
+        try:
+            cli.main([
+                "--start", "2026-06-01", "--end", "2026-06-01",
+                "--retry-max-attempts", "20",
+                "--retry-backoff-base-seconds", "1.5",
+                "--retry-max-backoff-seconds", "60",
+                "--retry-max-total-seconds", "1800",
+            ])
+        finally:
+            cli.run = real_run
+        policy = seen["policy"]
+        self.assertEqual(policy.max_attempts, 20)
+        self.assertEqual(policy.backoff_base_seconds, 1.5)
+        self.assertEqual(policy.max_backoff_seconds, 60.0)
+        self.assertEqual(policy.max_total_seconds, 1800.0)
+
+    def test_cli_defaults_produce_the_default_policy(self):
+        seen = {}
+        real_run = cli.run
+
+        def spy_run(**kwargs):
+            seen.update(kwargs)
+            return 0
+
+        cli.run = spy_run
+        try:
+            cli.main(["--start", "2026-06-01", "--end", "2026-06-01"])
+        finally:
+            cli.run = real_run
+        self.assertEqual(seen["policy"], cli.RetryPolicy())
+
+
+class TestRetryBounds(unittest.TestCase):
+    """Retrying must always terminate: a deterministic failure raises the
+    same HistoricalDataError a network blip does and is indistinguishable
+    here, so both the attempt count and the wall-clock budget must bound
+    the loop."""
+
+    def setUp(self):
+        self._real_collect = cli.collect_liquidations
+
+    def tearDown(self):
+        cli.collect_liquidations = self._real_collect
+
+    def _fake_clock(self, step):
+        """Monotonic clock that advances `step` seconds per reading."""
+        state = {"t": 0.0}
+
+        def monotonic():
+            now = state["t"]
+            state["t"] += step
+            return now
+
+        return monotonic
+
+    def test_transient_failure_recovers_without_exhausting_budget(self):
+        attempts = []
+        slept = []
+
+        def flaky(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            if len(attempts) < 8:  # would have been fatal under the old 6-attempt policy
+                raise HistoricalDataError("connection reset by peer")
+            return tuple(_result(s.value) for s in symbols)
+
+        cli.collect_liquidations = flaky
+        results = cli._collect_with_retry(
+            (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
+            sleep=slept.append, monotonic=self._fake_clock(0.0),
+        )
+        self.assertEqual(len(attempts), 8)
+        self.assertEqual(len(results), 1)
+        # Backoffs grew then capped, matching the configured policy.
+        self.assertEqual(slept, [2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 120.0])
+
+    def test_deterministic_failure_stops_at_max_attempts_not_forever(self):
+        attempts = []
+
+        def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise HistoricalDataError("MarkPriceObservation.value must be strictly positive, got 0")
+
+        cli.collect_liquidations = always_fails
+        policy = cli.RetryPolicy(max_attempts=5, max_total_seconds=10_000.0)
+        with self.assertRaises(HistoricalDataError):
+            cli._collect_with_retry(
+                (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
+                policy=policy, sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+            )
+        self.assertEqual(len(attempts), 5)  # bounded by attempts, did not loop forever
+
+    def test_time_budget_stops_retrying_before_max_attempts(self):
+        attempts = []
+
+        def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise HistoricalDataError("Could not connect to the endpoint URL")
+
+        cli.collect_liquidations = always_fails
+        # A huge attempt allowance, but only 10s of budget: the clock
+        # advances 5s per reading, so the budget -- not the attempt
+        # count -- must be what stops the loop.
+        policy = cli.RetryPolicy(max_attempts=1000, max_total_seconds=10.0)
+        with self.assertRaises(HistoricalDataError):
+            cli._collect_with_retry(
+                (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
+                policy=policy, sleep=lambda _s: None, monotonic=self._fake_clock(5.0),
+            )
+        self.assertLess(len(attempts), 1000)
+        self.assertGreaterEqual(len(attempts), 1)
+
+    def test_keyboard_interrupt_is_never_retried(self):
+        attempts = []
+
+        def interrupted(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise KeyboardInterrupt()
+
+        cli.collect_liquidations = interrupted
+        with self.assertRaises(KeyboardInterrupt):
+            cli._collect_with_retry(
+                (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
+                sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+            )
+        self.assertEqual(len(attempts), 1)  # immediate, no backoff wait
+
+    def test_unexpected_exception_is_never_retried(self):
+        attempts = []
+
+        def boom(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise ValueError("a genuine bug, not a network blip")
+
+        cli.collect_liquidations = boom
+        with self.assertRaises(ValueError):
+            cli._collect_with_retry(
+                (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
+                sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+            )
+        self.assertEqual(len(attempts), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
