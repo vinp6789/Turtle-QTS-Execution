@@ -390,6 +390,7 @@ pre-fix code and passes against the fix).
 - CSV + `Decimal` storage will not scale to tick-level data (e.g. a future order-flow family); not an issue today, worth flagging before it's discovered under deadline.
 
 **Operational risks**
+- This machine's connectivity to the Hyperliquid S3 endpoint drops for multi-minute stretches (18 logged transient failures on 2026-07-30/31, zero deterministic). The retry budget now absorbs ~12 minutes of outage (commit `e63cbab`), but an outage longer than that will still stop the job -- it resumes cleanly from the checkpoint with no data loss, and `--retry-max-total-seconds` raises the tolerance further if needed.
 - Requester-pays S3 archives (Hyperliquid node data) carry no published retention guarantee, unlike Binance's decade-plus public archives — the liquidation dataset is comparatively less permanent than every other historical source in the project.
 
 ---
@@ -725,6 +726,19 @@ accordingly.)*
              previously-failed months collected; the 2023-04 mark-price
              skip counts (BTC 12 / ETH 10 / SOL 10) exactly match the
              pre-fix live-archive probe. BACKLOG 2.1 CLOSED.
+2026-07-31   Commit `e63cbab` -- liquidation-backfill retry policy made
+             configurable (RetryPolicy + --retry-* flags). The
+             hard-coded 6-attempt/~62s budget was shorter than the real
+             outages and had forced FOUR manual resumes; defaults now
+             ride out ~12 minutes. Backoff is capped (the original was
+             not); bounded on both attempts and wall clock so a
+             deterministic failure cannot loop forever; KeyboardInterrupt
+             and non-HistoricalDataError still propagate immediately.
+             First five backoffs unchanged (2/4/8/16/32s), so this
+             strictly extends the prior behaviour. 11 new tests, verified
+             red against the pre-change source. 1,745 tests passing.
+             Resumed from day 72/367; data verified byte-identical
+             (md5) and checkpoint unchanged -- nothing recollected.
    ...        [next: Backlog 1.5 continues running detached; then 1.6
               (Campaign 06 feasibility review). Backlog 2.1 done, so the
               next funding/OI campaign is unblocked. Close the launcher
