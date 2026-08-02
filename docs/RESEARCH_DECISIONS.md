@@ -418,6 +418,119 @@ durability fix; completed 30/30 days.
 
 ---
 
+## RD-14 — A liquidation day with no rows is a VERIFIED ZERO-EVENT day, not a missing observation
+
+- **Date:** 2026-08-02 · **Author:** researcher · **Reviewer:** pending · **Category:** data-interpretation-rule · **Status:** active
+- **Scope:** how absence of rows for a `(symbol, day)` pair must be read in `liquidation__{SYMBOL}__hyperliquid_s3.csv`. **No campaign is pre-registered here, no hypothesis tested, no implementation changed.** This entry exists because the distinction is invisible in the stored data — an absent day and an unobserved day look identical on disk — and choosing wrongly silently biases any downstream sample.
+
+### A — What prompted it (measured facts)
+
+Mid-collection inspection of the Backlog 1.5 backfill showed the
+per-symbol contiguous-day runs disagreeing: BTC covered every day of the
+collected window, while ETH and SOL each showed two interior gaps.
+
+| Day | BTC rows | ETH rows | SOL rows |
+|---|---|---|---|
+| 2025-12-20 | 20 | 8 | **0** |
+| 2026-01-17 | 2 | **0** | **0** |
+| 2026-01-24 | 22 | **0** | 4 |
+
+For scale, over the collected window: BTC median **4,960** rows/day
+(min 2, max 70,920); ETH median 1,996 (min 2); SOL median 1,644 (min 4).
+The gap days are therefore 200–2,500× below normal **for every symbol
+simultaneously**, not for the symbol with the gap alone.
+
+### B — Evidence that this is real absence, not lost data
+
+Three independent checks, each capable of falsifying the conclusion:
+
+1. **Cross-symbol coincidence.** On every gap day BTC itself collapses to
+   2–22 rows. A per-symbol collection fault cannot explain a
+   market-wide collapse; a genuinely quiet market can.
+2. **Archive completeness (source-of-truth listing).** Listed the S3
+   prefix for each gap day and its immediate neighbours —
+   `20251219`, `20251220`, `20251221`, `20260116`, `20260117`,
+   `20260118`, `20260123`, `20260124`, `20260125` — **24/24 hourly
+   objects present for all nine**. No hour was absent upstream, so none
+   could have been silently skipped.
+3. **Re-decode from source (decisive).** Re-fetched and re-decoded
+   2026-01-17 directly from the archive: **zero liquidation rows for any
+   watchlist symbol**. The adjacent normal day 2026-01-18, decoded
+   identically, returned rows (BTC 18, SOL 2 in the sampled hours). The
+   archive genuinely contains no liquidations for the gap day.
+
+**Mechanistic corroboration:** `collect_liquidations()` processes an
+entire calendar day's hours and only advances the checkpoint after that
+day's rows are durably flushed (the Backlog 1.3 H1 invariant). Any day
+at or before the checkpoint therefore had every existing archive hour
+processed — which is independently confirmed above by BTC holding rows
+on those same days.
+
+**Consistency with prior measurement:** RD-13 measured extreme
+concentration on the pilot month (top-10 days = 65.2% of all events).
+A heavy-tailed, bursty process is expected to produce genuinely empty
+days for lower-activity symbols. This finding is the same phenomenon
+seen at its lower tail, not a contradiction of RD-13 (whose pilot month
+happened to have ≥1 event on all 30 days).
+
+### C — Decision (judgment)
+
+**Within the checkpoint-covered window, absence of rows for a
+`(symbol, day)` pair means that symbol had ZERO liquidation events that
+day. It is an observation with value zero, not a missing observation.**
+
+Consequently, for Campaign 06 and any later liquidation work:
+
+- **Zero-event days MUST be materialized as `count = 0`** when building
+  a daily-count series — never dropped, never left as NA, never
+  forward-filled, never interpolated.
+- **Threshold derivation must include zero days in the distribution.**
+  Excluding them inflates every percentile: a p60 threshold computed on
+  active-days-only is not the p60 of the actual daily-count
+  distribution, which silently breaks the venue-relative-threshold rule
+  (permanent, post-CAMP-02) that a threshold be derived from that
+  venue's own full distribution.
+- **Dropping empty days conditions the sample on activity**, biasing it
+  toward volatile regimes — precisely the regime-coverage failure the
+  pre-registration feasibility review (permanent, post-CAMP-02) exists
+  to catch.
+- **N_eff and signalled-count estimates must count zero days as
+  legitimate non-signal days**, not as absent sample rows.
+
+### D — Scope limits (what this entry does NOT license)
+
+This rule holds **only** for days at or before the durable checkpoint,
+where the archive's hourly objects were themselves complete. It does
+**not** apply to:
+
+- days beyond the checkpoint (never attempted — genuinely unknown);
+- any day where the archive lacks hourly objects (under-covered — the
+  distinction is then real and matters).
+
+Archive completeness was verified on nine days, not on all 233 collected
+to date, and the 2026-01-17 re-decode sampled 4 of 24 hours. **A
+whole-window coverage audit (assert 24 hourly objects per collected day)
+is therefore a prerequisite before final analysis** — the mechanistic
+argument above makes systematic under-coverage unlikely, but "unlikely"
+is not "measured", and the entire value of this rule is that it makes an
+otherwise-invisible distinction explicit.
+
+- **Evidence references:** live S3 prefix listings (nine days, 24/24
+  objects each); live re-decode of 2026-01-17 vs 2026-01-18 via
+  `sources/hyperliquid_s3.fetch_hour`/`decode_liquidations`; per-day row
+  counts from the in-progress Backlog 1.5 series; `collect_liquidations()`
+  day-flush/checkpoint ordering (Backlog 1.3 H1); RD-13 §B concentration
+  measurements.
+- **Revisit triggers:** the whole-window coverage audit in §D returning
+  any day with fewer than 24 hourly objects; any future venue or archive
+  whose absence semantics differ (an archive that omits empty periods
+  rather than containing no matching fills would invert this rule);
+  discovery of a decode path that could drop rows without raising.
+- **Supersedes / superseded-by:** — (complements RD-13; contradicts
+  nothing)
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -429,7 +542,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
 | Open Interest | ACTIVE | READY (Binance only) | cap | Level (CAMP-01) and **Velocity (CAMP-05)** both rejected. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
-| Liquidations | LOCKED | **COLLECTING** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill: 2025-07-27 → present (~12 months), ~240 GB, ~$27 (~$0 same-region), **not yet executed**. |
+| Liquidations | LOCKED | **COLLECTING** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill: 2025-07-27 → present (~12 months), ~240 GB, ~$27 (~$0 same-region), **in progress**. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |

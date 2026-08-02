@@ -383,6 +383,7 @@ pre-fix code and passes against the fix).
 **Scientific risks**
 - Liquidation cascades across BTC/ETH/SOL may be one correlated market-wide process rather than three independent signals — the defining open question Backlog 1.6 exists to answer.
 - Deep-history backfill (2.1) introduces **survivorship bias** (a 2026-chosen watchlist tested against 2020–21 conditions where SOL fell ~96% and was widely considered terminal) and **non-stationarity** (a 2020–2026 full-sample threshold spans two halvings, LUNA, FTX, and the ETF era) — both must become permanent `known_limitations` entries whenever the deep window is used, via the existing RD-11 A mechanism. Per-symbol archive start dates are also asymmetric (BTC ~2021-01, ETH/SOL ~2022-01 for `metrics`), a compositional break that sample construction must not silently pool across. **Fourth item, measured during the 2.1 collection (2026-07-30):** a small fraction of 5-minute mark-price observations are legitimately absent — Binance's archive reports `sum_open_interest_value == 0` alongside a normal `sum_open_interest` for a handful of snapshots (32 rows across BTC/ETH/SOL on 2023-04-10 alone), which yields no derivable mark and is skipped rather than fabricated. **The open-interest series is complete; the derived mark-price series is very slightly sparser.** Sample construction must join the two on timestamp rather than assuming row-for-row alignment.
+- **RD-14 (2026-08-02): a liquidation day with no rows is a VERIFIED ZERO-EVENT day, not a missing observation.** Verified three ways (cross-symbol coincidence; 24/24 archive objects present on all nine days checked; live re-decode of 2026-01-17 returning zero rows for every symbol while 2026-01-18 returned rows). Campaign 06 sample construction **must materialize these as `count = 0`** — dropping them conditions the sample on activity and inflates every percentile threshold, breaking the venue-relative-threshold rule. Prerequisite before final analysis: a whole-window coverage audit (24 hourly objects per collected day); completeness was verified on 9 days, not all 233.
 - `min_hit_rate = 0.55` has been copied unexamined into all five pre-registrations; re-deriving it for a structurally different feature (liquidation-event density vs. a continuous rate/level) rather than reusing the constant is a live methodology risk for Campaign 06.
 
 **Engineering risks**
@@ -547,6 +548,20 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-14 (2026-08-02)** — data-interpretation rule: within the
+  checkpoint-covered window, an absent `(symbol, day)` row in the
+  liquidation series means that symbol recorded **zero events** that
+  day; it is an observation of value zero, not a missing one. Arose
+  from ETH/SOL showing interior day-gaps that BTC did not; established
+  by cross-symbol coincidence (BTC itself collapsing to 2–22 rows vs a
+  4,960 median on those days), archive completeness (24/24 hourly
+  objects on all nine days listed), and a decisive live re-decode of
+  2026-01-17 returning zero rows for every symbol while the adjacent
+  day returned rows. Consistent with RD-13's measured concentration
+  (top-10 days = 65.2% of events) — the same heavy-tailed process seen
+  at its lower tail. Scope-limited: does not apply beyond the
+  checkpoint or to any under-covered day, and a whole-window coverage
+  audit remains a prerequisite before final analysis.
 - **[Session finding] Final independent QA audit of the job tooling, and
   the diminishing-returns decision (2026-07-30)** — a second independent
   audit re-verified the M1/M2/L1/L3/I1 fixes above rather than trusting
