@@ -262,7 +262,7 @@ class TestRetryBounds(unittest.TestCase):
         cli.collect_liquidations = flaky
         results = cli._collect_with_retry(
             (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
-            sleep=slept.append, monotonic=self._fake_clock(0.0),
+            sleep=slept.append,
         )
         self.assertEqual(len(attempts), 8)
         self.assertEqual(len(results), 1)
@@ -281,7 +281,7 @@ class TestRetryBounds(unittest.TestCase):
         with self.assertRaises(HistoricalDataError):
             cli._collect_with_retry(
                 (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
-                policy=policy, sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+                policy=policy, sleep=lambda _s: None,
             )
         self.assertEqual(len(attempts), 5)  # bounded by attempts, did not loop forever
 
@@ -300,7 +300,7 @@ class TestRetryBounds(unittest.TestCase):
         with self.assertRaises(HistoricalDataError):
             cli._collect_with_retry(
                 (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
-                policy=policy, sleep=lambda _s: None, monotonic=self._fake_clock(5.0),
+                policy=policy, sleep=lambda _s: None,
             )
         self.assertLess(len(attempts), 1000)
         self.assertGreaterEqual(len(attempts), 1)
@@ -316,7 +316,7 @@ class TestRetryBounds(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             cli._collect_with_retry(
                 (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
-                sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+                sleep=lambda _s: None,
             )
         self.assertEqual(len(attempts), 1)  # immediate, no backoff wait
 
@@ -331,9 +331,153 @@ class TestRetryBounds(unittest.TestCase):
         with self.assertRaises(ValueError):
             cli._collect_with_retry(
                 (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), "root", False, None,
-                sleep=lambda _s: None, monotonic=self._fake_clock(0.0),
+                sleep=lambda _s: None,
             )
         self.assertEqual(len(attempts), 1)
+
+
+class TestRetryBudgetMeasuresWaitingNotRuntime(unittest.TestCase):
+    """Regression for a real defect: the budget originally measured total
+    wall-clock elapsed since the call began, which INCLUDED however long
+    the backfill had been successfully collecting. A backfill runs for
+    hours before its first blip, so `elapsed` already exceeded the budget
+    and the very first failure gave up with ZERO retries -- strictly
+    worse than the 6 retries the hard-coded policy had managed. Observed
+    in production: 'BACKFILL_FAILED after up to 12 attempts' with not one
+    'transient failure' line logged.
+    """
+
+    def setUp(self):
+        self._real_collect = cli.collect_liquidations
+
+    def tearDown(self):
+        cli.collect_liquidations = self._real_collect
+
+    def test_long_successful_run_does_not_consume_the_retry_budget(self):
+        attempts = []
+
+        def fails_after_long_work(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise HistoricalDataError("Read timeout on endpoint URL")
+
+        cli.collect_liquidations = fails_after_long_work
+        policy = cli.RetryPolicy(max_attempts=12, max_total_seconds=900.0)
+        # No checkpoint exists -> no progress detectable -> the ONLY thing
+        # that may stop the loop is the attempt/budget bound itself.
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(HistoricalDataError):
+                cli._collect_with_retry(
+                    (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, False, None,
+                    policy=policy, sleep=lambda _s: None,
+                )
+        # Must use the full attempt allowance, not stop at 1.
+        self.assertEqual(len(attempts), 12)
+
+    def test_budget_counts_cumulative_backoff_only(self):
+        attempts = []
+        slept = []
+
+        def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+            attempts.append(1)
+            raise HistoricalDataError("Could not connect to the endpoint URL")
+
+        cli.collect_liquidations = always_fails
+        # 60s of budget: 2+4+8+16 = 30 fits, +32 would reach 62 > 60, so
+        # it must stop after 4 sleeps regardless of the high attempt cap.
+        policy = cli.RetryPolicy(max_attempts=100, max_total_seconds=60.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(HistoricalDataError):
+                cli._collect_with_retry(
+                    (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, False, None,
+                    policy=policy, sleep=slept.append,
+                )
+        self.assertEqual(slept, [2.0, 4.0, 8.0, 16.0])
+        self.assertEqual(len(attempts), 5)
+
+
+class TestRetryResetsOnForwardProgress(unittest.TestCase):
+    """A failure arriving AFTER the checkpoint advanced is a fresh
+    outage, not a stuck loop. Without resetting, a multi-day backfill
+    accumulates unrelated outages toward a cap that never resets and
+    eventually dies mid-run -- the exact manual-resume churn this work
+    exists to stop."""
+
+    def setUp(self):
+        self._real_collect = cli.collect_liquidations
+
+    def tearDown(self):
+        cli.collect_liquidations = self._real_collect
+
+    def _write_cp(self, path, key):
+        path.write_text(f'{{"last_processed_key": "{key}"}}', encoding="utf-8")
+
+    def test_progress_between_failures_resets_the_attempt_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cp = Path(tmp) / "cp.json"
+            self._write_cp(cp, "node_fills_by_block/hourly/20250101/0.lz4")
+            state = {"n": 0}
+
+            def fails_but_progresses(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+                state["n"] += 1
+                # Each attempt advances the checkpoint (real work done),
+                # then hits a fresh outage -- until it finally succeeds.
+                self._write_cp(cp, f"node_fills_by_block/hourly/2025010{state['n']}/0.lz4")
+                if state["n"] < 8:
+                    raise HistoricalDataError("Read timeout on endpoint URL")
+                return tuple(_result(s.value) for s in symbols)
+
+            cli.collect_liquidations = fails_but_progresses
+            # Only 3 attempts allowed: without the progress reset this
+            # would die at attempt 3. With it, each advance resets.
+            policy = cli.RetryPolicy(max_attempts=3, max_total_seconds=900.0)
+            results = cli._collect_with_retry(
+                (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, False, str(cp),
+                policy=policy, sleep=lambda _s: None,
+            )
+            self.assertEqual(len(results), 1)
+            self.assertEqual(state["n"], 8)  # survived well past max_attempts
+
+    def test_no_progress_still_terminates_at_max_attempts(self):
+        """The termination guarantee: a deterministic failure advances
+        nothing, so nothing resets and the bound still applies."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cp = Path(tmp) / "cp.json"
+            self._write_cp(cp, "node_fills_by_block/hourly/20250101/0.lz4")
+            attempts = []
+
+            def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+                attempts.append(1)  # checkpoint deliberately never moves
+                raise HistoricalDataError("MarkPriceObservation.value must be strictly positive, got 0")
+
+            cli.collect_liquidations = always_fails
+            policy = cli.RetryPolicy(max_attempts=4, max_total_seconds=900.0)
+            with self.assertRaises(HistoricalDataError):
+                cli._collect_with_retry(
+                    (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, False, str(cp),
+                    policy=policy, sleep=lambda _s: None,
+                )
+            self.assertEqual(len(attempts), 4)
+
+    def test_unreadable_checkpoint_is_treated_as_no_progress(self):
+        """Best-effort read: a missing/corrupt checkpoint must not crash
+        the retry loop, and must not be mistaken for progress."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cp = Path(tmp) / "cp.json"
+            cp.write_text("{ this is not json", encoding="utf-8")
+            attempts = []
+
+            def always_fails(symbols, start, end, storage_root, force=False, checkpoint_path=None):
+                attempts.append(1)
+                raise HistoricalDataError("Read timeout on endpoint URL")
+
+            cli.collect_liquidations = always_fails
+            policy = cli.RetryPolicy(max_attempts=3, max_total_seconds=900.0)
+            with self.assertRaises(HistoricalDataError):
+                cli._collect_with_retry(
+                    (Symbol("BTC"),), date(2026, 6, 1), date(2026, 6, 1), tmp, False, str(cp),
+                    policy=policy, sleep=lambda _s: None,
+                )
+            self.assertEqual(len(attempts), 3)  # bounded, no crash
 
 
 if __name__ == "__main__":

@@ -19,9 +19,12 @@ transient network outage without requiring a human to re-invoke the
 script by hand -- it is a convenience, never a correctness mechanism.
 
 Retry behaviour is configurable (see RetryPolicy and the --retry-*
-flags) and bounded by BOTH an attempt count and a wall-clock budget, so
-a deterministic failure -- which surfaces as the same
-HistoricalDataError a network blip does -- can never loop forever.
+flags) and bounded by BOTH an attempt count and a budget on time spent
+BACKING OFF (not total runtime), so a deterministic failure -- which
+surfaces as the same HistoricalDataError a network blip does -- can
+never loop forever. Both bounds reset when the checkpoint advances,
+since a failure after real progress is a fresh outage rather than a
+stuck loop.
 
 Run:
     python -m alpha_engine.historical.backfill_liquidations \
@@ -39,12 +42,13 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 
 from exchange_adapter import Symbol
 
 from .errors import HistoricalDataError
 from .pipeline import collect_liquidations
-from .sources.hyperliquid_s3 import EARLIEST_MEASURED_DATE
+from .sources.hyperliquid_s3 import EARLIEST_MEASURED_DATE, read_checkpoint
 
 # Retry defaults. The original hard-coded policy (6 attempts, uncapped
 # 2**attempt backoff) spent a total of ~62s before giving up, which is
@@ -78,7 +82,9 @@ class RetryPolicy:
     HistoricalDataError just like a network blip does and is
     indistinguishable from one here, so the loop must always terminate.
     `max_attempts` bounds the number of calls; `max_total_seconds`
-    bounds wall-clock time. Whichever is reached first stops the retry.
+    bounds CUMULATIVE BACKOFF time (not total runtime -- a backfill
+    legitimately runs for hours between blips). Whichever is reached
+    first stops the retry.
 
     Retrying does not risk data: collect_liquidations() only advances
     the checkpoint after a day's rows are durably flushed, so a retry
@@ -116,11 +122,50 @@ def _parse_date(raw: str) -> date:
     return datetime.strptime(raw, "%Y-%m-%d").date()
 
 
+def _checkpoint_marker(storage_root, checkpoint_path):
+    """Best-effort read of the durable checkpoint, used ONLY to detect
+    forward progress between retries.
+
+    Never written, and never consulted for what to collect -- that stays
+    entirely inside collect_liquidations(). An unreadable/absent
+    checkpoint yields None, which is treated as "no progress observed":
+    the conservative answer, since it can only shorten retrying, never
+    extend it past the configured bounds.
+
+    The default path mirrors collect_liquidations()'s own default (also
+    stated in --checkpoint-path's help text). If that default ever
+    diverged, this degrades to "no progress detected" -- retries become
+    more conservative, never unbounded.
+    """
+    path = Path(checkpoint_path) if checkpoint_path is not None \
+        else Path(storage_root) / ".liquidation_checkpoint.json"
+    try:
+        return read_checkpoint(path)
+    except (HistoricalDataError, OSError, ValueError):
+        return None
+
+
 def _collect_with_retry(
     symbols, start, end, storage_root, force, checkpoint_path,
-    policy=None, sleep=None, monotonic=None,
+    policy=None, sleep=None,
 ):
-    """Retries TRANSIENT failures only, bounded by attempts AND wall clock.
+    """Retries TRANSIENT failures only, bounded by attempts AND by time
+    spent waiting.
+
+    The budget measures time spent BACKING OFF, not total runtime. A
+    backfill legitimately runs for hours before its first network blip;
+    charging that successful work against the retry budget would make
+    the very first failure look like an exhausted budget and give up
+    without retrying at all.
+
+    A failure that arrives AFTER the checkpoint advanced is a fresh
+    outage, not a stuck loop, so the attempt counter and budget reset.
+    That is what lets a multi-day backfill survive many independent
+    outages instead of accumulating toward a cap that never resets.
+    Termination is still guaranteed for the dangerous case: a
+    deterministic failure makes no progress, so nothing resets and the
+    attempt/budget bounds apply. Progress itself is finite (the
+    requested date range), so resetting on progress cannot loop forever.
 
     Only HistoricalDataError is retried. KeyboardInterrupt, SystemExit
     and every other exception propagate immediately and untouched -- an
@@ -131,29 +176,37 @@ def _collect_with_retry(
     # Resolved at CALL time, not bound as argument defaults, so that
     # patching time.sleep on this module keeps working.
     sleep = sleep if sleep is not None else time.sleep
-    monotonic = monotonic if monotonic is not None else time.monotonic
-    started = monotonic()
-    for attempt in range(1, policy.max_attempts + 1):
+
+    marker = _checkpoint_marker(storage_root, checkpoint_path)
+    attempt = 0
+    slept = 0.0
+    while True:
+        attempt += 1
         try:
             return collect_liquidations(
                 symbols, start, end, storage_root, force=force, checkpoint_path=checkpoint_path,
             )
         except HistoricalDataError as exc:
-            if attempt == policy.max_attempts:
+            current = _checkpoint_marker(storage_root, checkpoint_path)
+            if current is not None and current != marker:
+                # Forward progress since the last failure -> fresh outage.
+                marker, attempt, slept = current, 1, 0.0
+            if attempt >= policy.max_attempts:
                 raise
             backoff = policy.backoff_for(attempt)
-            elapsed = monotonic() - started
-            if elapsed + backoff > policy.max_total_seconds:
+            if slept + backoff > policy.max_total_seconds:
                 # Sleeping would overrun the budget; stop now rather than
                 # after one more oversized wait.
                 raise
             print(
                 f"liquidations {start.isoformat()}..{end.isoformat()}: transient failure "
-                f"(attempt {attempt}/{policy.max_attempts}, {elapsed:.0f}s of "
-                f"{policy.max_total_seconds:.0f}s budget used), retrying in {backoff:.0f}s: {exc}",
+                f"(attempt {attempt}/{policy.max_attempts}, {slept:.0f}s of "
+                f"{policy.max_total_seconds:.0f}s retry budget used), "
+                f"retrying in {backoff:.0f}s: {exc}",
                 flush=True,
             )
             sleep(backoff)
+            slept += backoff
 
 
 def run(
