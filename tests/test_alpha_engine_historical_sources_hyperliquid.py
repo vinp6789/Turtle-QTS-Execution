@@ -93,6 +93,33 @@ class TestFetchFundingRateRange(unittest.TestCase):
                 Symbol("BTC"), 1704067200000, 1704074400000, transport=transport, clock=_CLOCK,
             )
 
+    def test_read_timeout_raises_historical_data_error_not_timeout_error(self):
+        """A stalled read on an already-open connection surfaces from
+        urlopen as a bare TimeoutError, NOT urllib.error.URLError -- unlike
+        a connection-establishment failure, it is not wrapped. It must be
+        translated like any other transport failure so a caller's
+        HistoricalDataError-only retry loop can catch it. Identical defect
+        and identical fix as sources/binance.py (commit 75f9353); an
+        untranslated TimeoutError there escaped the retry path and killed
+        a running collection job."""
+        transport = _FakeTransport([TimeoutError("The read operation timed out")])
+        with self.assertRaises(HistoricalDataError):
+            hyperliquid.fetch_funding_rate_range(
+                Symbol("BTC"), 1704067200000, 1704074400000, transport=transport, clock=_CLOCK,
+            )
+
+    def test_read_timeout_on_a_later_page_also_translates(self):
+        """Pagination makes one call per page; the translation must hold
+        on every iteration, not only the first."""
+        page1 = [_row(1704067200000 + i * 3600000, "0.0001") for i in range(500)]
+        transport = _FakeTransport([page1, TimeoutError("The read operation timed out")])
+        with self.assertRaises(HistoricalDataError):
+            hyperliquid.fetch_funding_rate_range(
+                Symbol("BTC"), 1704067200000, 1704067200000 + 2_000 * 3600000,
+                transport=transport, clock=_CLOCK,
+            )
+        self.assertEqual(len(transport.calls), 2)  # failed on the second page
+
     def test_invalid_range_raises(self):
         with self.assertRaises(HistoricalDataError):
             hyperliquid.fetch_funding_rate_range(Symbol("BTC"), 100, 50)  # end < start
@@ -110,6 +137,15 @@ def _candle_row(t_ms, close, coin="BTC"):
 class TestFetchDailyCandles(unittest.TestCase):
     """Backlog 1.4. No real network calls -- same fake-transport pattern
     as TestFetchFundingRateRange above."""
+    def test_read_timeout_raises_historical_data_error_not_timeout_error(self):
+        """Same translation requirement on the candles endpoint -- it is
+        the second call site in this module and must not diverge."""
+        transport = _FakeTransport([TimeoutError("The read operation timed out")])
+        with self.assertRaises(HistoricalDataError):
+            hyperliquid.fetch_daily_candles(
+                Symbol("BTC"), 1704067200000, 1704153600000, transport=transport, clock=_CLOCK,
+            )
+
 
     def test_parses_rows_using_close_price(self):
         transport = _FakeTransport([[

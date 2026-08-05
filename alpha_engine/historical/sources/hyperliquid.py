@@ -94,6 +94,13 @@ _DEFAULT_TIMEOUT_SECONDS = 15.0
 
 _logger = logging.getLogger(__name__)
 
+# TransportFn: (url, payload, timeout_seconds) -> decoded JSON. Raises
+# urllib.error.HTTPError for a non-2xx response, or urllib.error.URLError
+# for a connection-level failure. A stall on an already-open connection
+# (the read of the response itself timing out) is NOT wrapped into
+# URLError by urlopen -- it surfaces as a bare TimeoutError -- so every
+# call site below must catch that separately. Same contract, and the
+# same fix, as sources/binance.py.
 TransportFn = Callable[[str, Dict[str, Any], float], Any]
 
 
@@ -142,7 +149,9 @@ def fetch_funding_rate_range(
             body = transport(_INFO_URL, payload, timeout_seconds)
         except urllib.error.HTTPError as exc:
             raise HistoricalDataError(f"{_INFO_URL}: HTTP {exc.code}: {exc}") from exc
-        except urllib.error.URLError as exc:
+        except (urllib.error.URLError, TimeoutError) as exc:
+            # TimeoutError (a stalled read on an already-open connection)
+            # is not a urllib.error.URLError -- see the TransportFn note.
             raise HistoricalDataError(f"{_INFO_URL}: transport failure: {exc}") from exc
 
         if not isinstance(body, list):
@@ -224,7 +233,9 @@ def fetch_daily_candles(
         body = transport(_INFO_URL, payload, timeout_seconds)
     except urllib.error.HTTPError as exc:
         raise HistoricalDataError(f"{_INFO_URL}: HTTP {exc.code}: {exc}") from exc
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError) as exc:
+        # TimeoutError (a stalled read on an already-open connection) is
+        # not a urllib.error.URLError -- see the TransportFn note.
         raise HistoricalDataError(f"{_INFO_URL}: transport failure: {exc}") from exc
 
     if not isinstance(body, list):
