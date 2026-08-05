@@ -1,0 +1,274 @@
+{
+  "generated_at_utc": "2026-08-05T11:08:45Z",
+  "window": {
+    "start": "2025-07-28",
+    "end": "2026-07-28",
+    "n_days": 366,
+    "rd15_excluded_day": "2025-07-27"
+  },
+  "preflight": [
+    {
+      "assertion": "symbol_count",
+      "passed": true,
+      "detail": "3 symbols (expected 3)"
+    },
+    {
+      "assertion": "date_coverage[BTC]",
+      "passed": true,
+      "detail": "366 days (expected 366)"
+    },
+    {
+      "assertion": "date_coverage[ETH]",
+      "passed": true,
+      "detail": "366 days (expected 366)"
+    },
+    {
+      "assertion": "date_coverage[SOL]",
+      "passed": true,
+      "detail": "366 days (expected 366)"
+    },
+    {
+      "assertion": "panel_row_count",
+      "passed": true,
+      "detail": "1098 rows (expected 1098)"
+    },
+    {
+      "assertion": "contiguous[BTC]",
+      "passed": true,
+      "detail": "2025-07-28..2026-07-28"
+    },
+    {
+      "assertion": "contiguous[ETH]",
+      "passed": true,
+      "detail": "2025-07-28..2026-07-28"
+    },
+    {
+      "assertion": "contiguous[SOL]",
+      "passed": true,
+      "detail": "2025-07-28..2026-07-28"
+    },
+    {
+      "assertion": "rd14_zero_materialization",
+      "passed": true,
+      "detail": "8 zero-event (symbol,day) cells materialized: ETH=['2026-01-17', '2026-01-24', '2026-07-25']; SOL=['2025-12-20', '2026-01-17', '2026-04-25', '2026-05-03', '2026-07-25']"
+    },
+    {
+      "assertion": "rd15_partial_day_excluded",
+      "passed": true,
+      "detail": "2025-07-27 in_panel=False (expected False), in_raw_collected=True (expected True)"
+    },
+    {
+      "assertion": "no_negative_counts",
+      "passed": true,
+      "detail": "all counts >= 0"
+    }
+  ],
+  "thresholds": {
+    "BTC": {
+      "p60": 2973.0,
+      "p75": 4375.0,
+      "p90": 6972.5
+    },
+    "ETH": {
+      "p60": 1053.0,
+      "p75": 1620.0,
+      "p90": 2966.0
+    },
+    "SOL": {
+      "p60": 839.0,
+      "p75": 1251.25,
+      "p90": 2049.5
+    }
+  },
+  "cross_symbol_correlation": {
+    "BTC-ETH": 0.7578591158034532,
+    "BTC-SOL": 0.7992593565306338,
+    "ETH-SOL": 0.8983643204339234
+  },
+  "mean_pairwise_rho": 0.8184942642560035,
+  "n_eff_symbols": 1.1376613768179082,
+  "n_eff_haircut": 0.37922045893930273,
+  "lag1_autocorrelation": {
+    "BTC": 0.3080202845630217,
+    "ETH": 0.22355631409701465,
+    "SOL": 0.25801545510513185
+  },
+  "min_signaled_samples_floor": 100,
+  "grid": [
+    {
+      "percentile": 60,
+      "n_folds": 3,
+      "pooled_signalled_total": 441,
+      "per_fold_raw": [
+        187,
+        148,
+        106
+      ],
+      "worst_fold_raw": 106,
+      "mean_fold_raw": 147.0,
+      "worst_fold_effective": 40.19736864756609,
+      "mean_fold_effective": 55.7454074640775,
+      "raw_clears_floor": true,
+      "effective_clears_floor": false
+    },
+    {
+      "percentile": 60,
+      "n_folds": 5,
+      "pooled_signalled_total": 441,
+      "per_fold_raw": [
+        97,
+        127,
+        89,
+        49,
+        79
+      ],
+      "worst_fold_raw": 49,
+      "mean_fold_raw": 88.2,
+      "worst_fold_effective": 18.581802488025833,
+      "mean_fold_effective": 33.4472444784465,
+      "raw_clears_floor": false,
+      "effective_clears_floor": false
+    },
+    {
+      "percentile": 75,
+      "n_folds": 3,
+      "pooled_signalled_total": 277,
+      "per_fold_raw": [
+        137,
+        83,
+        57
+      ],
+      "worst_fold_raw": 57,
+      "mean_fold_raw": 92.33333333333333,
+      "worst_fold_effective": 21.615566159540254,
+      "mean_fold_effective": 35.01468904206229,
+      "raw_clears_floor": false,
+      "effective_clears_floor": false
+    },
+    {
+      "percentile": 75,
+      "n_folds": 5,
+      "pooled_signalled_total": 277,
+      "per_fold_raw": [
+        67,
+        92,
+        52,
+        20,
+        46
+      ],
+      "worst_fold_raw": 20,
+      "mean_fold_raw": 55.4,
+      "worst_fold_effective": 7.584409178786054,
+      "mean_fold_effective": 21.00881342523737,
+      "raw_clears_floor": false,
+      "effective_clears_floor": false
+    },
+    {
+      "percentile": 90,
+      "n_folds": 3,
+      "pooled_signalled_total": 111,
+      "per_fold_raw": [
+        66,
+        31,
+        14
+      ],
+      "worst_fold_raw": 14,
+      "mean_fold_raw": 37.0,
+      "worst_fold_effective": 5.309086425150238,
+      "mean_fold_effective": 14.0311569807542,
+      "raw_clears_floor": false,
+      "effective_clears_floor": false
+    },
+    {
+      "percentile": 90,
+      "n_folds": 5,
+      "pooled_signalled_total": 111,
+      "per_fold_raw": [
+        28,
+        45,
+        24,
+        1,
+        13
+      ],
+      "worst_fold_raw": 1,
+      "mean_fold_raw": 22.2,
+      "worst_fold_effective": 0.37922045893930273,
+      "mean_fold_effective": 8.41869418845252,
+      "raw_clears_floor": false,
+      "effective_clears_floor": false
+    }
+  ],
+  "bootstrap": {
+    "p60_folds3": {
+      "mean": 146.906,
+      "p05": 117,
+      "p95": 180,
+      "frac_ge_floor": 0.994,
+      "frac_eff_ge_floor": 0.0
+    },
+    "p60_folds5": {
+      "mean": 86.87,
+      "p05": 63,
+      "p95": 111,
+      "frac_ge_floor": 0.198,
+      "frac_eff_ge_floor": 0.0
+    },
+    "p75_folds3": {
+      "mean": 92.043,
+      "p05": 62,
+      "p95": 125,
+      "frac_ge_floor": 0.329,
+      "frac_eff_ge_floor": 0.0
+    },
+    "p75_folds5": {
+      "mean": 54.768,
+      "p05": 32,
+      "p95": 78,
+      "frac_ge_floor": 0.003,
+      "frac_eff_ge_floor": 0.0
+    },
+    "p90_folds3": {
+      "mean": 37.473,
+      "p05": 20,
+      "p95": 58,
+      "frac_ge_floor": 0.0,
+      "frac_eff_ge_floor": 0.0
+    },
+    "p90_folds5": {
+      "mean": 22.416,
+      "p05": 8,
+      "p95": 39,
+      "frac_ge_floor": 0.0,
+      "frac_eff_ge_floor": 0.0
+    }
+  },
+  "temporal_dispersion_by_quarter": {
+    "p60": {
+      "2025Q3": 88,
+      "2025Q4": 140,
+      "2026Q1": 110,
+      "2026Q2": 76,
+      "2026Q3": 27
+    },
+    "p75": {
+      "2025Q3": 62,
+      "2025Q4": 97,
+      "2026Q1": 62,
+      "2026Q2": 42,
+      "2026Q3": 14
+    },
+    "p90": {
+      "2025Q3": 28,
+      "2025Q4": 45,
+      "2026Q1": 24,
+      "2026Q2": 12,
+      "2026Q3": 2
+    }
+  },
+  "timings_seconds": {
+    "stage1_build_panel_s": 13.782904399908148,
+    "stage2_thresholds_s": 0.00013399997260421515,
+    "stage3_statistics_s": 0.04379810008686036,
+    "total_s": 13.829578599892557
+  }
+}
