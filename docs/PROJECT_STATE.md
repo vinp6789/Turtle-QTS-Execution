@@ -36,12 +36,12 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **Backlog 1.5, 1.6 and 2.1 all COMPLETE.** The 1.6 feasibility gate **DEFERRED Campaign 06** (RD-16) — measured N_eff = 1.14 of 3 symbols. Next: extend Hyperliquid-native funding coverage (stale since 2024-12), then an N_eff screen for the next funding/OI campaign on the now-deep window. |
+| **Current objective** | **Campaign 07 executed and CLOSED — all six experiments REJECTED on merit** (RD-17). The horizon dimension is falsified for OI extremeness; the OI family moves ACTIVE → NEAR-EXHAUSTED. Next: the remaining near-free screen (hourly liquidations, RD-16 §E), then the Live Sample Recorder decision. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **Backlog 3.2** — outcome-blind N_eff screen for the next funding/OI campaign on the deep window, including RD-04's now-triggered Funding Persistence revisit. |
-| **Full regression** | **1,753 passed, 97 subtests, 0 failed** (3 new tests for the hyperliquid `TimeoutError` translation; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
+| **Immediate next task** | **Hourly-liquidation feasibility screen** (RD-16 §E) — the last near-free experiment in the queue; data already collected, ~seconds of compute. |
+| **Full regression** | **1,773 passed, 101 subtests, 0 failed** (20 new Campaign 07 tests, incl. pre-registration immutability guards; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not) |
 | **Approved alpha models** | **0** |
-| **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · **2 deferred pre-registrations** — Funding Persistence (RD-04) and **Campaign 06 / Liquidations (RD-16)**, both on non-viable N_eff |
+| **Rejected hypotheses** | **24 registered** (Campaigns 01–05: 18; **Campaign 07: 6**) — but only ~**12 independent measurements** (contrarian/momentum pairs are algebraically complementary, RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) |
 
 ---
 
@@ -338,6 +338,16 @@ pre-fix code and passes against the fix).
 - **Pilot re-collection verified benign.** The requested range includes the 2026-06 pilot month, so the production checkpoint marched through it and re-fetched those 30 days, producing 90 conflict warnings (30 days × 3 symbols), confined to exactly `20260601`–`20260630`. A conflicting hour was re-decoded from source and compared field by field: **every market-data field is identical** (price, size, side, direction, method, liquidated_user, mark_price, source, source_detail); **only `ingested_at_utc` differs** (pilot `2026-07-28` vs re-fetch). First-seen values were correctly kept. **No duplicate rows were written and no data changed** — but note the precise wording: recollection *did* occur and changed nothing; "no recollection occurred" would be false.
 - Collection required **five** resumes from checkpoint across transient S3 outages (18 logged connectivity failures, zero deterministic). **No data was lost on any of them** — the Backlog 1.3 H1 durability invariant held throughout.
 
+**Campaign 07 EXECUTED AND CLOSED (2026-08-05) — all six experiments REJECTED on merit:**
+- **What it tested:** the forward-return **horizon** — the one dimension all 18 prior registered models held fixed at 24h. Pre-registered at 72h and 120h with strictly non-overlapping outcome windows; `docs/RESEARCH_CAMPAIGN_07_oi_long_horizon.md`.
+- **Design resolved from existing governance, no new methodology:** both tails come free from the platform's `percentile_rank_centered` feature (CAMP-01 precedent); `horizon_hours` and the non-overlap assertion already existed in CAMP-01's `build_samples`, which was **reused unchanged**. Only a new runner was written.
+- **Results:** hit rates **0.4775–0.5225** — the same coin-flip cluster as every prior campaign. Causality/leakage audit PASSED on all six; single-pass, walk-forward and regime FAILED on all six. Governance recorded through the frozen module (reviewer ≠ researcher, fingerprint verified).
+- **Well-powered, not a power failure.** Cross-symbol ρ̄ = +0.296 → **N_eff = 1.88 of 3** (RD-13 §C); effective signalled samples ≈359 / ≈650 / ≈209 against a floor of 100 — 2–6× clearance. Contrast Campaign 06 (RD-16), deferred at N_eff 1.14 with ~40 effective per fold. **Campaign 07 had the power to find an edge and found none.**
+- **RD-17 created**, and it creates a rule: **horizon is closed as a *rescue* for an already-rejected mechanism.** A strategic review had identified horizon as the cheapest untested axis in the program; it is now spent. Also records that contrarian/momentum are algebraically complementary (every pair sums to exactly 1.0000), so campaign reporting must state independent measurements, not registered experiments — this campaign reports **three**, not six.
+- **Open Interest family: ACTIVE → NEAR-EXHAUSTED.** Level (CAMP-01), velocity (CAMP-05) and longer-horizon extremeness (CAMP-07) all rejected on merit; **Divergence** is the sole untested mechanism, still under the DEFER-ceiling.
+- **Honest limitation:** the 120h robustness arm was power-marginal — one walk-forward fold returned 93 signalled samples against the 100 floor (feasibility projected 107; the live run applies the regime labeler). It failed on hit rate regardless.
+- 20 new tests including literal pre-registration-immutability guards (RD-11 B). Full regression: **1,773 passed, 101 subtests, 0 failed.**
+
 **Backlog 3.1 COMPLETE (2026-08-05) — Hyperliquid funding extended to present:**
 - **Planning pass first, measured not estimated.** A read-only probe (`fetch_funding_rate_range`, writes nothing) measured ~1.23s/page against the live API and predicted ~103s for ~84 paginated requests. **Actual: 101.7s** — 1.3% error. Predicted +13,956 rows/symbol; actual +13,956/symbol exactly.
 - **A latent defect was found by that planning pass and fixed first (`23d08bb`):** `sources/hyperliquid.py` carried the *identical* raw-`TimeoutError` gap that commit `75f9353` fixed in `sources/binance.py` — both call sites translated only `HTTPError`/`URLError`, so a stalled read on an already-open connection escaped as a non-`HistoricalDataError`. That exact defect had already escaped a retry loop and killed a running collection job once. Fixed with the identical pattern (no new retry framework, no unrelated refactoring); 3 regression tests (first page, later page mid-pagination, and the candles call site), each verified red against the pre-fix source.
@@ -372,8 +382,9 @@ pre-fix code and passes against the fix).
 | ~~2.1~~ | ~~Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL)~~ | — | — | — | **Done 2026-07-30 — `BACKFILL_COMPLETE target=all`, 0 failed months.** Two real defects found and fixed en route (raw `TimeoutError` escaping the retry path; a genuine Binance archive `oi_value==0` anomaly on 2023-04-10) — see Active Work |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
 | ~~3.1~~ | ~~Extend Hyperliquid-native funding coverage from 2024-12-31 to present~~ | — | — | — | **Done 2026-08-05.** +41,868 rows (13,956/symbol), 101.7s foreground, 0 duplicates, 0 new gaps. Coverage now **2023-07-01 → 2026-08-05 (~37 months)**, lag 0.7h. Zero new infrastructure |
-| **3.2** | Outcome-blind **N_eff screen** for the next funding/OI campaign on the deep window: RD-04's Funding Persistence revisit (its "materially longer data window" trigger has fired: 18 → 77 months) + BTC-only funding momentum | 2.1 (done), 3.1 (done) | Gates the next funding pre-registration | ~1 day | **NEXT** |
-| **3.3** | Close the launcher concurrency race (H1/H2). **Required before 3.1 if 3.1 is run as a detached job**; unnecessary if 3.1 runs foreground | None | Conditional — see 3.1 | ~2 hrs | Not started |
+| ~~3.2~~ | ~~Outcome-blind N_eff screen for the next funding/OI campaign~~ | — | — | — | **Done 2026-08-05 — DEFER.** Funding Persistence N_eff 14–18 (unchanged by 3.9× data); BTC-only momentum Binance-powered but Hyperliquid-unpowered |
+| ~~3.4~~ | ~~**Campaign 07** — longer-horizon OI (72h/120h)~~ | 3.2 (done) | — | — | **Done 2026-08-05 — all six REJECTED on merit (RD-17).** Horizon dimension falsified; OI family → NEAR-EXHAUSTED |
+| **3.5** | **Hourly-liquidation feasibility screen** (RD-16 §E) — the last near-free experiment; data collected, no venue cap, ~seconds of compute. Must measure hourly serial autocorrelation, which is the risk that killed RD-04 | None | Gates any Campaign 06 revival | ~hours | **NEXT** || **3.3** | Close the launcher concurrency race (H1/H2). **Required before 3.1 if 3.1 is run as a detached job**; unnecessary if 3.1 runs foreground | None | Conditional — see 3.1 | ~2 hrs | Not started |
 
 ---
 
@@ -447,7 +458,9 @@ pre-fix code and passes against the fix).
 8a. ~~Deep-history backfill (Backlog 2.1), orthogonal to Campaign 06.~~ — **done 2026-07-30**, `BACKFILL_COMPLETE target=all`, 0 failed months.
 9. ~~Run the outcome-blind feasibility review; render the APPROVE/DEFER/REJECT call on Campaign 06.~~ — **done 2026-08-05: DEFER (RD-16)**, N_eff = 1.14, bar not weakened.
 10. **Extend Hyperliquid funding coverage to present (3.1)** — the DEX-first ceiling is now the binding constraint.
-10a. Outcome-blind **N_eff screen** for the next funding/OI campaign (3.2), including RD-04's Funding Persistence revisit — its "materially longer data window" trigger has fired (18 → 77 months).
+10a. ~~Outcome-blind N_eff screen (3.2)~~ — **done 2026-08-05: DEFER.**
+10b. ~~Campaign 07, longer-horizon OI~~ — **done 2026-08-05: all six REJECTED on merit (RD-17).** Horizon closed as a rescue path.
+11. **Hourly-liquidation feasibility screen (RD-16 §E)** — the last near-free experiment in the queue.
 11. Before starting any *future* long-running collection job beyond the two currently in flight: close the launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`) — see Current Blockers → Operational.
 
 ---
@@ -587,6 +600,16 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-17 (2026-08-05)** — **Campaign 07 closure: the horizon dimension
+  is falsified for OI extremeness.** Six experiments at 72h/120h, all
+  REJECTED on merit (hit rates 0.4775–0.5225), and **well-powered** —
+  N_eff 1.88 of 3 symbols, effective signalled samples 2–6× the floor.
+  Creates a rule: **horizon is closed as a *rescue* for an
+  already-rejected mechanism** (it remains open for families never tested
+  at 24h). Records that contrarian/momentum are algebraically
+  complementary — every pair sums to exactly 1.0000 — so reporting must
+  state independent measurements, not registered experiments; Campaign 07
+  reports three, not six. Open Interest family ACTIVE → NEAR-EXHAUSTED.
 - **RD-16 (2026-08-05)** — **Campaign 06 DEFERRED at the feasibility
   gate.** Measured on the full audited window (366 days × 3 symbols):
   cross-symbol correlation ρ̄ = +0.818 → **N_eff = 1.14** effective
@@ -870,9 +893,19 @@ accordingly.)*
              103s), +41,868 rows across 3 symbols, 0 duplicates, 0 new
              gaps, 6.22 -> 12.79 MB. Idempotent re-run added 0 rows.
              DEX-first ceiling narrowed 22% -> ~48% of Binance's span.
-   ...        [next: Backlog 3.2 (outcome-blind N_eff screen for the next
-              funding/OI campaign, incl. RD-04's now-triggered Funding
-              Persistence revisit). 3.3 (launcher concurrency race)
-              remains open but was not needed for 3.1, which ran
-              foreground.]
+2026-08-05   Backlog 3.2 complete -- funding deep-window feasibility
+             review, verdict DEFER (commit aad1884).
+2026-08-05   CAMPAIGN 07 EXECUTED AND CLOSED. Longer-horizon OI (72h,
+             120h), six pre-registered experiments, all REJECTED on
+             merit. Hit rates 0.4775-0.5225; causality PASSED, all other
+             stages FAILED. Well-powered: N_eff 1.88 of 3 symbols,
+             effective signalled 359/650/209 vs a floor of 100. RD-17
+             created -- horizon closed as a rescue path for an
+             already-rejected mechanism; OI family ACTIVE ->
+             NEAR-EXHAUSTED. 20 new tests, 1,773 passing.
+   ...        [next: hourly-liquidation feasibility screen (RD-16 Section E)
+              -- the last near-free experiment in the queue; then the
+              Live Sample Recorder decision, which becomes evidence-backed
+              once that screen resolves. 3.3 (launcher concurrency race)
+              remains open, unneeded for foreground work.]
 ```

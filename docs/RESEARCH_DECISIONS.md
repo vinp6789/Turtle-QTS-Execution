@@ -810,6 +810,103 @@ pre-registration, and is recorded here only so the option is not lost.
 
 ---
 
+## RD-17 — Campaign 07 closure: the horizon dimension is falsified for OI extremeness; the "different horizon" research direction is closed
+
+- **Date:** 2026-08-05 · **Author:** researcher · **Reviewer:** reviewer-campaign07 · **Category:** family-status, mechanism-prioritization · **Status:** active
+- **Scope:** the outcome of Research Campaign 07 and its consequence for the research program's remaining hypothesis space. **A methodological rule IS created by this entry (§C).**
+
+### A — Measured facts
+
+Campaign 07 tested the one dimension every prior campaign held fixed: the
+forward-return horizon. Pre-registered in
+`docs/RESEARCH_CAMPAIGN_07_oi_long_horizon.md`, executed 2026-08-05 with
+a fixed clock and seed 7, six experiments, governance recorded through
+the frozen module for all six.
+
+| Configuration | Signalled | Hit rate (contrarian / momentum) | Verdict |
+|---|---|---|---|
+| 72h, \|centered rank\| ≥ 0.40 (**PRIMARY**) | 572 | **0.4878 / 0.5122** | REJECTED |
+| 72h, ≥ 0.25 (threshold axis) | 1,035 | 0.4986 / 0.5014 | REJECTED |
+| 120h, ≥ 0.40 (horizon axis) | 333 | 0.4775 / 0.5225 | REJECTED |
+
+Causality/leakage audit **PASSED** on all six; single-pass, walk-forward
+and regime stratification **FAILED** on all six.
+
+**This was a well-powered merit rejection.** Cross-symbol ρ̄ = +0.296 →
+**N_eff = 1.88 of 3 symbols** (RD-13 §C reporting). Effective signalled
+samples after the haircut: ≈359, ≈650, ≈209 against a floor of 100 —
+clearance of 2–6×. This is the opposite situation to RD-16's Campaign 06
+deferral (N_eff 1.14, ~40 effective per fold): Campaign 07 had the power
+to detect an edge and found none.
+
+### B — Judgment
+
+**The horizon hypothesis is falsified for OI extremeness.** Extending the
+forward-return window from 24h to 72h and 120h, with strictly
+non-overlapping outcome windows, does not rescue the mechanism. Relaxing
+selectivity from CAMP-01's rank ≥0.99 to ≥0.90 and ≥0.75 does not either.
+
+Combined with CAMP-01 (OI level, 24h) and CAMP-05 (OI velocity, 24h,
+which passed its feasibility gate more cleanly than any campaign in the
+program), **Open Interest as a single-series extremeness signal is now
+rejected across three mechanisms and three horizons.**
+
+**Open Interest family status: ACTIVE → NEAR-EXHAUSTED.** Level,
+velocity, and now longer-horizon extremeness are all rejected on merit.
+**Divergence** remains the sole untested mechanism, under the unchanged
+DEFER-ceiling.
+
+### C — Rule created: horizon is no longer an open research dimension
+
+A strategic review conducted before this campaign identified "horizon" as
+the single cheapest untested axis in the program — 100% of 18 prior
+registered models used 24h. **That axis has now been tested and closed
+for the OI family.** Any future proposal to revisit a rejected mechanism
+"at a different horizon" must first present evidence that the mechanism
+is horizon-sensitive; Campaign 07 is the standing counter-evidence that
+horizon extension alone does not convert a null into an edge.
+
+This does **not** close horizon for families never tested at 24h (order
+flow, on-chain, stablecoin, macro, cross-asset) — it closes horizon as a
+*rescue* for an already-rejected mechanism.
+
+### D — Secondary methodological finding (applies to all future campaigns)
+
+**Contrarian and momentum are algebraically complementary, not
+independent evidence.** Verified across the closed record: every
+contrarian/momentum hit-rate pair sums to exactly 1.0000 (CAMP-04
+0.477/0.523 and 0.511/0.489; CAMP-05 0.5154/0.4846; CAMP-07 all three
+pairs). Constitution §6 **requires** registering them separately to
+prevent post-hoc direction-picking, and that requirement stands
+unchanged. But campaign reporting must state the number of **independent
+measurements**, not the number of registered experiments. Campaigns
+01–05 reported "18 rejected hypotheses"; the count of independent
+mechanism measurements is roughly half that. Campaign 07 reports three,
+not six.
+
+**Not retrofitted** onto Campaigns 01–05's closed verdicts — each was
+correctly rejected under its own criteria, and none would change.
+
+### E — Consequences
+
+- **CAMP-07 closed**, six models added to `ALPHA_LIBRARY.md` as rejected,
+  ledger entry written. No model reached SUPPORTED; the Alpha Library
+  still holds **zero approved models**.
+- **Open Interest family:** ACTIVE → **NEAR-EXHAUSTED** (Divergence only,
+  DEFER-ceiling).
+- **Horizon axis:** closed as a rescue path (§C).
+- **The cheap-experiment queue identified by the strategic review is now
+  materially shorter.** Of the near-free directions, longer-horizon OI is
+  spent. Hourly liquidations (RD-16 §E) remains untested.
+- **Revisit triggers:** a mechanism with measured horizon-sensitivity; or
+  Hyperliquid-native OI history existing (would lift the DEFER-ceiling and
+  make the OI family promotable, though it would not revive the rejected
+  mechanisms).
+- **Supersedes / superseded-by:** — (complements RD-16; contradicts
+  nothing)
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -820,7 +917,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 | Family | Research | Data | Cap | Next distinct mechanism / unlock |
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
-| Open Interest | ACTIVE | READY (Binance only) | cap | Level (CAMP-01) and **Velocity (CAMP-05)** both rejected. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
+| Open Interest | **NEAR-EXHAUSTED** | READY (Binance only) | cap | Level (CAMP-01), **Velocity (CAMP-05)** and **longer-horizon extremeness (CAMP-07, 72h/120h — RD-17)** all rejected on merit. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
 | Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. **RD-16 (2026-08-05): Campaign 06 DEFERRED at the feasibility gate** — measured ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold configuration reaches `min_signaled_samples = 100` per fold on an effective-sample basis (best 40.2; P(eff ≥ 100) = 0.00). **Deferred pre-registration, NOT a rejected hypothesis** — the mechanism is untested. Revisit at ≈264 worst-fold raw (~18 further months). |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |

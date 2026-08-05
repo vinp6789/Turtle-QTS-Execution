@@ -105,8 +105,12 @@ fresh pre-registration:
 - **Open Interest Divergence** — the sole untested OI mechanism (per
   RD-05), under the same DEFER-ceiling as Campaigns 01/05 (no Hyperliquid
   OI history → knowledge-only until a live OI recorder lifts it).
-- **Longer-horizon OI hypotheses** (3–7 day forward return) — Campaign 01
-  tested only 24h.
+- ~~**Longer-horizon OI hypotheses** (3–7 day forward return)~~ —
+  **CLOSED 2026-08-05 by Campaign 07 (RD-17).** Tested at 72h and 120h
+  with non-overlapping windows: all six experiments REJECTED on merit
+  (hit rates 0.4775–0.5225), well-powered (N_eff 1.88 of 3, effective
+  signalled 2–6× the floor). Horizon is now closed as a *rescue* for an
+  already-rejected mechanism.
 
 ### 1.4 Combined-feature and future families
 

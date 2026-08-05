@@ -468,3 +468,47 @@ knowledge-only until a live OI recorder lifts that ceiling.
 
 *(Future campaigns are appended below this line, in run order. Do not
 edit or remove a prior entry once recorded.)*
+
+---
+
+## CAMP-07 — Longer-Horizon Open Interest (72h / 120h)
+
+**Status: CLOSED — all six experiments REJECTED on merit.**
+
+**Hypothesis:** Open Interest extreme relative to its own 30-day trailing
+distribution carries directional information about the **3-to-5-day**
+forward move — the one dimension CAMP-01–05 held fixed (all used 24h).
+
+**Pre-registration:** `docs/RESEARCH_CAMPAIGN_07_oi_long_horizon.md`.
+Three configurations × two directions: PRIMARY 72h/|centered rank|≥0.40;
+robustness 72h/≥0.25 (threshold axis) and 120h/≥0.40 (horizon axis).
+`min_hit_rate = 0.55`; `min_signaled_samples = 100` per fold;
+`n_folds = 3`; bootstrap `n_resamples = 1000`, `seed = 7`.
+
+**Final verdict:** **All REJECTED.** Hit rates **0.4775–0.5225**.
+Only three independent measurements exist — each contrarian/momentum pair
+sums to exactly 1.0000, disclosed in the pre-registration:
+0.4878/0.5122 (PRIMARY), 0.4986/0.5014, 0.4775/0.5225. Causality audit
+PASSED throughout; single-pass, walk-forward and regime all FAILED.
+
+**This was a well-powered merit rejection, not a power failure.**
+Cross-symbol ρ̄ = +0.296 → N_eff = 1.88 of 3 symbols; effective signalled
+samples after the haircut were ≈359 / ≈650 / ≈209 against a floor of 100
+(2–6× clearance). Contrast Campaign 06, deferred at N_eff 1.14 with ~40
+effective per fold.
+
+**What this closes:** the **horizon dimension**. Extending the
+forward-return window to 72h and 120h does not rescue OI extremeness, and
+relaxing selectivity from CAMP-01's rank ≥0.99 to ≥0.90/≥0.75 does not
+either. See RD-17.
+
+**Honest limitation:** the 120h arm was power-marginal — one walk-forward
+fold returned 93 signalled samples against the 100 floor (feasibility
+projected 107; the live run applies the regime labeler). It failed on hit
+rate regardless; the 72h PRIMARY result carries the campaign.
+
+**Known limitations carried:** DEFER-ceiling (knowledge-only — no
+Hyperliquid OI history exists, so not promotion-eligible); outcome derived
+as `sum_open_interest_value / sum_open_interest`, validated against an
+independent price source over 18% of the window; survivorship;
+non-stationarity; asymmetric per-symbol starts.

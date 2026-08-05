@@ -44,6 +44,12 @@ deferred until there are enough approved models to justify it.
 | Funding Delta, momentum (Hyperliquid) | `funding_rate_threshold_rule` (feature `funding_delta`) | momentum-hyperliquid-v1 | fp `c237e53ff9972534…` | Yes | CAMP-04 |
 | OI Velocity, contrarian (Binance) | `funding_rate_threshold_rule` (feature `oi_velocity`) | contrarian-binance-v1 | fp `ccc56cd026521f56…` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-05 |
 | OI Velocity, momentum (Binance) | `funding_rate_threshold_rule` (feature `oi_velocity`) | momentum-binance-v1 | fp `6fbce5305a663a32…` | Not applicable — same structural blocker | CAMP-05 |
+| OI extremeness 72h horizon, contrarian | `open_interest_extremeness_rule` | h72-t040-contrarian-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| OI extremeness 72h horizon, momentum | `open_interest_extremeness_rule` | h72-t040-momentum-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| OI extremeness 72h horizon, contrarian | `open_interest_extremeness_rule` | h72-t025-contrarian-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| OI extremeness 72h horizon, momentum | `open_interest_extremeness_rule` | h72-t025-momentum-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| OI extremeness 120h horizon, contrarian | `open_interest_extremeness_rule` | h120-t040-contrarian-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| OI extremeness 120h horizon, momentum | `open_interest_extremeness_rule` | h120-t040-momentum-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
 
 CAMP-01 (all four): hit rate 0.49–0.51 (indistinguishable from chance),
 causality audit passed (not a leakage artifact), sample floor cleared
