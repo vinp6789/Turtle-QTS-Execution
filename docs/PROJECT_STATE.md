@@ -38,8 +38,8 @@ they're found, never silently carried forward.
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
 | **Current objective** | **Backlog 1.5, 1.6 and 2.1 all COMPLETE.** The 1.6 feasibility gate **DEFERRED Campaign 06** (RD-16) — measured N_eff = 1.14 of 3 symbols. Next: extend Hyperliquid-native funding coverage (stale since 2024-12), then an N_eff screen for the next funding/OI campaign on the now-deep window. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **Backlog 3.1** — extend Hyperliquid funding coverage from 2024-12-31 to present (zero new code; DEX-first ceiling is now the binding constraint). See Immediate Backlog. |
-| **Full regression** | **1,729 passed, 92 subtests, 0 failed** (12 new tests for the Backlog 2.1 driver; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
+| **Immediate next task** | **Backlog 3.2** — outcome-blind N_eff screen for the next funding/OI campaign on the deep window, including RD-04's now-triggered Funding Persistence revisit. |
+| **Full regression** | **1,753 passed, 97 subtests, 0 failed** (3 new tests for the hyperliquid `TimeoutError` translation; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · **2 deferred pre-registrations** — Funding Persistence (RD-04) and **Campaign 06 / Liquidations (RD-16)**, both on non-viable N_eff |
 
@@ -79,12 +79,14 @@ opened the next research step was **Backlog 2.1's completion**
 (2026-07-30), which deepened Binance funding/OI/mark-price history to
 2020–2021.
 
-The binding constraint is now the **DEX-first venue ceiling**: Binance
-funding spans 77 months while **Hyperliquid funding is stale at
-2024-12-31** (17 months), and under Constitution §6 a finding that
-exists only on CEX data is never promotion-eligible. Hence 3.1 (extend
-Hyperliquid coverage) precedes 3.2 (the next N_eff screen). See
-**Immediate Backlog** for the exact ordered chain.
+The **DEX-first venue ceiling has been narrowed but not removed**
+(Backlog 3.1, 2026-08-05): Hyperliquid funding now spans **~37 months**
+(2023-07-01 → present) against Binance's 77 — from 22% to ~48% of
+Binance's span. Under Constitution §6 a finding that exists only on CEX
+data is never promotion-eligible, so any funding campaign remains
+replication-limited by the shorter Hyperliquid history. Next is **3.2**,
+the outcome-blind N_eff screen. See **Immediate Backlog** for the exact
+ordered chain.
 
 ---
 
@@ -336,6 +338,15 @@ pre-fix code and passes against the fix).
 - **Pilot re-collection verified benign.** The requested range includes the 2026-06 pilot month, so the production checkpoint marched through it and re-fetched those 30 days, producing 90 conflict warnings (30 days × 3 symbols), confined to exactly `20260601`–`20260630`. A conflicting hour was re-decoded from source and compared field by field: **every market-data field is identical** (price, size, side, direction, method, liquidated_user, mark_price, source, source_detail); **only `ingested_at_utc` differs** (pilot `2026-07-28` vs re-fetch). First-seen values were correctly kept. **No duplicate rows were written and no data changed** — but note the precise wording: recollection *did* occur and changed nothing; "no recollection occurred" would be false.
 - Collection required **five** resumes from checkpoint across transient S3 outages (18 logged connectivity failures, zero deterministic). **No data was lost on any of them** — the Backlog 1.3 H1 durability invariant held throughout.
 
+**Backlog 3.1 COMPLETE (2026-08-05) — Hyperliquid funding extended to present:**
+- **Planning pass first, measured not estimated.** A read-only probe (`fetch_funding_rate_range`, writes nothing) measured ~1.23s/page against the live API and predicted ~103s for ~84 paginated requests. **Actual: 101.7s** — 1.3% error. Predicted +13,956 rows/symbol; actual +13,956/symbol exactly.
+- **A latent defect was found by that planning pass and fixed first (`23d08bb`):** `sources/hyperliquid.py` carried the *identical* raw-`TimeoutError` gap that commit `75f9353` fixed in `sources/binance.py` — both call sites translated only `HTTPError`/`URLError`, so a stalled read on an already-open connection escaped as a non-`HistoricalDataError`. That exact defect had already escaped a retry loop and killed a running collection job once. Fixed with the identical pattern (no new retry framework, no unrelated refactoring); 3 regression tests (first page, later page mid-pagination, and the candles call site), each verified red against the pre-fix source.
+- **Execution: foreground, existing collector only** — three `collect_funding_rate(source="hyperliquid")` calls. No detached launcher, no checkpoint framework, no new infrastructure. `fetch_funding_rate_range` paginates internally past the 500-record cap, so one call per symbol covered the whole 581-day gap.
+- **Integrity audit (measured):** 27,153 rows/symbol (13,197 + 13,956) · **0 duplicates** · coverage `2023-07-01 → 2026-08-05T11:00`, lag 0.7h · sorted on disk · symbol/source fields consistent · **0 newly-introduced gaps** (the 3 gaps >1.5h are all pre-existing, in 2023–24; the collected range is dense — 13,956 rows over 13,955 hours) · size 6.22 → **12.79 MB**, matching the ~12.8 MB forecast.
+- **Resumability re-verified on production, idempotent:** re-running the identical full-range call added **0 rows** in 1.7s. Verified beforehand on a scratch root: high-water resume suppresses already-collected data, extension fetches only the tail, dedup key `(symbol, observed_at_utc)`, 0 duplicates.
+- **Effect on the research program:** the DEX-first ceiling is **narrowed, not removed** — Hyperliquid now covers ~37 months against Binance's 77 (22% → ~48%). Any funding campaign remains replication-limited by the shorter native history. **No governance decision changed**, so no RD entry was created.
+- Full regression: **1,753 passed, 97 subtests, 0 failed.**
+
 **Backlog 2.1 CLOSED (2026-07-30) — `BACKFILL_COMPLETE target=all`, zero failed months:**
 - All 5 previously-failed months collected on the resumed run: `ETH 2022-06`/`2022-07` (the transient DNS failures — 8640/8928 rows, no skips) and **`BTC/ETH/SOL 2023-04`** (8640 OI rows each; mark-price rows 8628/8630/8630 — i.e. exactly **12/10/10** rows skipped per symbol).
 - **Those skip counts independently corroborate the investigation:** they match, exactly, the anomalous-row counts measured by a separate live-archive probe run *before* the fix was written (BTC 12, ETH 10, SOL 10 rows with `sum_open_interest_value == "0E-8"` on 2023-04-10). The fix skipped precisely the anomalous rows and nothing else.
@@ -360,8 +371,8 @@ pre-fix code and passes against the fix).
 | ~~1.6~~ | ~~Campaign 06 outcome-blind feasibility review (N_eff + cross-symbol correlation)~~ | 1.5 (done) | — | — | **Done 2026-08-05 — verdict DEFER (RD-16).** ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold config reaches `min_signaled_samples = 100` per fold effectively (best 40.2; P(eff≥100) = 0.00). Bar not weakened. Runtime 13.83s |
 | ~~2.1~~ | ~~Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL)~~ | — | — | — | **Done 2026-07-30 — `BACKFILL_COMPLETE target=all`, 0 failed months.** Two real defects found and fixed en route (raw `TimeoutError` escaping the retry path; a genuine Binance archive `oi_value==0` anomaly on 2023-04-10) — see Active Work |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
-| **3.1** | **Extend Hyperliquid-native funding coverage** from 2024-12-31 to present (~19 months stale). Zero new code — `collect_funding_rate(source="hyperliquid")` already resumes from its own high-water mark | None | **Yes — for any future funding campaign's DEX-first replication** | ~hours | **NEXT** |
-| **3.2** | Outcome-blind **N_eff screen** for the next funding/OI campaign on the deep window: RD-04's Funding Persistence revisit (its "materially longer data window" trigger has fired: 18 → 77 months) + BTC-only funding momentum | 2.1 (done), 3.1 preferred | Gates the next funding pre-registration | ~1 day | Not started |
+| ~~3.1~~ | ~~Extend Hyperliquid-native funding coverage from 2024-12-31 to present~~ | — | — | — | **Done 2026-08-05.** +41,868 rows (13,956/symbol), 101.7s foreground, 0 duplicates, 0 new gaps. Coverage now **2023-07-01 → 2026-08-05 (~37 months)**, lag 0.7h. Zero new infrastructure |
+| **3.2** | Outcome-blind **N_eff screen** for the next funding/OI campaign on the deep window: RD-04's Funding Persistence revisit (its "materially longer data window" trigger has fired: 18 → 77 months) + BTC-only funding momentum | 2.1 (done), 3.1 (done) | Gates the next funding pre-registration | ~1 day | **NEXT** |
 | **3.3** | Close the launcher concurrency race (H1/H2). **Required before 3.1 if 3.1 is run as a detached job**; unnecessary if 3.1 runs foreground | None | Conditional — see 3.1 | ~2 hrs | Not started |
 
 ---
@@ -850,9 +861,18 @@ accordingly.)*
              77 months) is now the binding constraint, so 3.1 precedes
              3.2. MCP data-provider evaluation recorded as a future
              gate, not an active item.
-   ...        [next: Backlog 3.1 (extend Hyperliquid funding coverage to
-              present), then 3.2 (outcome-blind N_eff screen for the next
+2026-08-05   Commit `23d08bb` -- TimeoutError translation added to
+             sources/hyperliquid.py, mirroring 75f9353 in binance.py.
+             Found by the Backlog 3.1 planning pass. 3 tests, red->green.
+             1,753 passing.
+2026-08-05   Backlog 3.1 COMPLETE -- Hyperliquid funding extended
+             2024-12-31 -> 2026-08-05. Foreground, 101.7s (predicted
+             103s), +41,868 rows across 3 symbols, 0 duplicates, 0 new
+             gaps, 6.22 -> 12.79 MB. Idempotent re-run added 0 rows.
+             DEX-first ceiling narrowed 22% -> ~48% of Binance's span.
+   ...        [next: Backlog 3.2 (outcome-blind N_eff screen for the next
               funding/OI campaign, incl. RD-04's now-triggered Funding
-              Persistence revisit). Close the launcher concurrency race
-              (3.3) first if 3.1 is run detached rather than foreground.]
+              Persistence revisit). 3.3 (launcher concurrency race)
+              remains open but was not needed for 3.1, which ran
+              foreground.]
 ```

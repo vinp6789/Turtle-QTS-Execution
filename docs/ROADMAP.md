@@ -76,10 +76,14 @@ fresh pre-registration:
   2024-12-31 (17 months)** while Binance runs to 2026-06-30 (77 months).
   Under Constitution §6, a finding that exists only on CEX data is never
   promotion-eligible, so raw Binance power does not by itself raise what
-  a funding campaign can promote. **Extending Hyperliquid-native funding
-  coverage to present is therefore the prerequisite** — zero new code
-  (`collect_funding_rate(source="hyperliquid")` resumes from its own
-  high-water mark). Tracked as Backlog 3.1.
+  a funding campaign can promote. Extending Hyperliquid-native funding
+  coverage was therefore the prerequisite — **DONE 2026-08-05 (Backlog
+  3.1)**: Hyperliquid funding now spans **~37 months** (2023-07-01 →
+  present, +41,868 rows), zero new code as planned. **The ceiling is
+  narrowed, not removed** — ~37 months against Binance's 77 (22% → ~48%
+  of its span), so any funding campaign remains replication-limited by
+  the shorter native history. That limit must be stated in the next
+  campaign's feasibility review.
 - **RD-04's Funding Persistence deferral is now revisitable.** Its stated
   trigger was "a materially longer data window"; 18 → 77 months has
   fired it. It must be re-screened for N_eff **outcome-blind** before any
