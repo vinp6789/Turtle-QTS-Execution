@@ -74,6 +74,49 @@ left by a job that has since exited is reclaimed automatically — but only
 when its holder is *provably* gone, never when liveness is merely
 unverifiable.
 
+## The Live Recorder (permanent background service)
+
+Since **2026-08-05** the project runs one job continuously rather than
+only for the duration of a backfill:
+
+```bash
+python scripts/run_detached_job.py --name live_recorder --     python -m alpha_engine.historical.live_recorder --interval-seconds 900
+```
+
+**What it records:** Hyperliquid open interest, funding rate and mark
+price for BTC/ETH/SOL — the three venue-native metrics that **cannot be
+reconstructed from any archive**. One `metaAndAssetCtxs` call per cycle
+returns all three for every symbol.
+
+**Data cadence is hourly; poll cadence is 15 minutes.** These are
+deliberately different. `observed_at_utc` is stamped at the **top of the
+hour**, so polling more often than hourly adds no rows — it just means a
+single transient failure does not lose that hour's sample. The exact
+fetch instant is preserved in `ingested_at_utc`.
+
+**Its series are separate files** (`*__hyperliquid_live.csv`) and never
+collide with the API-backfilled `*__hyperliquid.csv` series. Do not merge
+them without reading the derivation-scope note: the live `funding` field
+is the *current* rate, whereas `fundingHistory` returns *settled* rates —
+they are not the same quantity.
+
+**Health check (read-only, safe any time):**
+
+```bash
+python scripts/recorder_health.py
+```
+
+Exit code 0 = healthy, 1 = degraded. It reports process state, per-series
+row counts, newest timestamp and lag, duplicate keys and gaps, and counts
+`RECORD_FAILED` / skipped-field warnings in the log. Because the
+providers are fail-safe (any problem becomes an *unavailable* reading
+rather than an exception), **"running" is not the same as "recording"** —
+this check is what distinguishes them, and is the reason it exists.
+
+**If it stops:** re-run the launch command. Recording is idempotent
+within an hour, so a restart cannot duplicate data; at most one hourly
+sample is missed.
+
 ## Checking on it — from any session, any time
 
 ```bash

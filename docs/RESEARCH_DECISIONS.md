@@ -907,6 +907,106 @@ correctly rejected under its own criteria, and none would change.
 
 ---
 
+## RD-18 — Live Recorder promoted and deployed, scoped to venue-native snapshots; order-flow capture explicitly NOT YET
+
+- **Date:** 2026-08-05 · **Author:** researcher · **Reviewer:** pending · **Category:** data-acquisition-capability, governance-boundary · **Status:** active
+- **Scope:** reverses the standing deferral of the Live Sample Recorder (`ROADMAP.md` §2.2, and the Deferred Work entry that twice recorded "Constitution §5: no present concrete need"). Records what was deployed, what was deliberately **not** deployed, and the rule that separates them. **No campaign is pre-registered here and no research conclusion changes.**
+
+### A — Why the §5 threshold is now crossed (measured, not argued)
+
+Constitution §5 permits complexity only when *"a specific, present
+requirement demands it."* Three measurements from this session, none of
+which existed at the previous deferral decisions, make the requirement
+specific and present:
+
+1. **RD-17** closed OI level, velocity and longer-horizon extremeness on
+   merit. The Open Interest family is NEAR-EXHAUSTED with **Divergence**
+   the sole untested mechanism — and `ROADMAP.md` §1.3 names this
+   recorder as the specific unlock for its DEFER-ceiling.
+2. **Backlog 3.2** measured the venue ceiling biting: a funding campaign
+   clears the per-fold power floor on Binance (worst fold 140) and fails
+   it on Hyperliquid (worst fold 20, P(≥100) = 0.35).
+3. **Backlog 3.1** established that Hyperliquid history **cannot be
+   extended backwards** — it reached the venue's own 2023-07 coverage
+   boundary. Combined with the live-verified absence of any historical
+   open-interest endpoint, **data not captured now is unrecoverable.**
+
+The earlier deferrals were correct on the evidence available then. The
+"~1.5-year lead time" objection still holds and now argues the other
+way: lead time is precisely why the clock must start before a campaign
+needs the data, because "build it when a campaign needs it" is
+unsatisfiable for a family whose data only accrues forward.
+
+### B — What was deployed
+
+Hyperliquid **open interest, funding rate and mark price**, BTC/ETH/SOL,
+recorded from `metaAndAssetCtxs` — one call per cycle returns all three
+metrics for every symbol. Data cadence hourly; poll cadence 15 minutes
+(a shorter poll adds no rows because the timestamp is hour-slotted, but
+means one transient failure does not lose that hour's sample).
+
+Written under a distinct `hyperliquid_live` source tag, so these series
+are **separate files** from the API-backfilled ones.
+
+**Derivation-scope note (RD-11 A), important for any future campaign:**
+the live `funding` field is the *current* rate; `fundingHistory` returns
+*settled* rates. They are **not the same quantity** and must not be
+concatenated without declaring the difference. The same applies to
+`markPx` (venue mark) versus the daily-candle close already collected.
+
+### C — What was deliberately NOT deployed, and why
+
+**Order-flow capture: NOT YET.** This is a scoping rule, not a schedule.
+
+- The frozen Module 10 adapter declares `websocket_connected=False,
+  # no websocket in this (REST-only) build`, and its `get_fills` reads
+  `userFills` — **the account's own fills, not market-wide flow.**
+- RD-07's own unlock condition for the Order Flow family — *"verify HL
+  historical order-flow (or capture via recorder)"* — has **never been
+  verified**.
+
+Building capture against an unverified source, for a family with no
+feasibility review, would be exactly the speculative engineering §5
+forbids, and would have inverted the project's own
+**evidence-before-implementation** principle by exempting one family
+from the gate every other family passed through.
+
+**A correction recorded for the record:** two earlier strategic reviews
+in this session priced "the Live Sample Recorder" as a single monolithic
+item and recommended building it whole. Inspection of the architecture
+showed it is two propositions with entirely different readiness — the
+snapshot half was nearly free and ready, the order-flow half is neither.
+Only the ready half was built.
+
+### D — Consequences
+
+- **The recorder is now the project's permanent background service.** All
+  future research should assume Hyperliquid OI/funding/mark snapshots are
+  continuously accumulating from 2026-08-05.
+- **Open Interest family: the DEFER-ceiling begins to lift**, but not
+  retroactively — the recorder produces *forward* history only. OI
+  Divergence remains knowledge-only until enough has accumulated (prior
+  campaigns needed 12–18 months).
+- **Additive only:** no frozen module, storage, provider, research or
+  campaign code was modified.
+- **Prerequisite that had to close first:** the launcher concurrency race
+  (H1/H2), fixed in Backlog 3.3 (`4325782`). It was safely deferred while
+  every job ran foreground or supervised; a continuously-running
+  unattended service is the case it was always going to matter for.
+- **Monitoring is part of the deployment, not an afterthought:**
+  `scripts/recorder_health.py`, read-only, exit 0/1. It exists because
+  the providers are fail-safe — any problem degrades to an *unavailable*
+  reading rather than an exception — so **"running" is not the same as
+  "recording"**, and only an on-disk check distinguishes them.
+- **Revisit triggers:** enough accumulated history to make an HL-native
+  OI campaign feasible (re-screen, do not assume); or a verified
+  market-wide order-flow source, which would reopen §C on evidence.
+- **Supersedes / superseded-by:** reverses the Live Sample Recorder
+  deferral in `ROADMAP.md` §2.2 and `PROJECT_STATE.md`'s Deferred Work.
+  Complements RD-17; contradicts nothing.
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -917,9 +1017,9 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 | Family | Research | Data | Cap | Next distinct mechanism / unlock |
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
-| Open Interest | **NEAR-EXHAUSTED** | READY (Binance only) | cap | Level (CAMP-01), **Velocity (CAMP-05)** and **longer-horizon extremeness (CAMP-07, 72h/120h — RD-17)** all rejected on merit. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
+| Open Interest | **NEAR-EXHAUSTED** | READY (Binance) / **COLLECTING (Hyperliquid, live from 2026-08-05)** | cap | Level (CAMP-01), **Velocity (CAMP-05)** and **longer-horizon extremeness (CAMP-07, 72h/120h — RD-17)** all rejected on merit. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
 | Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. **RD-16 (2026-08-05): Campaign 06 DEFERRED at the feasibility gate** — measured ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold configuration reaches `min_signaled_samples = 100` per fold on an effective-sample basis (best 40.2; P(eff ≥ 100) = 0.00). **Deferred pre-registration, NOT a rejected hypothesis** — the mechanism is untested. Revisit at ≈264 worst-fold raw (~18 further months). |
-| Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
+| Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow. **RD-18: NOT addressed by the Live Recorder** — the frozen adapter is REST-only and `get_fills` reads the account's own fills, not market flow. This precondition remains unverified. |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |
 | Macro liquidity | PAUSED | NONE | — | Resume: enough history for ≥1 full liquidity cycle |

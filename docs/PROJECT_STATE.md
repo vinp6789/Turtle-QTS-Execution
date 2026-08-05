@@ -36,10 +36,10 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **Campaign 07 executed and CLOSED — all six experiments REJECTED on merit** (RD-17). The horizon dimension is falsified for OI extremeness; the OI family moves ACTIVE → NEAR-EXHAUSTED. Next: the remaining near-free screen (hourly liquidations, RD-16 §E), then the Live Sample Recorder decision. |
+| **Current objective** | **The Live Recorder is DEPLOYED and is now the project's permanent background service** (Backlog 3.4). Hyperliquid OI/funding/mark snapshots accumulate continuously from 2026-08-05. All future research should assume this series is growing. Next: the hourly-liquidation screen (RD-16 §E) — but not until deployment is verified over multiple cycles. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **Hourly-liquidation feasibility screen** (RD-16 §E) — the last near-free experiment in the queue; data already collected, ~seconds of compute. |
-| **Full regression** | **1,773 passed, 101 subtests, 0 failed** (20 new Campaign 07 tests, incl. pre-registration immutability guards; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not) |
+| **Immediate next task** | Let the recorder accumulate. Check with `python scripts/recorder_health.py` (read-only, exit 0 = healthy). Then the hourly-liquidation screen (RD-16 §E). |
+| **Full regression** | **1,831 passed, 102 subtests, 0 failed** (20 launcher-concurrency, 25 recorder, 13 recorder-health tests added; **all job-tooling QA findings now closed, including L1/H1**) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **24 registered** (Campaigns 01–05: 18; **Campaign 07: 6**) — but only ~**12 independent measurements** (contrarian/momentum pairs are algebraically complementary, RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) |
 
@@ -338,6 +338,15 @@ pre-fix code and passes against the fix).
 - **Pilot re-collection verified benign.** The requested range includes the 2026-06 pilot month, so the production checkpoint marched through it and re-fetched those 30 days, producing 90 conflict warnings (30 days × 3 symbols), confined to exactly `20260601`–`20260630`. A conflicting hour was re-decoded from source and compared field by field: **every market-data field is identical** (price, size, side, direction, method, liquidated_user, mark_price, source, source_detail); **only `ingested_at_utc` differs** (pilot `2026-07-28` vs re-fetch). First-seen values were correctly kept. **No duplicate rows were written and no data changed** — but note the precise wording: recollection *did* occur and changed nothing; "no recollection occurred" would be false.
 - Collection required **five** resumes from checkpoint across transient S3 outages (18 logged connectivity failures, zero deterministic). **No data was lost on any of them** — the Backlog 1.3 H1 durability invariant held throughout.
 
+**Backlog 3.3 + 3.4 (2026-08-05) — launcher race closed, Live Recorder DEPLOYED:**
+- **3.3 — H1/H2 closed (`4325782`).** Root cause proven deterministically *before* any change: the lock was created with `O_CREAT|O_EXCL` but written **empty**, and stamped with the child's pid only after the liveness probe and `Popen`. A second caller in that window read `''`, computed `holder_pid = -1`, and **skipped the liveness guard entirely**. Fix is 35 insertions: stamp the claiming process's own pid at creation, and refuse (never steal) an unstamped lock. 20 concurrency tests with real threads/processes; the prior suite had **zero** concurrency coverage, which is why an audit once declared this fixed when it was not.
+- **3.4 — Live Recorder deployed.** Scope strictly as approved: **Hyperliquid OI + funding + mark price, BTC/ETH/SOL, hourly**. One `metaAndAssetCtxs` call per cycle returns all three metrics for all symbols (live-verified; symbols located **by name** — SOL is at index 5, not 2). Written under its own `hyperliquid_live` source tag so these series never collide with the API-backfilled ones.
+- **Order-flow capture deliberately NOT built.** The frozen Module 10 adapter declares `websocket_connected=False, # no websocket in this (REST-only) build`, and `get_fills` reads `userFills` (the account's own fills, not market flow). RD-07's "verify HL historical order-flow" precondition remains unverified, so building capture for it would be the speculative engineering §5 forbids.
+- **Additive only:** two new modules and one new script; **no frozen module, no storage, no provider, no research or campaign code touched.**
+- **Monitoring: `scripts/recorder_health.py`** — read-only, no daemon, no framework; exit 0 healthy / 1 degraded. Detects all nine required failure modes: running-but-writing-nothing, stale timestamps, repeated unavailable readings, malformed responses, disk-write failure (surfaces as unexpected exit), storage corruption, duplicate timestamps, excessive gaps, unexpected process exit.
+- **Idempotency by design:** `observed_at_utc` is the **top of the hour**; the precise fetch instant is preserved in `ingested_at_utc`. A restart within the same hour re-writes the same dedup keys and adds **0 rows** (verified live).
+- Full regression: **1,831 passed, 102 subtests, 0 failed.**
+
 **Campaign 07 EXECUTED AND CLOSED (2026-08-05) — all six experiments REJECTED on merit:**
 - **What it tested:** the forward-return **horizon** — the one dimension all 18 prior registered models held fixed at 24h. Pre-registered at 72h and 120h with strictly non-overlapping outcome windows; `docs/RESEARCH_CAMPAIGN_07_oi_long_horizon.md`.
 - **Design resolved from existing governance, no new methodology:** both tails come free from the platform's `percentile_rank_centered` feature (CAMP-01 precedent); `horizon_hours` and the non-overlap assertion already existed in CAMP-01's `build_samples`, which was **reused unchanged**. Only a new runner was written.
@@ -384,6 +393,8 @@ pre-fix code and passes against the fix).
 | ~~3.1~~ | ~~Extend Hyperliquid-native funding coverage from 2024-12-31 to present~~ | — | — | — | **Done 2026-08-05.** +41,868 rows (13,956/symbol), 101.7s foreground, 0 duplicates, 0 new gaps. Coverage now **2023-07-01 → 2026-08-05 (~37 months)**, lag 0.7h. Zero new infrastructure |
 | ~~3.2~~ | ~~Outcome-blind N_eff screen for the next funding/OI campaign~~ | — | — | — | **Done 2026-08-05 — DEFER.** Funding Persistence N_eff 14–18 (unchanged by 3.9× data); BTC-only momentum Binance-powered but Hyperliquid-unpowered |
 | ~~3.4~~ | ~~**Campaign 07** — longer-horizon OI (72h/120h)~~ | 3.2 (done) | — | — | **Done 2026-08-05 — all six REJECTED on merit (RD-17).** Horizon dimension falsified; OI family → NEAR-EXHAUSTED |
+| ~~3.3~~ | ~~Close the launcher concurrency race (H1/H2)~~ | — | — | — | **Done 2026-08-05 (`4325782`).** Root cause proven first: lock created empty, second caller skipped the liveness guard. 35-line fix + 20 concurrency tests (prior suite had none) |
+| ~~3.4~~ | ~~Deploy the Live Recorder~~ | 3.3 (done) | — | — | **Done 2026-08-05 (RD-18).** Running as `live_recorder`: HL OI/funding/mark, BTC/ETH/SOL, hourly data / 15-min poll. Monitoring: `scripts/recorder_health.py`. **Order-flow capture NOT built — remains NOT YET** |
 | **3.5** | **Hourly-liquidation feasibility screen** (RD-16 §E) — the last near-free experiment; data collected, no venue cap, ~seconds of compute. Must measure hourly serial autocorrelation, which is the risk that killed RD-04 | None | Gates any Campaign 06 revival | ~hours | **NEXT** || **3.3** | Close the launcher concurrency race (H1/H2). **Required before 3.1 if 3.1 is run as a detached job**; unnecessary if 3.1 runs foreground | None | Conditional — see 3.1 | ~2 hrs | Not started |
 
 ---
@@ -396,7 +407,7 @@ pre-fix code and passes against the fix).
 | **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` §1.3 |
 | **Historical Validation Layer (HVL)** | Trigger: the first campaign producing a SUPPORTED hypothesis (RD-11). Nothing has ever passed governance. | `ROADMAP.md` §2 |
 | **"Robustness Validation" as a separate layer** | Rejected on Constitution §5 — its contents (Monte Carlo, parameter sensitivity → Research; stress/spread/fills → HVL; latency/delay → Paper Trading) dissolve into three existing homes with nothing left over. Zero concrete instances exist to justify a fourth layer. | Not scheduled — absorbed into HVL/Research/Paper Trading design notes |
-| **Live Sample Recorder** | Correctly demoted after being briefly promoted — ~1.5-year lead time before any family it unlocks becomes testable (12–18mo accumulation, same as every archive-based campaign); addresses none of the failure modes seen to date (5 rejections on evidence, 2 kills on statistical power). Constitution §5: no present concrete need. | `ROADMAP.md` §2, last priority |
+| ~~**Live Sample Recorder**~~ | **PROMOTED AND DEPLOYED 2026-08-05 (Backlog 3.4).** The §5 threshold was crossed by measurement, not opinion: RD-17 closed three OI mechanisms on merit leaving only Divergence (whose named unlock is this recorder), and Backlog 3.2 measured that Hyperliquid history **cannot be extended backwards**. Scoped strictly to HL-native OI/funding/mark snapshots — **order-flow capture remains NOT YET**, since the frozen adapter is REST-only by its own declaration and RD-07's "verify HL historical order-flow" precondition is still unverified. | Running as job `live_recorder` |
 | **Telegram Operations Console** | Deferred until paper/live trading is actually imminent — nothing trades today, so a full ops console has nothing to operate (§5 simplicity). **Not dropped** — full four-tier design preserved verbatim: **Monitoring** (read-only) → **Notifications** (event fan-out) → **Operations** (capital-affecting, confirmation-gated) → **Explainability** (deterministic retrieval only, never generative inference). One-path-only constraint (shared Operations Service, no parallel business logic in any client) and the forbidden-actions list (no alpha approval, no threshold changes, no Risk Manager/Governance bypass, no Live Mode switch via any operational channel) both carry forward unchanged. | `ROADMAP.md` §3; also listed in Definition of Done |
 | **`min_mean_directional_return` as a runner-recognized key** | Withdrawn after verification — the governance gate is meant to inspect mean directional return / expectancy sign at review time (CAMP-01 precedent, see Backlog 1.1); adding a mechanical runner key would migrate judgment out of the one deliberately human-owned gate. | Superseded by Backlog 1.1 |
 | **`docs/RESEARCH_INSIGHTS.md`** (proposed new document) | Rejected — ~80% duplicates `ALPHA_LIBRARY.md` / `RESEARCH_LEDGER.md` / RD-12 with no consistency mechanism between four documents (§5). | Not created; durable findings recorded via RD entries instead |
@@ -418,7 +429,7 @@ pre-fix code and passes against the fix).
 **Operational**
 - ~~Evidence store gitignored~~ — **closed 2026-07-29**, `data/alpha_engine_research/` now tracked. `data/alpha_engine_historical/` (243 MB CSVs) remains deliberately gitignored — reconstructible from public archives, not the provenance-critical asset the evidence store is.
 - `railway.json` declares no persistent volume; `data/` is ephemeral on Railway today (affects future live deployment, not current research). (Backlog 2.2)
-- **OPEN — launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`), deferred by explicit decision (2026-07-30).** The duplicate-start guard's `lock` file is created empty and stamped with the real pid only after `Popen` succeeds; a second concurrent `start()` call can steal the empty lock before that stamp lands. Reproduced end-to-end (two concurrent starts, both spawned live children); measured window ~0.25s–35s. **Does not affect either currently running job** (`liq_backfill`, `deep_history_backfill`) — a job that is genuinely alive is unambiguously refused via `ALIVE_AND_MATCHES` regardless of this race; the exposure is scoped strictly to two callers racing to start/resume the *same job name* at the same moment while it is dead. Fix designed but not implemented: stamp the starting process's own pid into the lock at creation (same `os.open()` call, before any slow work), overwrite with the child's pid after `Popen`. **To be closed before the next long-running collection campaign is started**, not before 1.5/2.1 (already launched, not raced). Also open: `docs/LONG_RUNNING_JOBS.md` and this document's own Active Work (L1 bullet, corrected in place) both once asserted an atomicity guarantee this does not actually provide — treat that claim as false until H1/H2 close.
+- ~~OPEN — launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`)~~ — **CLOSED 2026-08-05 (`4325782`, Backlog 3.3).** Root cause proven deterministically before any change: the lock was created with `O_CREAT|O_EXCL` but **written empty**, and only stamped with the child's pid after the liveness probe and `Popen`. A second caller in that window read `''`, computed `holder_pid = -1` from `"".isdigit() == False`, and therefore **skipped the liveness guard entirely**, falling through to the steal path. Fix (35 insertions): a `_claim()` helper stamps the **claiming process's own pid** into the lock as part of creating it, before any slow work; and an unstamped/unparseable lock is now **refused rather than stolen**, closing the residual one-syscall window. 20 concurrency tests using real threads and real processes — the prior suite had zero concurrency coverage, which is why the defect survived an audit that claimed it fixed. **H2 resolved without a documentation edit:** `LONG_RUNNING_JOBS.md`'s atomicity claim was false when written and is now true.
 
 **Documentation**
 - ~~RD-12's stale "no backfill has been executed" claim~~ — **corrected 2026-07-29** via RD-13, with an inline pointer left at RD-12 itself.
@@ -600,6 +611,20 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-18 (2026-08-05)** — **Live Recorder promoted and deployed**,
+  reversing a standing §5 deferral on measured evidence: RD-17 left OI
+  Divergence as the sole untested mechanism (whose named unlock is this
+  recorder), Backlog 3.2 measured the venue ceiling biting, and Backlog
+  3.1 established that Hyperliquid history cannot be extended backwards
+  — so uncaptured data is unrecoverable. **Scoped to venue-native
+  snapshots only** (OI/funding/mark). **Order-flow capture is explicitly
+  NOT YET**: the frozen adapter is REST-only by its own declaration,
+  `get_fills` reads the account's own fills rather than market flow, and
+  RD-07's "verify HL historical order-flow" precondition is unverified.
+  Also records a correction — two earlier strategic reviews priced the
+  recorder as one monolithic item; architecture inspection showed it is
+  two propositions with entirely different readiness, and only the ready
+  half was built.
 - **RD-17 (2026-08-05)** — **Campaign 07 closure: the horizon dimension
   is falsified for OI extremeness.** Six experiments at 72h/120h, all
   REJECTED on merit (hit rates 0.4775–0.5225), and **well-powered** —
@@ -903,9 +928,23 @@ accordingly.)*
              created -- horizon closed as a rescue path for an
              already-rejected mechanism; OI family ACTIVE ->
              NEAR-EXHAUSTED. 20 new tests, 1,773 passing.
-   ...        [next: hourly-liquidation feasibility screen (RD-16 Section E)
-              -- the last near-free experiment in the queue; then the
-              Live Sample Recorder decision, which becomes evidence-backed
-              once that screen resolves. 3.3 (launcher concurrency race)
-              remains open, unneeded for foreground work.]
+2026-08-05   Backlog 3.3 -- launcher concurrency race (H1/H2) CLOSED
+             (commit `4325782`). Root cause proven deterministically
+             first: the lock was created empty, so a second caller read
+             '' and skipped the liveness guard entirely. 35-line fix;
+             20 concurrency tests with real threads/processes.
+2026-08-05   Backlog 3.4 -- LIVE RECORDER DEPLOYED as job
+             `live_recorder` (RD-18). Hyperliquid OI/funding/mark,
+             BTC/ETH/SOL, hourly data cadence / 15-min poll. First cycle
+             wrote 9 rows; health check HEALTHY. Order-flow capture
+             deliberately NOT built (adapter is REST-only; RD-07
+             precondition unverified). Monitoring added:
+             scripts/recorder_health.py (read-only, exit 0/1).
+             1,831 tests passing.
+   ...        [next: verify the recorder over multiple cycles, then the
+              hourly-liquidation feasibility screen (RD-16 Section E) --
+              the last near-free experiment in the queue. The Live
+              Recorder decision is CLOSED (RD-18, deployed); the launcher
+              concurrency race is CLOSED (3.3). Start no new campaign
+              until recorder deployment is verified.]
 ```

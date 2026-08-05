@@ -188,7 +188,15 @@ any future campaign's pre-registration, including Campaign 06's.
      stress checks ever need their own lifecycle/governance/cadence, that
      is the second concrete need and the honest moment to split, not now.
 
-2. **Live Sample Recorder.** Captures live provider readings + realized
+2. ~~**Live Sample Recorder.**~~ — **DEPLOYED 2026-08-05 (Backlog 3.4)**, scoped
+   to Hyperliquid OI/funding/mark snapshots only. Running as job
+   `live_recorder`; health via `python scripts/recorder_health.py`.
+   **Order-flow capture is NOT included and remains NOT YET** — the frozen
+   adapter is REST-only by its own declaration, and RD-07's "verify HL
+   historical order-flow" precondition is still unverified. The original
+   entry is retained below for the record.
+
+   Captures live provider readings + realized
    outcomes into a durable research dataset automatically. Genuinely
    high-leverage in the long run — it is the only mechanism that
    converts a `Data: NONE` family into `COLLECTING`, and the only
