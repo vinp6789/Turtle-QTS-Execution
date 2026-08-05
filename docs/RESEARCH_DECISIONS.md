@@ -281,7 +281,7 @@ until then).
 ### Step 1 — measured facts (authenticated probe, one object)
 
 - **Layout:** `s3://hl-mainnet-node-data/node_fills_by_block/hourly/YYYYMMDD/H.lz4` — one object per hour, hour **unpadded** (`3.lz4`, not `03.lz4`), region `ap-northeast-1`, Requester Pays.
-- **Earliest coverage: 2025-07-27** (partial, from hour 10); first complete day 2025-07-28; 367 contiguous date prefixes ≈ **~12 months**.
+- **Earliest coverage: 2025-07-27** (partial, from hour 10); first complete day 2025-07-28; 367 contiguous date prefixes ≈ **~12 months**. **[Corrected by RD-15, 2026-08-05: the measured first hour is 08:00 UTC, not 10:00 — that day carries 16/24 hours, not 14/24. The rest of this line stands.]**
 - **Compression:** LZ4 frame, ~4.8× (10.08 MB → 48.74 MB measured).
 - **Volume:** 24 objects/day; ~300 MB–1 GB/day compressed, growing ~3× across the window.
 - **Schema:** NDJSON, one block per line — `{local_time, block_time, block_number, events:[[address, fill], …]}`.
@@ -531,6 +531,143 @@ otherwise-invisible distinction explicit.
 
 ---
 
+## RD-15 — The liquidation archive begins mid-day on 2025-07-27; that day is 16/24 hours and is never statistically equivalent to a complete day
+
+- **Date:** 2026-08-05 · **Author:** researcher · **Reviewer:** pending · **Category:** data-interpretation-rule, data-acquisition-capability · **Status:** active
+- **Scope:** the **boundary completeness** of the first day of the Hyperliquid S3 liquidation archive, and how that day must be handled in any distributional, threshold, or power calculation. **Deliberately separate from RD-14:** RD-14 governs *within-window* absence (a day whose hours were all processed and which genuinely contained no events for a symbol). This entry governs a different failure mode — a day whose **archive hours do not all exist**, so the day itself is under-observed for *every* symbol simultaneously. Conflating the two would let a structurally short day be read as a quiet market. **No campaign is pre-registered here, no hypothesis tested, no implementation changed.**
+
+### A — Evidence (measured)
+
+Whole-window coverage audit executed 2026-08-05 against the live archive
+(read-only listing of every hourly object across the full collected
+range), performed as the prerequisite RD-14 §D recorded as outstanding:
+
+| Measurement | Result |
+|---|---|
+| Days audited | **367 / 367** (2025-07-27 → 2026-07-28) |
+| Hourly objects listed | **8,800** |
+| Objects if every day were 24h | 8,808 |
+| Days with ≠ 24 objects | **exactly 1** |
+| The exception | **2025-07-27 — 16 objects, hours 08–23; hours 00–07 absent** |
+
+The 8-object shortfall across the entire year is therefore accounted for
+**exactly and entirely** by that one day's eight absent leading hours.
+Every other one of the 366 days is exactly 24/24.
+
+Directly verified, not inferred:
+
+- First object in the archive: **`node_fills_by_block/hourly/20250727/8.lz4`**.
+- `list_hour_keys(date="20250726")` returns **0 objects** — the archive
+  has no earlier day at all, so 2025-07-27 is a true start boundary, not
+  a hole between covered days.
+- Rows collected on that day: **BTC 1,056 · ETH 732 · SOL 70**
+  (528 / 366 / 35 events) — the day is populated, not empty.
+
+**Correction to RD-12.** RD-12 recorded "Earliest coverage: 2025-07-27
+(partial, **from hour 10**)". The measured first hour is **08:00 UTC**,
+not 10:00 — so the day carries **16/24** hours, not 14/24. RD-12's
+figure was a single-probe estimate; this entry supersedes that specific
+number only. RD-12's other archive measurements (coverage span, size,
+cost, 367 contiguous date prefixes) are unaffected and stand.
+
+### B — Reasoning
+
+This is **expected archive coverage, not data corruption**, on three
+independent grounds:
+
+1. **It is a start boundary, not a gap.** The preceding day contains
+   zero objects. A corruption or collection fault would produce holes
+   *inside* covered territory; an archive that simply begins at a point
+   in time produces exactly this shape.
+2. **It is upstream of this project.** The objects were never published;
+   nothing in the collection path could have dropped them. The pipeline
+   fetched every object that exists for that day.
+3. **It is singular and self-consistent.** Across 8,800 objects, this is
+   the only deviation, and its size (8) matches the shortfall (8)
+   exactly. A systematic collection defect would not confine itself to
+   the first eight hours of the first day.
+
+Consequently the day's event counts are **mechanically understated by
+construction** — roughly one third of the day is simply not in the
+archive — for every symbol at once. That understatement is a property of
+the observation window, not of the market.
+
+### C — Decision (judgment) and consequences
+
+**2025-07-27 is a STRUCTURALLY PARTIAL day (16/24 hours = 66.7%). It
+must never be treated as statistically equivalent to a complete day.**
+
+Every analysis that consumes a daily-count series must handle it
+explicitly. Concretely, leaving it in raw:
+
+- **Contaminates percentile and threshold derivation.** A venue-relative
+  threshold is required by Constitution §6 to be derived from *that
+  venue's own historical distribution*. A day that is 2/3 observed is
+  not a sample from the distribution of daily counts; including it
+  biases the low tail downward and shifts every percentile.
+- **Corrupts distributional statistics** — mean, variance, skew,
+  autocorrelation, and any concentration measure of the RD-13 kind all
+  ingest one observation that is not on the same scale as the other 366.
+- **Distorts N_eff and signalled-count estimates**, which the
+  pre-registration feasibility review (Constitution §6, permanent rule)
+  is specifically required to report for Campaign 06.
+- **Interacts with RD-14.** A symbol with few events on that day could
+  be pushed to zero by the missing eight hours and then be read, under
+  RD-14, as a verified zero-event day. RD-14's rule is sound but its
+  precondition ("the archive hours were themselves complete") does not
+  hold here. **RD-14 must not be applied to 2025-07-27.**
+
+### D — Implementation guidance
+
+A future analysis must adopt **one** of the following, and **state which
+one it used** in its pre-registration:
+
+1. **Exclude the day** (recommended default). Analyze
+   **2025-07-28 → 2026-07-28, 366 complete days**. Simple,
+   assumption-free, costs 0.27% of the window. Note that this makes the
+   effective start date differ from the collection start date — say so
+   explicitly rather than letting the two silently diverge.
+2. **Normalize with a documented method.** If the day is retained, scale
+   its counts by 24/16 = **1.5×** and record that factor, its
+   assumption, and its known weakness (§E) as a `known_limitation` under
+   RD-11 A.
+
+Prohibited in either case: silently including the raw count; dropping it
+without recording that it was dropped; or discovering the issue
+downstream and adjusting a threshold after seeing a result (Constitution
+§6 — thresholds are never adjusted after seeing an outcome).
+
+### E — Limitations of this entry
+
+Stated plainly, because the guidance above is only as good as what was
+actually measured:
+
+- **The audit counted objects, not their contents.** A present-but-empty
+  or truncated hourly object would still have counted as covered. The
+  366 full days are therefore verified *present*, not verified
+  *non-empty*. Nothing observed suggests otherwise (rows/event is
+  exactly 2.0000 across 2,138,761 events, and there are no unpaired
+  fills), but "not contradicted" is weaker than "measured".
+- **The 1.5× normalization assumes a uniform intra-day event rate, which
+  is false.** Liquidations are bursty and cluster in time (RD-13
+  measured top-10 days carrying 65.2% of a month's events); the same
+  clustering applies within a day. A single scalar cannot recover the
+  eight missing hours, and 00:00–08:00 UTC is not a random third of the
+  day. **This is the principal reason exclusion is recommended over
+  normalization.**
+- **Why the archive starts at 08:00 UTC is unknown.** Whether
+  Hyperliquid's node data genuinely begins there, or the archive
+  publisher began capturing then, is not distinguishable from outside.
+  It does not affect the handling rule, but it means no claim is made
+  about what happened before 2025-07-27T08:00Z — that period is
+  **unobserved**, not empty.
+
+- **Evidence references:** whole-window coverage audit, 2026-08-05 (367 days, 8,800 objects listed via `sources/hyperliquid_s3.list_hour_keys`); direct listing of `20250727` (16 objects, hours 8–23) and `20250726` (0 objects); per-day row counts from the completed Backlog 1.5 series; `hyperliquid_s3.EARLIEST_MEASURED_DATE = "20250727"`; RD-12's archive measurement (hour figure corrected here); RD-14 §D (which required this audit); Constitution §6 (venue-relative thresholds; pre-registration feasibility review).
+- **Revisit triggers:** the archive publisher backfilling 2025-07-27 hours 00–07 or any earlier date (would retire this entry); a content-level audit finding any present-but-empty hourly object (would extend it beyond a pure boundary concern); any future venue/archive whose start boundary lands mid-day (the same rule would apply, re-derived for that venue).
+- **Supersedes / superseded-by:** corrects RD-12's "from hour 10" to **from hour 08** (16/24, not 14/24); RD-12's remaining archive measurements stand. Complements RD-14 and **bounds its applicability** — RD-14's zero-event rule does not apply to 2025-07-27.
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -542,7 +679,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
 | Open Interest | ACTIVE | READY (Binance only) | cap | Level (CAMP-01) and **Velocity (CAMP-05)** both rejected. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
-| Liquidations | LOCKED | **COLLECTING** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill: 2025-07-27 → present (~12 months), ~240 GB, ~$27 (~$0 same-region), **in progress**. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. |
+| Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |

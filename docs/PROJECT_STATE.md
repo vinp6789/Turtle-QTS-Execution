@@ -36,9 +36,9 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | Full 12-month liquidation backfill (Backlog 1.5) **— running detached, 19.6% complete**; then Campaign 06's outcome-blind feasibility review (1.6). **Backlog 2.1 (deep-history backfill) is COMPLETE** (2026-07-30). |
+| **Current objective** | **Backlog 1.5 (12-month liquidation backfill) is COMPLETE and audited** (2026-08-05, 367/367 days, 2,138,761 events). Next: Campaign 06's outcome-blind feasibility review (1.6). Backlog 2.1 also COMPLETE (2026-07-30). |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | Let both detached backfills continue. Check with `python scripts/job_status.py <name>` (`liq_backfill` / `deep_history_backfill`) and `python scripts/liquidation_backfill_progress.py`. |
+| **Immediate next task** | **Backlog 1.6** — the outcome-blind feasibility review (N_eff + cross-symbol correlation). Must apply **RD-14** (absent day = `count = 0`) and **RD-15** (2025-07-27 is 16/24 hours — exclude or normalize, and do not apply RD-14 to it). |
 | **Full regression** | **1,729 passed, 92 subtests, 0 failed** (12 new tests for the Backlog 2.1 driver; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
@@ -64,12 +64,16 @@ by nor gating Alpha Engine research.
 
 ## Current Objective
 
-All Priority 0/1.1/1.2/1.3/1.4 defect-chain items are closed. The full
-12-month liquidation backfill (1.5) is running detached; once it
-finishes, determine — via an outcome-blind feasibility review, not
-intuition — whether a 12-month liquidation campaign is statistically
-viable at all (1.6), before spending further engineering or research
-effort on it. **Backlog 2.1 (the deep-history backfill) completed
+All Priority 0/1.1/1.2/1.3/1.4 defect-chain items are closed, and the
+full 12-month liquidation backfill (1.5) **completed and passed
+independent audit on 2026-08-05** — 367/367 days, 2,138,761 events, no
+integrity defects. The next step is to determine — via an outcome-blind
+feasibility review, not intuition — whether a 12-month liquidation
+campaign is statistically viable at all (1.6), before spending further
+engineering or research effort on it. **That review must apply RD-14
+(an absent `(symbol, day)` row is `count = 0`, not missing) and RD-15
+(2025-07-27 carries only 16/24 archive hours — exclude or normalize it,
+and never apply RD-14 to it).** **Backlog 2.1 (the deep-history backfill) completed
 2026-07-30** — funding/OI/mark-price coverage now reaches back to
 2020–2021 via Binance's public archive, which unblocks the *next*
 funding/OI campaign (it was always orthogonal to Campaign 06 and never
@@ -315,6 +319,16 @@ pre-fix code and passes against the fix).
 - **Both fixes committed separately:** `75f9353` (raw `TimeoutError` → `HistoricalDataError` translation, closing the earlier `deep_history_backfill` crash) and `8667cb2` (the `oi_value` skip fix above).
 - **`deep_history_backfill` resumed** via the identical documented command (new pid). Verified: the entire funding-rate phase re-walked with `skipped=1, rows_added=0` for every month (funding CSVs' row counts unchanged: BTC/ETH 7120, SOL 6425 lines, before and after), then the metrics phase resumed and correctly skipped every already-collected month (`fetched=0, skipped=N`) without re-fetching any of them.
 
+**Backlog 1.5 COMPLETE (2026-08-05) — full 12-month liquidation backfill, independently audited:**
+- Terminal status `BACKFILL_COMPLETE symbols=['BTC','ETH','SOL'] range=2025-07-27..2026-07-28`; final checkpoint `node_fills_by_block/hourly/20260728/23.lz4` — the last hour of the requested end date.
+- **Final dataset:** 367/367 days · **4,277,522 rows** / **2,138,761 unique events** · 0.92 GB on disk (BTC 2,493,516 rows / 1,246,758 events · ETH 1,025,120 / 512,560 · SOL 758,886 / 379,443).
+- **Integrity, measured not assumed:** `rows/event` **exactly 2.0000** on all three symbols · **0** unpaired `tid`s across 2,138,761 events (the strongest available evidence against partially-written days — a truncated day would split fill pairs) · **0** exact duplicate dedup keys · **0** rows outside the requested window · no orphaned `.tmp` files · checkpoint end hour consistent with the data's own end date.
+- **Coverage:** BTC **367/367 complete**. ETH 364/367, SOL 362/367 — all **6** missing `(symbol, day)` pairs verified as **RD-14 zero-event days** (on each, at least one other symbol has rows, proving the archive hours were fetched and decoded): 2025-12-20 (SOL), 2026-01-17 (ETH+SOL), 2026-01-24 (ETH), 2026-04-25 (SOL), 2026-05-03 (SOL), 2026-07-25 (ETH+SOL).
+- **The RD-14 §D whole-window coverage audit is now COMPLETE** (it was recorded as an outstanding prerequisite): every hourly object across all 367 days listed from the live archive — **8,800 objects**, and **exactly one** day deviates from 24/24.
+- **That one deviation is the new finding, now governed by RD-15:** **2025-07-27 carries only 16/24 hours** (archive's first object is `20250727/8.lz4`; hours 00–07 absent; 2025-07-26 has zero objects, so this is a true start boundary, not a gap). The 8-object shortfall across the whole year is accounted for exactly and entirely by those eight hours. **This day must never be treated as statistically equivalent to a complete day** — exclude it, or normalize by 1.5× with the method documented; and **RD-14 must not be applied to it**. RD-15 also corrects RD-12's "from hour 10" to hour 08.
+- **Pilot re-collection verified benign.** The requested range includes the 2026-06 pilot month, so the production checkpoint marched through it and re-fetched those 30 days, producing 90 conflict warnings (30 days × 3 symbols), confined to exactly `20260601`–`20260630`. A conflicting hour was re-decoded from source and compared field by field: **every market-data field is identical** (price, size, side, direction, method, liquidated_user, mark_price, source, source_detail); **only `ingested_at_utc` differs** (pilot `2026-07-28` vs re-fetch). First-seen values were correctly kept. **No duplicate rows were written and no data changed** — but note the precise wording: recollection *did* occur and changed nothing; "no recollection occurred" would be false.
+- Collection required **five** resumes from checkpoint across transient S3 outages (18 logged connectivity failures, zero deterministic). **No data was lost on any of them** — the Backlog 1.3 H1 durability invariant held throughout.
+
 **Backlog 2.1 CLOSED (2026-07-30) — `BACKFILL_COMPLETE target=all`, zero failed months:**
 - All 5 previously-failed months collected on the resumed run: `ETH 2022-06`/`2022-07` (the transient DNS failures — 8640/8928 rows, no skips) and **`BTC/ETH/SOL 2023-04`** (8640 OI rows each; mark-price rows 8628/8630/8630 — i.e. exactly **12/10/10** rows skipped per symbol).
 - **Those skip counts independently corroborate the investigation:** they match, exactly, the anomalous-row counts measured by a separate live-archive probe run *before* the fix was written (BTC 12, ETH 10, SOL 10 rows with `sum_open_interest_value == "0E-8"` on 2023-04-10). The fix skipped precisely the anomalous rows and nothing else.
@@ -335,8 +349,8 @@ pre-fix code and passes against the fix).
 | ~~1.2~~ | ~~RD-13: record the pilot; correct RD-12's "no backfill executed"~~ | — | — | — | **Done 2026-07-29** — `ROADMAP.md` §1 also already unstaled in the prior doc-reorg session |
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
-| **1.5** | Full 12-month liquidation backfill, **single pass, all symbols retained** (~2.4 GB retained, ~$27 one-time). Running **detached** via `scripts/run_detached_job.py` — survives chat/terminal/browser loss; resumes from checkpoint after any interruption (`docs/LONG_RUNNING_JOBS.md`) | 0.2 (done), 1.3 (done) | Yes, for Campaign 06 only | ~1 day wall-clock | **IN PROGRESS — 72/367 days (19.6%) durable at 2026-07-31; resumed 4x after transient S3 outages (no data lost on any). Retry budget raised ~62s -> ~12min (`e63cbab`) to stop the manual-resume churn** |
-| **1.6** | Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
+| ~~1.5~~ | ~~Full 12-month liquidation backfill, single pass, all symbols retained~~ | — | — | — | **Done 2026-08-05 — independently audited.** 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicates, 0 unpaired fills. Five checkpoint resumes across transient S3 outages, no data lost. Surfaced **RD-15** (2025-07-27 is a 16/24-hour partial day) |
+| **1.6** | **NEXT.** Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
 | ~~2.1~~ | ~~Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL)~~ | — | — | — | **Done 2026-07-30 — `BACKFILL_COMPLETE target=all`, 0 failed months.** Two real defects found and fixed en route (raw `TimeoutError` escaping the retry path; a genuine Binance archive `oi_value==0` anomaly on 2023-04-10) — see Active Work |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
 
@@ -383,6 +397,7 @@ pre-fix code and passes against the fix).
 **Scientific risks**
 - Liquidation cascades across BTC/ETH/SOL may be one correlated market-wide process rather than three independent signals — the defining open question Backlog 1.6 exists to answer.
 - Deep-history backfill (2.1) introduces **survivorship bias** (a 2026-chosen watchlist tested against 2020–21 conditions where SOL fell ~96% and was widely considered terminal) and **non-stationarity** (a 2020–2026 full-sample threshold spans two halvings, LUNA, FTX, and the ETF era) — both must become permanent `known_limitations` entries whenever the deep window is used, via the existing RD-11 A mechanism. Per-symbol archive start dates are also asymmetric (BTC ~2021-01, ETH/SOL ~2022-01 for `metrics`), a compositional break that sample construction must not silently pool across. **Fourth item, measured during the 2.1 collection (2026-07-30):** a small fraction of 5-minute mark-price observations are legitimately absent — Binance's archive reports `sum_open_interest_value == 0` alongside a normal `sum_open_interest` for a handful of snapshots (32 rows across BTC/ETH/SOL on 2023-04-10 alone), which yields no derivable mark and is skipped rather than fabricated. **The open-interest series is complete; the derived mark-price series is very slightly sparser.** Sample construction must join the two on timestamp rather than assuming row-for-row alignment.
+- **RD-15 (2026-08-05): 2025-07-27 is a structurally partial day — 16 of 24 archive hours.** The archive's first object is `20250727/8.lz4`; hours 00–07 do not exist upstream. Counts that day are mechanically understated ~33% for **every** symbol simultaneously, so including it raw shifts every percentile and corrupts threshold derivation, distributional statistics, and N_eff. Backlog 1.6 must exclude it (recommended) or normalize by 1.5× with the method documented. **RD-14 must not be applied to this day.** The whole-window audit confirmed it is the *only* such day in 367.
 - **RD-14 (2026-08-02): a liquidation day with no rows is a VERIFIED ZERO-EVENT day, not a missing observation.** Verified three ways (cross-symbol coincidence; 24/24 archive objects present on all nine days checked; live re-decode of 2026-01-17 returning zero rows for every symbol while 2026-01-18 returned rows). Campaign 06 sample construction **must materialize these as `count = 0`** — dropping them conditions the sample on activity and inflates every percentile threshold, breaking the venue-relative-threshold rule. Prerequisite before final analysis: a whole-window coverage audit (24 hourly objects per collected day); completeness was verified on 9 days, not all 233.
 - `min_hit_rate = 0.55` has been copied unexamined into all five pre-registrations; re-deriving it for a structurally different feature (liquidation-event density vs. a continuous rate/level) rather than reusing the constant is a live methodology risk for Campaign 06.
 
@@ -405,7 +420,7 @@ pre-fix code and passes against the fix).
 5. ~~Write RD-13~~ — **done 2026-07-29**: pilot measurements, RD-12 correction, cross-symbol correlation finding, new feasibility-review requirement.
 6. ~~Build `collect_liquidations()` + CLI entry; declare `boto3`/`lz4`~~ — **done 2026-07-29**, plus a real durability defect (deferred-write, not per-day flush) found and fixed before commit.
 7. ~~Collect Hyperliquid-native daily candles 2025-07-27→present + Binance metrics secondary check~~ — **done 2026-07-29**, plus a real end-date boundary defect found via live run and fixed (see Active Work).
-8. Execute the full 12-month liquidation backfill, single pass, all symbols retained. *(IN PROGRESS — 72/367 days, 19.6%; running detached; check with `python scripts/job_status.py liq_backfill`. Resumed from checkpoint 4x after transient S3 outages, no data lost on any; retry budget since raised to ~12min.)*
+8. ~~Execute the full 12-month liquidation backfill, single pass, all symbols retained.~~ — **done 2026-08-05**, audited: 367/367 days, 2,138,761 events, rows/event exactly 2.0000. Surfaced RD-15.
 8a. ~~Deep-history backfill (Backlog 2.1), orthogonal to Campaign 06.~~ — **done 2026-07-30**, `BACKFILL_COMPLETE target=all`, 0 failed months.
 9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
 10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and proceed with the next funding/OI campaign, by then unblocked by Backlog 2.1.
@@ -548,6 +563,23 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-15 (2026-08-05)** — data-interpretation rule, distinct from
+  RD-14: the liquidation archive **begins mid-day on 2025-07-27**, whose
+  first object is hour 08, so that day carries **16/24 hours** and is
+  structurally partial. Established by the whole-window coverage audit
+  (367 days, 8,800 objects listed; exactly one day deviates from 24/24,
+  and its 8-object shortfall accounts for the year's entire shortfall)
+  plus a direct listing showing 2025-07-26 has zero objects — a true
+  start boundary, not a gap, and upstream of this project rather than a
+  collection fault. **The day must never be treated as statistically
+  equivalent to a complete day**: it mechanically understates counts for
+  every symbol at once, contaminating percentile/threshold derivation
+  (Constitution §6), distributional statistics, and N_eff. A future
+  analysis must either exclude it (recommended — assumption-free, costs
+  0.27% of the window) or normalize by 1.5× with the method documented,
+  and must state which. **Bounds RD-14:** RD-14's zero-event rule does
+  not apply to this day, since its precondition (archive hours complete)
+  fails. Also corrects RD-12's "from hour 10" to hour 08.
 - **RD-14 (2026-08-02)** — data-interpretation rule: within the
   checkpoint-covered window, an absent `(symbol, day)` row in the
   liquidation series means that symbol recorded **zero events** that
@@ -754,8 +786,30 @@ accordingly.)*
              red against the pre-change source. 1,745 tests passing.
              Resumed from day 72/367; data verified byte-identical
              (md5) and checkpoint unchanged -- nothing recollected.
-   ...        [next: Backlog 1.5 continues running detached; then 1.6
-              (Campaign 06 feasibility review). Backlog 2.1 done, so the
-              next funding/OI campaign is unblocked. Close the launcher
-              concurrency race before any *future* long-running job.]
+2026-08-05   Backlog 1.5 COMPLETE. BACKFILL_COMPLETE, checkpoint at
+             20260728/23 (the requested end date). Final dataset:
+             367/367 days, 4,277,522 rows / 2,138,761 events, 0.92 GB;
+             rows/event exactly 2.0000, 0 unpaired fills, 0 duplicate
+             keys, 0 rows outside the window, no orphaned .tmp files.
+             Five checkpoint resumes across transient S3 outages, no
+             data lost on any.
+2026-08-05   Final collection audit (independent). Completed the
+             whole-window coverage audit RD-14 Section D had recorded as
+             an outstanding prerequisite: 8,800 hourly objects across
+             367 days, exactly ONE day deviating from 24/24. All six
+             missing (symbol, day) pairs confirmed as RD-14 zero-event
+             days. Pilot-month recollection (30 days, 90 conflict
+             warnings) verified benign by field-by-field re-decode from
+             source: every market-data field identical, only
+             ingested_at_utc differing.
+2026-08-05   Commit `RD15` — RD-15 recorded: the archive begins
+             2025-07-27 at hour 08, so that day is 16/24 hours and is
+             never statistically equivalent to a complete day. Corrects
+             RD-12's "from hour 10". Bounds RD-14's applicability.
+             Liquidations Data Status COLLECTING -> READY.
+   ...        [next: Backlog 1.6 (Campaign 06 feasibility review), which
+              must apply RD-14 and RD-15 to sample construction. Backlog
+              2.1 done, so the next funding/OI campaign is unblocked.
+              Close the launcher concurrency race before any *future*
+              long-running collection job.]
 ```
