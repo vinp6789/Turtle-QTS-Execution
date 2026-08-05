@@ -62,6 +62,10 @@ from .funding_rate_candidate import (
     FundingRateThresholdRuleCandidate,
     funding_rate_candidate_specification,
 )
+from .liquidation_density_candidate import (
+    LiquidationDensityRuleCandidate,
+    liquidation_density_candidate_specification,
+)
 from .models import CandidateSignal, CandidateSpecification, SignalDirection
 from .open_interest_candidate import (
     OpenInterestThresholdRuleCandidate,
@@ -76,6 +80,8 @@ __all__ = [
     "CandidateSpecification",
     "funding_rate_candidate_specification",
     "FundingRateThresholdRuleCandidate",
+    "liquidation_density_candidate_specification",
+    "LiquidationDensityRuleCandidate",
     "open_interest_candidate_specification",
     "OpenInterestThresholdRuleCandidate",
     "open_interest_extremeness_candidate_specification",

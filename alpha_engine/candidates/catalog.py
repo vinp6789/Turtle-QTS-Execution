@@ -27,9 +27,14 @@ from ..features import (
     PCTRANK_NAME,
     PCTRANK_VERSION,
     FundingRateFeature,
+    LiquidationDensityFeature,
     OpenInterestFeature,
 )
 from .errors import CandidateError
+from .liquidation_density_candidate import (
+    LiquidationDensityRuleCandidate,
+    liquidation_density_candidate_specification,
+)
 from .funding_rate_candidate import (
     FundingRateThresholdRuleCandidate,
     funding_rate_candidate_specification,
@@ -69,6 +74,7 @@ class CatalogEntry:
 
 _FUNDING_METADATA = FundingRateFeature.metadata()
 _OI_METADATA = OpenInterestFeature.metadata()
+_LIQUIDATION_METADATA = LiquidationDensityFeature.metadata()
 
 CANDIDATE_CATALOG = MappingProxyType({
     "funding_rate_threshold_rule": CatalogEntry(
@@ -93,6 +99,21 @@ CANDIDATE_CATALOG = MappingProxyType({
     # feature binding lives in each CandidateSpecification (the factory
     # validates it against both allowed identities), and evaluate_fn works
     # for either.
+    # Research Campaign 08. Its own family rather than a reuse of
+    # funding_rate_threshold_rule: the funding factory stamps
+    # feature_name from FundingRateFeature.metadata(), so reusing it
+    # would record "funding_rate_raw" in every evidence package while
+    # actually testing liquidation density (the misstatement CAMP-04 and
+    # CAMP-05 carry). Campaign 08 could be promotion-eligible, so its
+    # provenance must be exact.
+    "liquidation_density_rule": CatalogEntry(
+        name="liquidation_density_rule",
+        candidate_type="rule_based",
+        feature_name=_LIQUIDATION_METADATA.name,
+        feature_version=_LIQUIDATION_METADATA.version,
+        specification_factory=liquidation_density_candidate_specification,
+        evaluate_fn=LiquidationDensityRuleCandidate.evaluate,
+    ),
     "open_interest_extremeness_rule": CatalogEntry(
         name="open_interest_extremeness_rule",
         candidate_type="rule_based",

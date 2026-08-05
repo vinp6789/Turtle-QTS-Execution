@@ -162,7 +162,7 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
         self.assertEqual(
             set(module.__all__),
             {
-                "FundingRateFeature", "OpenInterestFeature",
+                "FundingRateFeature", "OpenInterestFeature", "LiquidationDensityFeature",
                 "FeatureValue", "FeatureMetadata", "FeatureError",
                 "percentile_rank_centered", "zscore",
                 "PCTRANK_NAME", "PCTRANK_VERSION", "ZSCORE_NAME", "ZSCORE_VERSION",
@@ -175,6 +175,8 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
             set(module.__all__),
             {
                 "CandidateSpecification", "funding_rate_candidate_specification",
+                "liquidation_density_candidate_specification",
+                "LiquidationDensityRuleCandidate",
                 "FundingRateThresholdRuleCandidate", "open_interest_candidate_specification",
                 "OpenInterestThresholdRuleCandidate",
                 "open_interest_extremeness_candidate_specification",

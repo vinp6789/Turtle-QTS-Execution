@@ -26,6 +26,7 @@ docstring).
 
 from .errors import FeatureError
 from .funding_rate_feature import FundingRateFeature
+from .liquidation_density_feature import LiquidationDensityFeature
 from .models import FeatureMetadata, FeatureValue
 from .open_interest_feature import OpenInterestFeature
 from .open_interest_rolling import (
@@ -39,6 +40,7 @@ from .open_interest_rolling import (
 
 __all__ = [
     "FundingRateFeature",
+    "LiquidationDensityFeature",
     "OpenInterestFeature",
     "FeatureValue",
     "FeatureMetadata",
