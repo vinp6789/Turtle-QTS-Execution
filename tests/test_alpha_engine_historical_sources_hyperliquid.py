@@ -137,6 +137,41 @@ def _candle_row(t_ms, close, coin="BTC"):
 class TestFetchDailyCandles(unittest.TestCase):
     """Backlog 1.4. No real network calls -- same fake-transport pattern
     as TestFetchFundingRateRange above."""
+    def test_interval_defaults_to_1d_preserving_prior_behaviour(self):
+        """Backlog 3.6 added `interval`; the default must keep every
+        existing caller on exactly the request they made before."""
+        transport = _FakeTransport([[]])
+        hyperliquid.fetch_daily_candles(
+            Symbol("BTC"), 1704067200000, 1704153600000, transport=transport, clock=_CLOCK)
+        self.assertEqual(transport.calls[0][1]["req"]["interval"], "1d")
+
+    def test_interval_is_forwarded_to_the_venue(self):
+        transport = _FakeTransport([[]])
+        hyperliquid.fetch_daily_candles(
+            Symbol("BTC"), 1704067200000, 1704153600000, interval="1h",
+            transport=transport, clock=_CLOCK)
+        self.assertEqual(transport.calls[0][1]["req"]["interval"], "1h")
+
+    def test_interval_is_recorded_in_source_detail(self):
+        """Provenance must distinguish an hourly row from a daily one."""
+        rows = [_candle_row(1704067200000, "42000.0")]
+        transport = _FakeTransport([rows])
+        out = hyperliquid.fetch_daily_candles(
+            Symbol("BTC"), 1704067200000, 1704153600000, interval="1h",
+            transport=transport, clock=_CLOCK)
+        self.assertTrue(out)
+        self.assertIn("interval=1h", out[0].source_detail)
+
+    def test_still_forming_exclusion_holds_at_hourly_interval(self):
+        """The M1 guard must not be interval-specific."""
+        future = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+        rows = [{"t": future, "T": future + 3599999, "s": "BTC", "i": "1h",
+                 "o": "1", "c": "1", "h": "1", "l": "1", "v": "1", "n": 1}]
+        out = hyperliquid.fetch_daily_candles(
+            Symbol("BTC"), future, future + 3600000, interval="1h",
+            transport=_FakeTransport([rows]), clock=_CLOCK)
+        self.assertEqual(out, ())
+
     def test_read_timeout_raises_historical_data_error_not_timeout_error(self):
         """Same translation requirement on the candles endpoint -- it is
         the second call site in this module and must not diverge."""

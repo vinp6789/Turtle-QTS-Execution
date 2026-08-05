@@ -192,6 +192,7 @@ def fetch_daily_candles(
     start_ms: int,
     end_ms: int,
     *,
+    interval: str = "1d",
     transport: TransportFn = post_json,
     timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
     clock: Callable[[], str] = _now,
@@ -203,6 +204,15 @@ def fetch_daily_candles(
     https://api.hyperliquid.xyz/info {"type": "candleSnapshot", "req":
     {"coin": <SYMBOL>, "interval": "1d", "startTime": <ms>,
     "endTime": <ms>}}.
+
+    `interval` defaults to "1d" -- the original and only behaviour until
+    Backlog 3.6 -- and may be set to any interval the venue supports
+    (e.g. "1h"). Every guarantee below holds unchanged at any interval;
+    only the bucket width differs. NOTE the venue retains finer
+    intervals for a SHORTER history than daily: 1h was measured
+    (2026-08-05) to reach back only ~210 days, while 1d reaches the
+    archive start. An out-of-retention request returns an empty tuple,
+    not an error.
 
     A candle whose close time (`T`) has not yet passed `clock()` is
     STILL FORMING and is silently excluded -- never returned, never an
@@ -227,7 +237,7 @@ def fetch_daily_candles(
     now_ms = int(parse_utc(ingested_at_utc).timestamp() * 1000)
     payload = {
         "type": "candleSnapshot",
-        "req": {"coin": symbol.value, "interval": "1d", "startTime": start_ms, "endTime": end_ms},
+        "req": {"coin": symbol.value, "interval": interval, "startTime": start_ms, "endTime": end_ms},
     }
     try:
         body = transport(_INFO_URL, payload, timeout_seconds)
@@ -241,7 +251,7 @@ def fetch_daily_candles(
     if not isinstance(body, list):
         raise HistoricalDataError(f"{_INFO_URL}: expected a JSON array, got {type(body).__name__}")
 
-    source_detail = f"candleSnapshot coin={symbol.value} interval=1d startTime={start_ms} endTime={end_ms}"
+    source_detail = f"candleSnapshot coin={symbol.value} interval={interval} startTime={start_ms} endTime={end_ms}"
     observations: List[MarkPriceObservation] = []
     for row in body:
         try:

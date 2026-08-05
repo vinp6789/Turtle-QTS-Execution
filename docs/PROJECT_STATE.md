@@ -36,7 +36,7 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **Backlog 3.5 APPROVED an hourly Campaign 06 specification** — the first APPROVE any feasibility gate has ever returned. Next: collect the Hyperliquid 1h outcome series (3.6, **time-sensitive — ~210-day venue retention**), then pre-register Campaign 08. The Live Recorder (3.4) runs continuously and makes this constraint non-recurring. |
+| **Current objective** | **Pre-register and run Campaign 08** — hourly liquidation density. Feasibility APPROVED (3.5) and the Hyperliquid-native hourly outcome series is collected (3.6). This is the **first campaign with both feature and outcome venue-native**, i.e. no DEFER-ceiling: a positive result would be promotion-eligible. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
 | **Immediate next task** | Let the recorder accumulate. Check with `python scripts/recorder_health.py` (read-only, exit 0 = healthy). Then the hourly-liquidation screen (RD-16 §E). |
 | **Full regression** | **1,831 passed, 102 subtests, 0 failed** (20 launcher-concurrency, 25 recorder, 13 recorder-health tests added; **all job-tooling QA findings now closed, including L1/H1**) |
@@ -396,7 +396,8 @@ pre-fix code and passes against the fix).
 | ~~3.3~~ | ~~Close the launcher concurrency race (H1/H2)~~ | — | — | — | **Done 2026-08-05 (`4325782`).** Root cause proven first: lock created empty, second caller skipped the liveness guard. 35-line fix + 20 concurrency tests (prior suite had none) |
 | ~~3.4~~ | ~~Deploy the Live Recorder~~ | 3.3 (done) | — | — | **Done 2026-08-05 (RD-18).** Running as `live_recorder`: HL OI/funding/mark, BTC/ETH/SOL, hourly data / 15-min poll. Monitoring: `scripts/recorder_health.py`. **Order-flow capture NOT built — remains NOT YET** |
 | ~~3.5~~ | ~~Hourly-liquidation feasibility screen (RD-16 §E)~~ | — | — | — | **Done 2026-08-05 — APPROVE** (p75, folds 3/5). RD-16 §E's fear is **refuted**: hourly serial autocorrelation is LOW (+0.18–0.22), so the 24× raw gain survives (×0.65). Cross-symbol dependence is scale-invariant (ρ̄ +0.817 hourly vs +0.818 daily) |
-| **3.6** | **Collect Hyperliquid 1h candles** (BTC/ETH/SOL, 2026-01-07 → present) — the hourly outcome series Campaign 08 needs. **TIME-SENSITIVE: the venue retains 1h candles only ~210 days**, so one more day ages out daily | 3.5 (done) | **Yes — gates Campaign 08 pre-registration** | ~minutes | **NEXT** |
+| ~~3.6~~ | ~~Collect Hyperliquid 1h candles~~ | — | — | — | **Done 2026-08-05.** ~5,000 candles/symbol, `mark_price__*__hyperliquid_1h.csv`, 2026-01-09 → present. **0 duplicates, 0 non-1h steps**, still-forming candle excluded. Usable overlap with the liquidation window: **200 days ≈ 4,800 hourly samples** |
+| **3.7** | **Pre-register Campaign 08** — hourly liquidation density, p75, n_folds 3/5, Hyperliquid-native feature AND outcome. First campaign in project history with **no venue-transfer ceiling** | 3.5, 3.6 (done) | — | ~1 day | **NEXT** |
 
 ---
 
