@@ -1,0 +1,408 @@
+{
+  "generated_at_utc": "2026-08-05T11:48:29Z",
+  "windows": {
+    "binance": {
+      "start": "2020-09-13",
+      "end": "2026-06-30",
+      "n_days": 2117
+    },
+    "hyperliquid": {
+      "start": "2023-07-01",
+      "end": "2026-08-05",
+      "n_days": 1132
+    }
+  },
+  "venue_overlap": {
+    "start": "2023-07-01",
+    "end": "2026-06-30",
+    "n_days": 1096
+  },
+  "preflight": [
+    {
+      "assertion": "nonempty[binance/BTC]",
+      "passed": true,
+      "detail": "7,119 rows"
+    },
+    {
+      "assertion": "ascending[binance/BTC]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[binance/BTC]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "nonempty[binance/ETH]",
+      "passed": true,
+      "detail": "7,119 rows"
+    },
+    {
+      "assertion": "ascending[binance/ETH]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[binance/ETH]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "nonempty[binance/SOL]",
+      "passed": true,
+      "detail": "6,424 rows"
+    },
+    {
+      "assertion": "ascending[binance/SOL]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[binance/SOL]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "nonempty[hyperliquid/BTC]",
+      "passed": true,
+      "detail": "27,153 rows"
+    },
+    {
+      "assertion": "ascending[hyperliquid/BTC]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[hyperliquid/BTC]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "nonempty[hyperliquid/ETH]",
+      "passed": true,
+      "detail": "27,153 rows"
+    },
+    {
+      "assertion": "ascending[hyperliquid/ETH]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[hyperliquid/ETH]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "nonempty[hyperliquid/SOL]",
+      "passed": true,
+      "detail": "27,153 rows"
+    },
+    {
+      "assertion": "ascending[hyperliquid/SOL]",
+      "passed": true,
+      "detail": "timestamps ascending"
+    },
+    {
+      "assertion": "unique[hyperliquid/SOL]",
+      "passed": true,
+      "detail": "0 duplicate timestamps (expected 0)"
+    },
+    {
+      "assertion": "cadence[binance]",
+      "passed": true,
+      "detail": "modal inter-arrival 8h (expected 8h)"
+    },
+    {
+      "assertion": "cadence[hyperliquid]",
+      "passed": true,
+      "detail": "modal inter-arrival 1h (expected 1h)"
+    },
+    {
+      "assertion": "venue_overlap_nonempty",
+      "passed": true,
+      "detail": "2023-07-01..2026-06-30 = 1096 days of Binance/Hyperliquid overlap"
+    },
+    {
+      "assertion": "hyperliquid_current",
+      "passed": true,
+      "detail": "last Hyperliquid settlement 2026-08-05T11:00:00.049000+00:00 (0.03 days ago)"
+    },
+    {
+      "assertion": "window_len[binance]",
+      "passed": true,
+      "detail": "2117 common days across all 3 symbols"
+    },
+    {
+      "assertion": "window_len[hyperliquid]",
+      "passed": true,
+      "detail": "1132 common days across all 3 symbols"
+    }
+  ],
+  "q1_persistence": {
+    "binance/BTC": {
+      "n_days": 2117,
+      "lag1": 0.9830792126491527,
+      "n_eff": 18.063477542024614,
+      "n_neg_runs": 482,
+      "median_neg_run_h": 8.000001388888888,
+      "n_pos_runs": 481
+    },
+    "binance/ETH": {
+      "n_days": 2117,
+      "lag1": 0.9867995617852534,
+      "n_eff": 14.065499227062467,
+      "n_neg_runs": 486,
+      "median_neg_run_h": 8.000001666666668,
+      "n_pos_runs": 486
+    },
+    "binance/SOL": {
+      "n_days": 2117,
+      "lag1": 0.984689949331923,
+      "n_eff": 16.330700558658634,
+      "n_neg_runs": 591,
+      "median_neg_run_h": 15.999998611111112,
+      "n_pos_runs": 591
+    },
+    "hyperliquid/BTC": {
+      "n_days": 1132,
+      "lag1": 0.9365899791529558,
+      "n_eff": 37.06522514913037,
+      "n_neg_runs": 785,
+      "median_neg_run_h": 2.000002777777778,
+      "n_pos_runs": 785
+    },
+    "hyperliquid/ETH": {
+      "n_days": 1132,
+      "lag1": 0.9334030203359537,
+      "n_eff": 38.992274340504984,
+      "n_neg_runs": 955,
+      "median_neg_run_h": 1.9999988888888889,
+      "n_pos_runs": 955
+    },
+    "hyperliquid/SOL": {
+      "n_days": 1132,
+      "lag1": 0.9706602754887347,
+      "n_eff": 16.85352293333027,
+      "n_neg_runs": 1094,
+      "median_neg_run_h": 2.000020833333333,
+      "n_pos_runs": 1094
+    }
+  },
+  "cross_symbol": {
+    "binance": {
+      "pairs": {
+        "BTC-ETH": 0.8632881461389386,
+        "BTC-SOL": 0.37844696065491934,
+        "ETH-SOL": 0.42876996912432785
+      },
+      "rho_bar": 0.556835025306062,
+      "n_eff_symbols": 1.4193322175006418,
+      "haircut": 0.47311073916688057
+    },
+    "hyperliquid": {
+      "pairs": {
+        "BTC-ETH": 0.502582154326429,
+        "BTC-SOL": 0.38580301815668516,
+        "ETH-SOL": 0.47643372767672454
+      },
+      "rho_bar": 0.4549396333866129,
+      "n_eff_symbols": 1.5707799190199871,
+      "haircut": 0.5235933063399957
+    }
+  },
+  "q2_btc_only_grid": [
+    {
+      "venue": "binance",
+      "percentile": 75,
+      "n_folds": 3,
+      "threshold": 0.0001,
+      "n_days": 2117,
+      "total_signalled": 986,
+      "per_fold": [
+        508,
+        338,
+        140
+      ],
+      "worst_fold": 140,
+      "mean_fold": 328.6666666666667,
+      "clears_floor": true
+    },
+    {
+      "venue": "binance",
+      "percentile": 75,
+      "n_folds": 5,
+      "threshold": 0.0001,
+      "n_days": 2117,
+      "total_signalled": 986,
+      "per_fold": [
+        368,
+        166,
+        223,
+        183,
+        46
+      ],
+      "worst_fold": 46,
+      "mean_fold": 197.2,
+      "clears_floor": false
+    },
+    {
+      "venue": "binance",
+      "percentile": 90,
+      "n_folds": 3,
+      "threshold": 0.00022675200000000028,
+      "n_days": 2117,
+      "total_signalled": 212,
+      "per_fold": [
+        159,
+        47,
+        6
+      ],
+      "worst_fold": 6,
+      "mean_fold": 70.66666666666667,
+      "clears_floor": false
+    },
+    {
+      "venue": "binance",
+      "percentile": 90,
+      "n_folds": 5,
+      "threshold": 0.00022675200000000028,
+      "n_days": 2117,
+      "total_signalled": 212,
+      "per_fold": [
+        156,
+        5,
+        25,
+        26,
+        0
+      ],
+      "worst_fold": 0,
+      "mean_fold": 42.4,
+      "clears_floor": false
+    },
+    {
+      "venue": "hyperliquid",
+      "percentile": 75,
+      "n_folds": 3,
+      "threshold": 1.5071925e-05,
+      "n_days": 1132,
+      "total_signalled": 283,
+      "per_fold": [
+        173,
+        90,
+        20
+      ],
+      "worst_fold": 20,
+      "mean_fold": 94.33333333333333,
+      "clears_floor": false
+    },
+    {
+      "venue": "hyperliquid",
+      "percentile": 75,
+      "n_folds": 5,
+      "threshold": 1.5071925e-05,
+      "n_days": 1132,
+      "total_signalled": 283,
+      "per_fold": [
+        100,
+        87,
+        59,
+        25,
+        12
+      ],
+      "worst_fold": 12,
+      "mean_fold": 56.6,
+      "clears_floor": false
+    },
+    {
+      "venue": "hyperliquid",
+      "percentile": 90,
+      "n_folds": 3,
+      "threshold": 5.103505999999999e-05,
+      "n_days": 1132,
+      "total_signalled": 114,
+      "per_fold": [
+        82,
+        30,
+        2
+      ],
+      "worst_fold": 2,
+      "mean_fold": 38.0,
+      "clears_floor": false
+    },
+    {
+      "venue": "hyperliquid",
+      "percentile": 90,
+      "n_folds": 5,
+      "threshold": 5.103505999999999e-05,
+      "n_days": 1132,
+      "total_signalled": 114,
+      "per_fold": [
+        41,
+        43,
+        23,
+        7,
+        0
+      ],
+      "worst_fold": 0,
+      "mean_fold": 22.8,
+      "clears_floor": false
+    }
+  ],
+  "bootstrap": {
+    "binance_p75_folds3": {
+      "mean": 329.106,
+      "p05": 283,
+      "p95": 375,
+      "frac_ge_floor": 1.0
+    },
+    "binance_p75_folds5": {
+      "mean": 196.945,
+      "p05": 159,
+      "p95": 235,
+      "frac_ge_floor": 1.0
+    },
+    "binance_p90_folds3": {
+      "mean": 71.021,
+      "p05": 45,
+      "p95": 101,
+      "frac_ge_floor": 0.056
+    },
+    "binance_p90_folds5": {
+      "mean": 42.554,
+      "p05": 21,
+      "p95": 66,
+      "frac_ge_floor": 0.0
+    },
+    "hyperliquid_p75_folds3": {
+      "mean": 93.194,
+      "p05": 68,
+      "p95": 121,
+      "frac_ge_floor": 0.346
+    },
+    "hyperliquid_p75_folds5": {
+      "mean": 56.189,
+      "p05": 37,
+      "p95": 76,
+      "frac_ge_floor": 0.0
+    },
+    "hyperliquid_p90_folds3": {
+      "mean": 37.627,
+      "p05": 22,
+      "p95": 55,
+      "frac_ge_floor": 0.0
+    },
+    "hyperliquid_p90_folds5": {
+      "mean": 22.639,
+      "p05": 11,
+      "p95": 37,
+      "frac_ge_floor": 0.0
+    }
+  },
+  "min_signaled_samples_floor": 100,
+  "timings_seconds": {
+    "stage1_load_s": 0.23698159994091839,
+    "stage23_stats_s": 0.2396689000306651,
+    "total_s": 0.555670200032182
+  }
+}
