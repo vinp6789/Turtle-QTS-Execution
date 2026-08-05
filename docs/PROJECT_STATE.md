@@ -36,12 +36,12 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **Backlog 1.5 (12-month liquidation backfill) is COMPLETE and audited** (2026-08-05, 367/367 days, 2,138,761 events). Next: Campaign 06's outcome-blind feasibility review (1.6). Backlog 2.1 also COMPLETE (2026-07-30). |
+| **Current objective** | **Backlog 1.5, 1.6 and 2.1 all COMPLETE.** The 1.6 feasibility gate **DEFERRED Campaign 06** (RD-16) — measured N_eff = 1.14 of 3 symbols. Next: extend Hyperliquid-native funding coverage (stale since 2024-12), then an N_eff screen for the next funding/OI campaign on the now-deep window. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **Backlog 1.6** — the outcome-blind feasibility review (N_eff + cross-symbol correlation). Must apply **RD-14** (absent day = `count = 0`) and **RD-15** (2025-07-27 is 16/24 hours — exclude or normalize, and do not apply RD-14 to it). |
+| **Immediate next task** | **Backlog 3.1** — extend Hyperliquid funding coverage from 2024-12-31 to present (zero new code; DEX-first ceiling is now the binding constraint). See Immediate Backlog. |
 | **Full regression** | **1,729 passed, 92 subtests, 0 failed** (12 new tests for the Backlog 2.1 driver; QA findings M1/M2/L3 on the job tooling remain closed, L1 does not — see Current Blockers → Operational) |
 | **Approved alpha models** | **0** |
-| **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · 1 deferred pre-registration (Funding Persistence, non-viable N_eff) |
+| **Rejected hypotheses** | **18** (4 each: Campaigns 01–04; 2: Campaign 05) · **2 deferred pre-registrations** — Funding Persistence (RD-04) and **Campaign 06 / Liquidations (RD-16)**, both on non-viable N_eff |
 
 ---
 
@@ -64,20 +64,27 @@ by nor gating Alpha Engine research.
 
 ## Current Objective
 
-All Priority 0/1.1/1.2/1.3/1.4 defect-chain items are closed, and the
-full 12-month liquidation backfill (1.5) **completed and passed
-independent audit on 2026-08-05** — 367/367 days, 2,138,761 events, no
-integrity defects. The next step is to determine — via an outcome-blind
-feasibility review, not intuition — whether a 12-month liquidation
-campaign is statistically viable at all (1.6), before spending further
-engineering or research effort on it. **That review must apply RD-14
-(an absent `(symbol, day)` row is `count = 0`, not missing) and RD-15
-(2025-07-27 carries only 16/24 archive hours — exclude or normalize it,
-and never apply RD-14 to it).** **Backlog 2.1 (the deep-history backfill) completed
-2026-07-30** — funding/OI/mark-price coverage now reaches back to
-2020–2021 via Binance's public archive, which unblocks the *next*
-funding/OI campaign (it was always orthogonal to Campaign 06 and never
-gated it). See **Immediate Backlog** for the exact ordered chain.
+All Priority 0/1.x and 2.1 items are closed. The 12-month liquidation
+backfill (1.5) completed and passed independent audit; the feasibility
+gate (1.6) then **DEFERRED Campaign 06** (RD-16) — measured cross-symbol
+correlation ρ̄ = +0.818 gives **N_eff = 1.14** effective independent
+series from 3 symbols, and no threshold/fold configuration reaches the
+locked `min_signaled_samples = 100` per fold on an effective-sample
+basis. The mechanism is **untested, not rejected**; revisit trigger is
+≈18 further months of archive accumulation.
+
+**Campaign 06 was a leaf in the dependency graph, not a prerequisite —
+its deferral frees capacity rather than unblocking work.** What actually
+opened the next research step was **Backlog 2.1's completion**
+(2026-07-30), which deepened Binance funding/OI/mark-price history to
+2020–2021.
+
+The binding constraint is now the **DEX-first venue ceiling**: Binance
+funding spans 77 months while **Hyperliquid funding is stale at
+2024-12-31** (17 months), and under Constitution §6 a finding that
+exists only on CEX data is never promotion-eligible. Hence 3.1 (extend
+Hyperliquid coverage) precedes 3.2 (the next N_eff screen). See
+**Immediate Backlog** for the exact ordered chain.
 
 ---
 
@@ -350,9 +357,12 @@ pre-fix code and passes against the fix).
 | ~~1.3~~ | ~~`collect_liquidations()` + CLI entry + declare `boto3`/`lz4`~~ | — | — | — | **Done 2026-07-29** — a real durability defect found and fixed during implementation, see Active Work |
 | ~~1.4~~ | ~~Outcome series 2025-07-27 → present: Hyperliquid-native daily candles + Binance metrics~~ | — | — | — | **Done 2026-07-29** — a real boundary defect found via live end-to-end run and fixed, see Active Work |
 | ~~1.5~~ | ~~Full 12-month liquidation backfill, single pass, all symbols retained~~ | — | — | — | **Done 2026-08-05 — independently audited.** 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicates, 0 unpaired fills. Five checkpoint resumes across transient S3 outages, no data lost. Surfaced **RD-15** (2025-07-27 is a 16/24-hour partial day) |
-| **1.6** | **NEXT.** Feasibility review reporting **N_eff and cross-symbol correlation** (measured on pilot: ρ=+0.85–0.90 cross-symbol, ~438 raw signalled/yr at p60 → ~146/fold nominal but ≈53/fold after the correlation haircut) — not raw signalled counts | 1.5 | Yes — gates Campaign 06 pre-registration; **may reject Campaign 06 before it starts, which is the cheapest possible outcome** | ~1 day | Not started |
+| ~~1.6~~ | ~~Campaign 06 outcome-blind feasibility review (N_eff + cross-symbol correlation)~~ | 1.5 (done) | — | — | **Done 2026-08-05 — verdict DEFER (RD-16).** ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold config reaches `min_signaled_samples = 100` per fold effectively (best 40.2; P(eff≥100) = 0.00). Bar not weakened. Runtime 13.83s |
 | ~~2.1~~ | ~~Deep-history backfill: funding→2020-01 (BTC/ETH), 2020-09 (SOL); metrics→2021-01 (BTC), ~2022-01 (ETH/SOL)~~ | — | — | — | **Done 2026-07-30 — `BACKFILL_COMPLETE target=all`, 0 failed months.** Two real defects found and fixed en route (raw `TimeoutError` escaping the retry path; a genuine Binance archive `oi_value==0` anomaly on 2023-04-10) — see Active Work |
 | **2.2** | Route `data/alpha_engine_historical` through `config/loader.py` with an env override; declare a persistent Railway volume (`railway.json` currently declares none — `data/` is ephemeral there) | None | No | ~3 hrs | Not started |
+| **3.1** | **Extend Hyperliquid-native funding coverage** from 2024-12-31 to present (~19 months stale). Zero new code — `collect_funding_rate(source="hyperliquid")` already resumes from its own high-water mark | None | **Yes — for any future funding campaign's DEX-first replication** | ~hours | **NEXT** |
+| **3.2** | Outcome-blind **N_eff screen** for the next funding/OI campaign on the deep window: RD-04's Funding Persistence revisit (its "materially longer data window" trigger has fired: 18 → 77 months) + BTC-only funding momentum | 2.1 (done), 3.1 preferred | Gates the next funding pre-registration | ~1 day | Not started |
+| **3.3** | Close the launcher concurrency race (H1/H2). **Required before 3.1 if 3.1 is run as a detached job**; unnecessary if 3.1 runs foreground | None | Conditional — see 3.1 | ~2 hrs | Not started |
 
 ---
 
@@ -360,6 +370,8 @@ pre-fix code and passes against the fix).
 
 | Item | Why deferred | Where it will land |
 |---|---|---|
+| **Campaign 06 (Liquidations)** | **Deferred at the feasibility gate 2026-08-05 (RD-16)** — N_eff = 1.14 of 3 symbols; effective per-fold samples 40.2 vs a floor of 100. Mechanism **untested, not rejected**. Trigger: ≈264 worst-fold raw signalled samples (~18 further months of archive). Do **not** revisit by lowering the floor, loosening the threshold, or dropping the N_eff requirement. | `RESEARCH_DECISIONS.md` RD-16 |
+| **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` §1.3 |
 | **Historical Validation Layer (HVL)** | Trigger: the first campaign producing a SUPPORTED hypothesis (RD-11). Nothing has ever passed governance. | `ROADMAP.md` §2 |
 | **"Robustness Validation" as a separate layer** | Rejected on Constitution §5 — its contents (Monte Carlo, parameter sensitivity → Research; stress/spread/fills → HVL; latency/delay → Paper Trading) dissolve into three existing homes with nothing left over. Zero concrete instances exist to justify a fourth layer. | Not scheduled — absorbed into HVL/Research/Paper Trading design notes |
 | **Live Sample Recorder** | Correctly demoted after being briefly promoted — ~1.5-year lead time before any family it unlocks becomes testable (12–18mo accumulation, same as every archive-based campaign); addresses none of the failure modes seen to date (5 rejections on evidence, 2 kills on statistical power). Constitution §5: no present concrete need. | `ROADMAP.md` §2, last priority |
@@ -398,7 +410,7 @@ pre-fix code and passes against the fix).
 - Liquidation cascades across BTC/ETH/SOL may be one correlated market-wide process rather than three independent signals — the defining open question Backlog 1.6 exists to answer.
 - Deep-history backfill (2.1) introduces **survivorship bias** (a 2026-chosen watchlist tested against 2020–21 conditions where SOL fell ~96% and was widely considered terminal) and **non-stationarity** (a 2020–2026 full-sample threshold spans two halvings, LUNA, FTX, and the ETF era) — both must become permanent `known_limitations` entries whenever the deep window is used, via the existing RD-11 A mechanism. Per-symbol archive start dates are also asymmetric (BTC ~2021-01, ETH/SOL ~2022-01 for `metrics`), a compositional break that sample construction must not silently pool across. **Fourth item, measured during the 2.1 collection (2026-07-30):** a small fraction of 5-minute mark-price observations are legitimately absent — Binance's archive reports `sum_open_interest_value == 0` alongside a normal `sum_open_interest` for a handful of snapshots (32 rows across BTC/ETH/SOL on 2023-04-10 alone), which yields no derivable mark and is skipped rather than fabricated. **The open-interest series is complete; the derived mark-price series is very slightly sparser.** Sample construction must join the two on timestamp rather than assuming row-for-row alignment.
 - **RD-15 (2026-08-05): 2025-07-27 is a structurally partial day — 16 of 24 archive hours.** The archive's first object is `20250727/8.lz4`; hours 00–07 do not exist upstream. Counts that day are mechanically understated ~33% for **every** symbol simultaneously, so including it raw shifts every percentile and corrupts threshold derivation, distributional statistics, and N_eff. Backlog 1.6 must exclude it (recommended) or normalize by 1.5× with the method documented. **RD-14 must not be applied to this day.** The whole-window audit confirmed it is the *only* such day in 367.
-- **RD-14 (2026-08-02): a liquidation day with no rows is a VERIFIED ZERO-EVENT day, not a missing observation.** Verified three ways (cross-symbol coincidence; 24/24 archive objects present on all nine days checked; live re-decode of 2026-01-17 returning zero rows for every symbol while 2026-01-18 returned rows). Campaign 06 sample construction **must materialize these as `count = 0`** — dropping them conditions the sample on activity and inflates every percentile threshold, breaking the venue-relative-threshold rule. Prerequisite before final analysis: a whole-window coverage audit (24 hourly objects per collected day); completeness was verified on 9 days, not all 233.
+- **RD-14 (2026-08-02): a liquidation day with no rows is a VERIFIED ZERO-EVENT day, not a missing observation.** Verified three ways (cross-symbol coincidence; 24/24 archive objects present on all nine days checked; live re-decode of 2026-01-17 returning zero rows for every symbol while 2026-01-18 returned rows). Campaign 06 sample construction **must materialize these as `count = 0`** — dropping them conditions the sample on activity and inflates every percentile threshold, breaking the venue-relative-threshold rule. **That prerequisite is now CLOSED:** the whole-window coverage audit ran 2026-08-05 across all 367 days (8,800 objects) and found exactly one deviation — the 2025-07-27 partial day, now governed by RD-15. Applied in the 1.6 review (RD-16): 8 zero-event cells materialized.
 - `min_hit_rate = 0.55` has been copied unexamined into all five pre-registrations; re-deriving it for a structurally different feature (liquidation-event density vs. a continuous rate/level) rather than reusing the constant is a live methodology risk for Campaign 06.
 
 **Engineering risks**
@@ -422,8 +434,9 @@ pre-fix code and passes against the fix).
 7. ~~Collect Hyperliquid-native daily candles 2025-07-27→present + Binance metrics secondary check~~ — **done 2026-07-29**, plus a real end-date boundary defect found via live run and fixed (see Active Work).
 8. ~~Execute the full 12-month liquidation backfill, single pass, all symbols retained.~~ — **done 2026-08-05**, audited: 367/367 days, 2,138,761 events, rows/event exactly 2.0000. Surfaced RD-15.
 8a. ~~Deep-history backfill (Backlog 2.1), orthogonal to Campaign 06.~~ — **done 2026-07-30**, `BACKFILL_COMPLETE target=all`, 0 failed months.
-9. Run the outcome-blind feasibility review reporting N_eff and cross-symbol correlation; render the APPROVE/DEFER/REJECT call on Campaign 06's viability.
-10. If feasible: pre-register Campaign 06. If not: record the rejection in RD-14 and proceed with the next funding/OI campaign, by then unblocked by Backlog 2.1.
+9. ~~Run the outcome-blind feasibility review; render the APPROVE/DEFER/REJECT call on Campaign 06.~~ — **done 2026-08-05: DEFER (RD-16)**, N_eff = 1.14, bar not weakened.
+10. **Extend Hyperliquid funding coverage to present (3.1)** — the DEX-first ceiling is now the binding constraint.
+10a. Outcome-blind **N_eff screen** for the next funding/OI campaign (3.2), including RD-04's Funding Persistence revisit — its "materially longer data window" trigger has fired (18 → 77 months).
 11. Before starting any *future* long-running collection job beyond the two currently in flight: close the launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`) — see Current Blockers → Operational.
 
 ---
@@ -563,6 +576,23 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-16 (2026-08-05)** — **Campaign 06 DEFERRED at the feasibility
+  gate.** Measured on the full audited window (366 days × 3 symbols):
+  cross-symbol correlation ρ̄ = +0.818 → **N_eff = 1.14** effective
+  independent series from 3 symbols. No threshold/fold configuration
+  reaches `min_signaled_samples = 100` per fold on an effective-sample
+  basis (best case p60/n_folds=3 = 40.2; moving-block bootstrap
+  P(effective ≥ 100) = 0.00 across all six configurations). Regime
+  coverage adequate — sample size alone binds. **The bar was not
+  weakened:** counted raw, p60/n_folds=3 would pass (106, P = 0.99); it
+  fails only once RD-13 §C's mandatory N_eff requirement is applied,
+  which is precisely the case that requirement was created for — its
+  first applied instance, and it changed the outcome. **DEFER, not
+  REJECT**, per RD-04's precedent: only testability failed, so recording
+  it as rejected would enter a false negative into the ledger. Supersedes
+  RD-13's one-month correlation estimate (+0.85–0.90) with the
+  full-window measurement. Revisit at ≈264 worst-fold raw (~18 further
+  months).
 - **RD-15 (2026-08-05)** — data-interpretation rule, distinct from
   RD-14: the liquidation archive **begins mid-day on 2025-07-27**, whose
   first object is hour 08, so that day carries **16/24 hours** and is
@@ -807,9 +837,22 @@ accordingly.)*
              never statistically equivalent to a complete day. Corrects
              RD-12's "from hour 10". Bounds RD-14's applicability.
              Liquidations Data Status COLLECTING -> READY.
-   ...        [next: Backlog 1.6 (Campaign 06 feasibility review), which
-              must apply RD-14 and RD-15 to sample construction. Backlog
-              2.1 done, so the next funding/OI campaign is unblocked.
-              Close the launcher concurrency race before any *future*
-              long-running collection job.]
+2026-08-05   Backlog 1.6 executed (commit `4a24c0a`) -- outcome-blind
+             feasibility review, 13.83s foreground, 11/11 pre-flight
+             assertions passed. Measured rho_bar = +0.818 -> N_eff = 1.14
+             of 3 symbols; P(effective >= 100) = 0.00 in all six
+             threshold/fold configurations. VERDICT: DEFER Campaign 06.
+2026-08-05   RD-16 recorded -- formal DEFER of Campaign 06's
+             pre-registration (deferred, NOT rejected; mechanism
+             untested). Second deferred pre-registration after RD-04.
+             Roadmap re-prioritized: the DEX-first venue ceiling
+             (Hyperliquid funding stale at 2024-12-31 vs Binance at
+             77 months) is now the binding constraint, so 3.1 precedes
+             3.2. MCP data-provider evaluation recorded as a future
+             gate, not an active item.
+   ...        [next: Backlog 3.1 (extend Hyperliquid funding coverage to
+              present), then 3.2 (outcome-blind N_eff screen for the next
+              funding/OI campaign, incl. RD-04's now-triggered Funding
+              Persistence revisit). Close the launcher concurrency race
+              (3.3) first if 3.1 is run detached rather than foreground.]
 ```

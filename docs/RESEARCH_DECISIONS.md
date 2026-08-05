@@ -349,7 +349,7 @@ durability fix; completed 30/30 days.
 - **Within-symbol lag-1 autocorrelation of daily event counts:** BTC
   +0.525, ETH +0.463, SOL +0.362.
 - **Cross-symbol correlation of daily event counts:** BTC–ETH +0.853,
-  BTC–SOL +0.899, ETH–SOL +0.874 — i.e. the three watchlist symbols behave
+  BTC–SOL +0.899, ETH–SOL +0.874 **[Superseded by RD-16, 2026-08-05: the full 12-month window measures ρ̄ = +0.818, N_eff = 1.14 — the pilot estimate was directionally correct and the projection held.]** — i.e. the three watchlist symbols behave
   as roughly **1.1 effective independent symbols, not 3**, on this metric.
 - **Concentration:** the top 1 day carries 11.0% of the month's events,
   top 3 = 29.6%, top 5 = 43.2%, top 10 = 65.2%.
@@ -668,6 +668,148 @@ actually measured:
 
 ---
 
+## RD-16 — Campaign 06 DEFERRED at the feasibility gate: cross-symbol dependence makes the 12-month liquidation window statistically non-viable
+
+- **Date:** 2026-08-05 · **Author:** researcher · **Reviewer:** pending · **Category:** mechanism-prioritization, family-status · **Status:** active
+- **Scope:** the outcome of Backlog 1.6, the mandatory outcome-blind feasibility review that gates Campaign 06's pre-registration. **This is a deferral of PRE-REGISTRATION, not a rejected hypothesis** — the liquidation-cascade mechanism was never tested and must not be recorded as a negative result. Direct precedent: RD-04 (Funding Persistence, deferred on non-viable N_eff, explicitly "revisitable, *not* a retirement").
+
+### A — What was measured (outcome-blind)
+
+Full audited dataset from Backlog 1.5 (367/367 days, 4,277,522 rows,
+2,138,761 unique events). Analysis panel after applying the governing
+rules: **366 days × 3 symbols = 1,098 cells**, 2025-07-28 → 2026-07-28.
+
+Rules applied as written, not re-derived: **RD-14** (8 absent
+`(symbol, day)` cells materialized as `count = 0`); **RD-15**
+(2025-07-27 excluded as structurally partial, and RD-14 deliberately
+**not** applied to it); **Constitution §6** (thresholds derived
+per-instrument from Hyperliquid's own distribution, no absolute
+magnitude carried across instruments); **RD-13 §C** (N_eff and
+cross-symbol correlation reported, not raw pooled counts alone).
+
+Strictly outcome-blind: the mark-price / outcome series was never
+opened, no return computed, no profitability evaluated, no threshold
+tuned against a result. 11/11 pre-flight assertions passed, including a
+two-sided check that 2025-07-27 is absent from the analysis panel while
+present in the raw collected data — proving deliberate exclusion rather
+than a collection gap.
+
+**Cross-symbol correlation of daily event counts:**
+
+| Pair | Pearson r |
+|---|---|
+| BTC–ETH | +0.758 |
+| BTC–SOL | +0.799 |
+| ETH–SOL | +0.898 |
+| **Mean pairwise ρ̄** | **+0.818** |
+
+**N_eff = 3 / (1 + 2ρ̄) = 1.14 effective independent series**, not 3 —
+effective-sample haircut **×0.379**. Within-symbol lag-1 autocorrelation
+(additional dependence, *not* included in that haircut): BTC +0.308,
+ETH +0.224, SOL +0.258.
+
+**Per-fold signalled samples against the locked floor
+(`min_signaled_samples = 100`, applied per fold, unchanged):**
+
+| Threshold | n_folds | worst raw | worst effective | raw clears? | **effective clears?** |
+|---|---|---|---|---|---|
+| p60 | 3 | 106 | **40.2** | yes | **no** |
+| p60 | 5 | 49 | 18.6 | no | **no** |
+| p75 | 3 | 57 | 21.6 | no | **no** |
+| p75 | 5 | 20 | 7.6 | no | **no** |
+| p90 | 3 | 14 | 5.3 | no | **no** |
+| p90 | 5 | 1 | 0.4 | no | **no** |
+
+Moving-block bootstrap (b = 7d, n = 1000, seed = 7 — block rather than
+i.i.d. because the series is serially dependent, and an i.i.d. resample
+would understate variance): **P(effective ≥ 100) = 0.00 in all six
+configurations.** Regime coverage (temporal dispersion by quarter,
+length-normalized) is adequate and is **not** the binding constraint.
+
+### B — Decision (judgment)
+
+**DEFER Campaign 06.** Not approved for pre-registration on the
+12-month window.
+
+The decision turns on one point, and it is exactly the point RD-13
+anticipated. Counted as **raw pooled samples**, the best configuration
+(p60, n_folds=3) *passes* — 106 worst-fold, bootstrap P(raw ≥ 100) =
+0.99. Counted as **effective samples** it fails decisively — 40.2
+against a floor of 100, short by ~2.5×, with P(effective ≥ 100) = 0.00.
+
+RD-13 §C made N_eff reporting mandatory for precisely this case: pooling
+BTC/ETH/SOL daily liquidation counts is close to counting **one**
+market-wide process three times. At ρ̄ = +0.818, three symbols supply
+1.14 series' worth of independent information. **Approving on the raw
+count would satisfy the letter of `min_signaled_samples = 100` while
+violating the reason it exists.**
+
+**The bar was not weakened.** `min_signaled_samples = 100` is unchanged;
+`n_folds = 5` remains standard with `n_folds = 3` the precedented
+outcome-blind fallback (Campaign 03); the N_eff requirement was applied
+rather than waived. No threshold was selected after seeing an outcome,
+because no outcome was inspected.
+
+**DEFER rather than REJECT**, following RD-04: only *testability*
+failed. The mechanism is untested, and recording an untested hypothesis
+as REJECTED would enter a false negative result into the permanent
+ledger.
+
+### C — Consequences
+
+- **Liquidations family:** Research **LOCKED** (unchanged — no campaign
+  has run), Data **READY** (Backlog 1.5 complete and audited). Adds a
+  **deferred pre-registration**, the project's **second** after RD-04's
+  Funding Persistence.
+- **This confirms RD-13's pilot projection on 12× the data.** RD-13
+  measured ρ = +0.85–0.90 on one month and projected ≈1.1 effective
+  symbols; the full year measures ρ̄ = +0.818 and N_eff = 1.14. **This
+  entry supersedes RD-13's single-month correlation estimate with the
+  full-window measurement**; RD-13's other pilot measurements stand. The
+  dependence is structural, not a small-sample artifact.
+- **First applied instance of RD-13 §C.** The N_eff reporting
+  requirement was created self-activating and has now changed a
+  governance outcome on its first use. The requirement is doing its job.
+- **HVL remains deferred**, trigger unchanged (first SUPPORTED
+  hypothesis; still zero). Campaign 06 was the nearest candidate; its
+  deferral leaves that trigger unmet, not worsened.
+- **Nothing else was blocked by Campaign 06.** It was a leaf in the
+  dependency graph, not a prerequisite — `ROADMAP.md` §1.2–1.4 and §2
+  were already recorded as orthogonal. Its deferral therefore **frees
+  capacity rather than unblocking work**.
+
+### D — Revisit trigger (measurable, not calendar-based)
+
+Re-run the identical review when the archive supports a window in which
+the **worst-fold raw signalled count at p60 / n_folds = 3 reaches ≈264**
+(= 100 / 0.379), versus 106 today — roughly **2.5× more data**. Since
+the archive extends only forward in time (RD-15: nothing exists before
+2025-07-27T08:00Z), that implies a window near **30 months**, i.e.
+approximately **18 further months** of accumulation. The review is a
+~14-second foreground job and can be repeated at any time at
+effectively zero cost.
+
+**Explicitly prohibited on revisit:** lowering `min_signaled_samples`,
+selecting a threshold more permissive than p60 in order to clear the
+bar, or dropping the RD-13 §C N_eff requirement. Any of those converts
+this gate from a control into a formality.
+
+### E — Noted alternative (not a recommendation, not authorized)
+
+The one live design change that could alter feasibility is a
+**finer-grained (e.g. hourly) specification**, which would multiply raw
+sample counts by up to ~24×. This is **not** feasible-by-assertion:
+hourly data would carry materially higher serial autocorrelation and
+possibly different cross-symbol dependence, both of which attack N_eff
+directly. It would require **its own feasibility review** before any
+pre-registration, and is recorded here only so the option is not lost.
+
+- **Evidence references:** `docs/RESEARCH_CAMPAIGN_06_feasibility_review.md` (full report); `research/campaign_06_liquidations/feasibility_review.py`; `data/alpha_engine_research/campaign_06_feasibility/{daily_event_counts.csv,feasibility_statistics.json}`; commit `4a24c0a`. Governing rules: RD-13 §C (N_eff requirement), RD-14 (zero-event days), RD-15 (partial-day boundary), Constitution §6 (venue-relative thresholds; pre-registration feasibility review), RD-04 (deferral precedent).
+- **Revisit triggers:** §D above; or a separately-reviewed finer-grained specification per §E.
+- **Supersedes / superseded-by:** supersedes RD-13's one-month cross-symbol correlation **estimate** (+0.85–0.90) with the full-window **measurement** (ρ̄ = +0.818, N_eff = 1.14); RD-13 otherwise stands in full.
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -679,7 +821,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
 | Open Interest | ACTIVE | READY (Binance only) | cap | Level (CAMP-01) and **Velocity (CAMP-05)** both rejected. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
-| Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. |
+| Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. **RD-16 (2026-08-05): Campaign 06 DEFERRED at the feasibility gate** — measured ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold configuration reaches `min_signaled_samples = 100` per fold on an effective-sample basis (best 40.2; P(eff ≥ 100) = 0.00). **Deferred pre-registration, NOT a rejected hypothesis** — the mechanism is untested. Revisit at ≈264 worst-fold raw (~18 further months). |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow (or capture via recorder) |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |

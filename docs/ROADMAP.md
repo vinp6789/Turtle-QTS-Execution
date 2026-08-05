@@ -23,33 +23,42 @@ paper/live trading) has nothing to operate on. Research remains the
 project's single highest-value lever, and the cheapest remaining work —
 the research harness is already built and proven across five campaigns.
 
-### 1.1 Liquidations (Campaign 06) — in the prerequisite chain now
+### 1.1 Liquidations (Campaign 06) — **DEFERRED at the feasibility gate**
 
-Sequenced exactly (see `PROJECT_STATE.md` Immediate Backlog for full
-detail and dependencies):
+**Status: deferred 2026-08-05 (`RESEARCH_DECISIONS.md` RD-16). Not an
+active item.** Steps 1–5 of the original chain all completed; step 5
+(the outcome-blind feasibility review) returned **DEFER**, so step 6
+(pre-registration) never opened.
 
-1. Storage durability fix + evidence-store git tracking (engineering
-   prerequisite, not research).
-2. `collect_liquidations()` + CLI entry point + declared dependencies.
-3. Outcome series 2025-07-27 → present: **Hyperliquid-native daily
-   candles as the primary outcome reference** (DEX-first, Constitution
-   §4/§6 — CEX is never the production reference), Binance metrics as a
-   secondary cross-venue check only.
-4. Full 12-month liquidation backfill — **single pass, all symbols
-   retained**. A staged/partial backfill was considered and rejected:
-   walk-forward validation requires chronological contiguity, and
-   selecting which months to sample would itself be an un-pre-registered
-   researcher judgment call.
-5. Outcome-blind feasibility review reporting **effective sample size
-   (N_eff) and cross-symbol correlation** — not raw signalled counts.
-   Measured on the one-month pilot: cross-symbol correlation of daily
-   liquidation counts is **+0.85 to +0.90**, meaning BTC/ETH/SOL behave as
-   roughly **1.1 effective independent symbols, not 3**. **This review may
-   reject Campaign 06 outright — that is the intended, cheapest possible
-   outcome of the gate, not a failure of it.**
-6. Pre-registration — **only if** step 5 passes, following
-   `RESEARCH_PLAYBOOK.md` in full, including the restored
-   governance-inspection clause (§1.5 below).
+Measured on the full audited 12-month window (366 days × 3 symbols):
+cross-symbol correlation of daily event counts **ρ̄ = +0.818**, giving
+**N_eff = 1.14** effective independent series from three symbols. No
+threshold/fold configuration reaches the locked
+`min_signaled_samples = 100` per fold on an effective-sample basis —
+best case 40.2, and a moving-block bootstrap gives
+**P(effective ≥ 100) = 0.00** in all six configurations. Regime coverage
+is adequate; **sample size alone is binding.**
+
+**The mechanism is untested, not rejected.** Only its testability
+failed, which is why this is a *deferred pre-registration* (RD-04's
+precedent) and not a ledger entry.
+
+**Revisit trigger (measurable, not calendar-based):** re-run the
+identical review when the archive supports ≈**264** worst-fold raw
+signalled samples at p60/n_folds=3, versus 106 today — roughly **18
+further months** of accumulation, since the archive extends only forward
+(RD-15). The review is a ~14-second foreground job.
+
+**Prohibited on revisit:** lowering `min_signaled_samples`, choosing a
+more permissive threshold in order to clear the bar, or dropping the
+RD-13 §C N_eff requirement. Any of those turns the gate into a
+formality.
+
+**Noted, not authorized:** a finer-grained (e.g. hourly) specification
+could multiply raw counts ~24× — but hourly data carries materially
+higher serial autocorrelation and possibly different cross-symbol
+dependence, both of which attack N_eff directly. It would need **its own
+feasibility review** first.
 
 ### 1.2 Next Funding/OI campaign — deep-history backfill first
 
@@ -58,11 +67,24 @@ funding candidate not yet retried (CAMP-02 Binance 0.686/n=35, CAMP-03
 Hyperliquid 0.580/n=138 — both underpowered in isolation). Before its
 fresh pre-registration:
 
-- **Deep-history backfill** — funding rate back to 2020-01 (BTC/ETH) /
-  2020-09 (SOL); OI + mark-price metrics back to 2021-01 (BTC) / ~2022-01
-  (ETH/SOL). Verified free and available via Binance's public archive,
-  zero new code (existing `collect_funding_rate`/`collect_metrics`).
-  Roughly triples usable funding history.
+- ~~**Deep-history backfill**~~ — **DONE 2026-07-30** (Backlog 2.1).
+  Binance funding now spans **77 months** (BTC/ETH from 2020-01; SOL from
+  2020-09); OI + mark-price metrics from 2021-01 (BTC) / 2022-01
+  (ETH/SOL). Zero new code, as planned.
+- **NEW BINDING CONSTRAINT — the DEX-first venue ceiling.** Backlog 2.1
+  deepened **Binance only**. Hyperliquid funding is **stale at
+  2024-12-31 (17 months)** while Binance runs to 2026-06-30 (77 months).
+  Under Constitution §6, a finding that exists only on CEX data is never
+  promotion-eligible, so raw Binance power does not by itself raise what
+  a funding campaign can promote. **Extending Hyperliquid-native funding
+  coverage to present is therefore the prerequisite** — zero new code
+  (`collect_funding_rate(source="hyperliquid")` resumes from its own
+  high-water mark). Tracked as Backlog 3.1.
+- **RD-04's Funding Persistence deferral is now revisitable.** Its stated
+  trigger was "a materially longer data window"; 18 → 77 months has
+  fired it. It must be re-screened for N_eff **outcome-blind** before any
+  pre-registration — RD-04 deferred it at N_eff ≈ 4–18, and a ~4.3×
+  window does not automatically clear the bar.
 - Any campaign using the deep window **must declare, as `known_limitations`
   under RD-11 A**: (a) **survivorship bias** — a 2026-chosen watchlist
   tested against 2020–21 conditions where SOL fell ~96% and was widely
@@ -337,6 +359,61 @@ leverage, only research opinions and evidence.
   if/when the strategy needs a second DEX venue. The production target
   remains decentralized perpetual exchanges exclusively; a centralized
   exchange is never a live candidate.
+
+---
+
+## 7. Future strategic evaluation gates (NOT active backlog items)
+
+Items here are **evaluations, not implementations.** Each is recorded so
+the option is not lost, and each is explicitly **gated** — it does not
+become executable work until its stated trigger fires. Per Constitution
+§5, nothing here is built ahead of a concrete, present need, and per this
+document's own preamble, presence here is not authorization.
+
+### 7.1 Evaluate External MCP Data Providers
+
+**Status: FUTURE EVALUATION GATE — not an active backlog item. Do not
+begin.**
+
+**Purpose: evaluate, not integrate.** Assess external MCP-based financial
+data providers (e.g. Financial Datasets MCP and comparable providers) for
+the **long-term multi-asset trading platform** — specifically whether any
+of them would add research value the current sources cannot supply.
+
+**Trigger (all must hold before this evaluation is even scheduled):**
+
+1. At least one alpha model has cleared governance (the project's
+   standing precondition for platform expansion — today the count is
+   **zero**), **or** a specific pre-registered campaign names a data
+   requirement that no existing source can satisfy; **and**
+2. the multi-asset / equities direction is an actual, stated objective
+   rather than a hypothetical — today the production target is
+   decentralized perpetuals exclusively (Constitution §4/§6); **and**
+3. the evaluation is scoped as a written comparison against existing
+   sources, not a spike or a prototype integration.
+
+**What the evaluation must consider when it does run:**
+
+| Dimension | Question it must answer |
+|---|---|
+| **Incremental value vs. existing sources** | What does this provide that Binance's public archive, the Hyperliquid API, and the Hyperliquid S3 fill archive genuinely cannot? A provider that duplicates existing coverage is a cost, not a capability. |
+| **Historical depth** | How far back, per asset class — and how does that compare with the 77-month Binance funding window already held? |
+| **Real-time capabilities** | Latency, update cadence, and whether it is point-in-time-safe or revision-prone. |
+| **Equity / fundamental coverage** | Breadth and quality — the dimension current sources genuinely lack, and therefore the strongest candidate justification. |
+| **Hyperliquid relevance** | Does it improve **DEX-native** coverage at all? Under Constitution §6 this is decisive: another CEX/equity source does not lift the venue-transfer ceiling that currently binds the research program. |
+| **Licensing** | Redistribution and research-use terms; whether derived evidence packages can be retained and published internally. |
+| **Reliability** | Uptime, historical revision policy, and whether outages are detectable rather than silent. |
+| **Rate limits** | Practical ceilings against realistic backfill volumes (Backlog 1.5 moved ~240 GB; 2.1 spanned ~80 months). |
+| **Caching strategy** | Local durability, resumability, and idempotent merge semantics compatible with the existing `historical/storage.py` model. |
+| **Architectural fit** | Whether it fits the existing provider/feature/candidate triple and the `TransportFn` seam without a new framework (§5), and whether it introduces a runtime dependency into the deployed path. |
+| **Point-in-time discipline** | Vendor data revision handling — the same requirement already recorded for on-chain and macro sources (§1.4). |
+| **Research value before implementation** | **The gate itself:** a written argument that a specific, pre-registered hypothesis becomes testable *only* with this data. Absent that, the answer is no. |
+
+**Explicitly out of scope until the trigger fires:** any credential
+setup, dependency declaration, adapter code, schema design, or
+proof-of-concept. **The default outcome of this gate is "not yet"** —
+recording it here is insurance against losing the option, not momentum
+toward adopting it.
 
 ---
 
