@@ -1007,6 +1007,96 @@ Only the ready half was built.
 
 ---
 
+## RD-19 — Campaign 08 closure: hourly liquidation density carries no 1-hour edge; the first venue-native, promotion-eligible campaign closes REJECTED
+
+- **Date:** 2026-08-05 · **Author:** researcher · **Reviewer:** reviewer-campaign08 · **Category:** family-status, governance-boundary · **Status:** active
+- **Scope:** the outcome of Research Campaign 08, the platform family built to run it, and what that closes. **A governance rule is created by this entry (§C).**
+
+### A — Measured facts
+
+Campaign 08 tested the specification RD-16 §E named and Backlog 3.5
+approved. Pre-registered before any result was seen; executed 2026-08-05,
+fixed clock, seed 7; governance recorded through the frozen module for
+all four experiments.
+
+| Configuration | Signalled | Hit rate (contrarian / momentum) | Verdict |
+|---|---|---|---|
+| p75, n_folds=3 (**PRIMARY**) | 3,678 | **0.5019 / 0.4965** | REJECTED |
+| p75, n_folds=5 | 3,678 | 0.5019 / 0.4965 | REJECTED |
+
+14,449 samples. Causality/leakage audit **PASSED** on all four;
+single-pass, walk-forward and regime stratification **FAILED** on all four.
+
+**Well-powered.** ρ̄ = +0.731 → **N_eff 1.22 of 3 symbols** (RD-13 §C);
+serial retention ×0.654; effective per-fold signalled **253** (folds=3)
+and **147** (folds=5) against a floor of 100. As with RD-17, the campaign
+had the power to detect an edge and found none.
+
+### B — Judgment
+
+**Hourly liquidation density carries no 1-hour directional edge.**
+
+This closes the hourly specification, and it does so on the **first
+campaign in project history where a positive result would have been
+promotion-eligible** — feature and outcome both Hyperliquid-native, no
+DEFER-ceiling, no venue-transfer caveat. That removes the standing
+objection that prior rejections might be artifacts of cross-venue proxying:
+**a venue-native test returned the same ~0.50 as every proxied one.**
+
+**What this does NOT close:** the liquidation family. The window was 200
+days (bounded by the venue's ~210-day 1h-candle retention, not by the
+archive), regime coverage was narrow, and only the 1-hour horizon was
+tested. Multi-hour horizons on this feature are untested — though RD-17
+stands as counter-evidence that horizon extension alone rescues a null.
+
+**Liquidations family status: LOCKED / READY → NEAR-EXHAUSTED.** Daily
+deferred (RD-16), hourly rejected on merit (this entry). No cheap distinct
+mechanism remains on the current window.
+
+### C — Rule created: evidence provenance must be exact
+
+Campaign 08 required a new candidate family because the alternative was
+to reuse `funding_rate_threshold_rule`, whose factory reads
+feature_name/feature_version from `FundingRateFeature.metadata()` and
+never from the caller. **CAMP-04 and CAMP-05 did exactly that**, so their
+evidence packages are stamped `feature_name="funding_rate_raw"` while
+they actually tested `funding_delta` and `oi_velocity`;
+`ALPHA_LIBRARY.md`'s "(feature `oi_velocity`)" annotations are human
+notes papering over the discrepancy.
+
+**Rule, effective immediately:** an evidence package must record the
+feature it actually measured. A campaign testing a feature with no
+matching candidate family adds one (additively) rather than borrowing a
+family whose identity is wrong. Human annotation is not a substitute for
+correct provenance in the permanent record.
+
+**Not retrofitted** onto CAMP-04/05's closed verdicts — both were
+correctly rejected under their own criteria and neither result changes.
+The defect is in their provenance metadata, not their science, and is
+recorded here rather than by rewriting sealed evidence.
+
+### D — Consequences
+
+- **CAMP-08 closed**, four models added to `ALPHA_LIBRARY.md` as rejected.
+  The Alpha Library still holds **zero approved models**.
+- **New platform family** `liquidation_density_rule` (commit `e938dc4`),
+  the first since Campaign 01: feature module, candidate type, spec
+  factory, `evaluate_fn`, catalog entry, 29 tests. One deliberate
+  semantic difference from the family it mirrors — a liquidation count is
+  non-negative, so the rule is **one-tailed**, unlike the signed funding
+  rule whose lower tail would be dead code here.
+- **Liquidations: NEAR-EXHAUSTED** (see §B).
+- **Every cheap experiment identified by the strategic review is now
+  spent**: longer-horizon OI (RD-17), funding deep-window (Backlog 3.2),
+  hourly liquidations (this entry).
+- **Revisit triggers:** materially more venue-native history (the Live
+  Recorder, RD-18, accumulates it); or a liquidation feature that is not
+  a count — the count formulation is what these two campaigns tested.
+- **Supersedes / superseded-by:** complements RD-16 (whose §E alternative
+  this resolves) and RD-17; contradicts nothing.
+
+---
+
 ## Appendix — Research Family State (current)
 
 Maintained per RD-07 (two-state model). **Research Status** ∈ {LOCKED,
@@ -1018,7 +1108,7 @@ ACTIVE, NEAR-EXHAUSTED (a qualified ACTIVE), PAUSED, EXHAUSTED};
 |---|---|---|---|---|
 | Funding Rate | **NEAR-EXHAUSTED** | READY | — | Level, venue-relative, and Delta rejected; Persistence deferred (RD-04); regime-interaction untestable on this window — no cheap distinct mechanism remains |
 | Open Interest | **NEAR-EXHAUSTED** | READY (Binance) / **COLLECTING (Hyperliquid, live from 2026-08-05)** | cap | Level (CAMP-01), **Velocity (CAMP-05)** and **longer-horizon extremeness (CAMP-07, 72h/120h — RD-17)** all rejected on merit. **Divergence** is the sole untested mechanism — same DEFER-ceiling (knowledge-only until a live OI recorder lifts it) |
-| Liquidations | LOCKED | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. **RD-16 (2026-08-05): Campaign 06 DEFERRED at the feasibility gate** — measured ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold configuration reaches `min_signaled_samples = 100` per fold on an effective-sample basis (best 40.2; P(eff ≥ 100) = 0.00). **Deferred pre-registration, NOT a rejected hypothesis** — the mechanism is untested. Revisit at ≈264 worst-fold raw (~18 further months). |
+| Liquidations | **NEAR-EXHAUSTED** | **READY** | — | **RD-13:** One-month outcome-blind pilot backfill (2026-06) executed — 208,486 events, 0 duplicates, 0 decode errors. Measured cross-symbol correlation of daily counts +0.85–0.90 (≈1.1 effective independent symbols, not 3) — full 12-month backfill and a proper N_eff/correlation-aware feasibility review still required before any pre-registration; may reject Campaign 06 outright. Full backfill **COMPLETE 2026-08-05**: 2025-07-27→2026-07-28, 367/367 days, 4,277,522 rows / 2,138,761 events, rows/event exactly 2.0000, 0 duplicate keys, 0 unpaired fills. **RD-14:** within the checkpoint-covered window an absent `(symbol, day)` row means **zero events**, not a missing observation — materialize as `count = 0` before any threshold or N_eff work. **RD-15:** 2025-07-27 is a structurally partial day (16/24 archive hours) — exclude it or normalize by 1.5× with the method documented; never treat it as a complete day, and never apply RD-14 to it. **RD-16 (2026-08-05): Campaign 06 DEFERRED at the feasibility gate** — measured ρ̄ = +0.818 → N_eff = 1.14 of 3 symbols; no threshold/fold configuration reaches `min_signaled_samples = 100` per fold on an effective-sample basis (best 40.2; P(eff ≥ 100) = 0.00). **Deferred pre-registration, NOT a rejected hypothesis** — the mechanism is untested. Revisit at ≈264 worst-fold raw (~18 further months). **RD-19 (2026-08-05): the HOURLY specification (RD-16 §E) was approved by Backlog 3.5, run as Campaign 08, and REJECTED on merit** (hit rates 0.4965–0.5019, well-powered at N_eff 1.22, effective per-fold 253). First venue-native promotion-eligible campaign; family → NEAR-EXHAUSTED. |
 | Order Flow | LOCKED | NONE | — | Unlock: verify HL historical order-flow. **RD-18: NOT addressed by the Live Recorder** — the frozen adapter is REST-only and `get_fills` reads the account's own fills, not market flow. This precondition remains unverified. |
 | Stablecoin flows | LOCKED | NONE | — | Unlock: verify a free, reliable, PIT-safe source |
 | On-chain | LOCKED | NONE | — | Unlock: source + PIT-revision handling |

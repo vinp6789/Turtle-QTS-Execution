@@ -1,9 +1,8 @@
 # Research Campaign 08 — Hourly Liquidation Density (BTC/ETH/SOL)
 
-**Status: PRE-REGISTRATION LOCKED, NOT YET REGISTERED.** Parameters below
-are frozen by the Backlog 3.5 feasibility measurement and must not change
-after results are seen. Execution is blocked on one platform decision
-(§7) that requires human judgment.
+**Status: CLOSED — all four experiments REJECTED on merit (2026-08-05).**
+Parameters were frozen by the Backlog 3.5 feasibility measurement before
+any result was seen and were not changed afterwards.
 
 **Why this campaign is different from every prior one:** it is the
 **first with BOTH feature and outcome Hyperliquid-native**. Campaigns
@@ -94,37 +93,80 @@ N_eff and cross-symbol correlation, alongside raw signalled counts.
 
 ---
 
-## §7 — Blocking decision: this campaign needs a new candidate family
+## §7 — Platform decision (RESOLVED)
 
-**No liquidation feature or candidate type exists.** `CANDIDATE_CATALOG`
-holds exactly three families — `funding_rate_threshold_rule`,
-`open_interest_threshold_rule`, `open_interest_extremeness_rule` — and no
-feature module references liquidations.
+Path **(b)** was authorized and taken: a dedicated `liquidation_density_rule`
+family was added (commit `e938dc4`) — feature module, candidate type, spec
+factory, `evaluate_fn`, catalog entry, 29 tests. Every Campaign 08 evidence
+package records `feature_name = liquidation_density_hourly`, verified in the
+run output. Path (a) — reusing `funding_rate_threshold_rule` — would have
+stamped `funding_rate_raw`, the misstatement CAMP-04 and CAMP-05 carry.
 
-Two paths, and the choice is **not** mine to make unilaterally because it
-writes to the permanent evidence record:
+One deliberate semantic difference from the family it mirrors: funding is
+signed and fires on `rate > threshold` **or** `rate < -threshold`; a
+liquidation count is non-negative, so `-threshold` is unreachable and the
+rule is **one-tailed** (`count >= threshold` → signal, else FLAT). A test
+pins this so a later "consistency" refactor cannot reintroduce the dead
+branch. No existing family was modified.
 
-**(a) Reuse `funding_rate_threshold_rule`.** Precedented — CAMP-04
-(`funding_delta`) and CAMP-05 (`oi_velocity`) both did this. But the
-factory reads `feature_name`/`feature_version` from
-`FundingRateFeature.metadata()` and **never from the caller**, so every
-evidence package would be stamped `feature_name="funding_rate"` while
-actually testing liquidation density. `ALPHA_LIBRARY.md`'s
-"(feature `oi_velocity`)" annotations are human notes papering over
-exactly this. Zero new code, **knowingly false provenance**.
+**Implementation note (mathematically identical to the locked rule).** The
+platform applies one threshold to all samples, but the rule is per-symbol.
+The normalization is therefore carried in the value —
+`feature value := count / p75(symbol)`, `threshold := 1.0` — which is
+exactly `count >= p75(symbol)` and, unlike a percentile-rank transform, is
+tie-safe (material here: 51–65% of hours are zero-count). Measured
+per-symbol p75: **BTC 77, ETH 6, SOL 5** counts/hour.
 
-**(b) Add a `liquidation_density_rule` family** — feature module,
-candidate type, spec factory, `evaluate_fn`, catalog entry, tests.
-Correct provenance; the first new candidate family since Campaign 01.
-Roughly 300–400 LOC of platform code, all additive.
+---
 
-**Recommendation: (b).** This is the first campaign whose result could be
-promotion-eligible, and Constitution §5's "no abstraction ahead of a
-second concrete need" is satisfied — there is a specific, present
-requirement, and (a) achieves reuse only by falsifying the record. But
-(b) is platform work touching the candidate catalog, so it warrants
-explicit authorization rather than being absorbed into a research task.
+## Results (FINAL)
 
-**Nothing is registered and no experiment has run.** The parameters above
-are frozen and independent of which path is chosen — the decision affects
-implementation and provenance, not the science.
+**Status: CLOSED — all four experiments REJECTED on merit.**
+
+Executed 2026-08-05, fixed clock `2026-08-05T00:00:00+00:00`, seed 7.
+**14,449 samples** (4,816 hours × 3 symbols), **3,678 signalled (25.5%)**.
+Governance recorded through the frozen module for all four.
+
+| Experiment | Role | Signalled | Hit rate | mean_directional_return | Boot. frac ≥ bar | Verdict |
+|---|---|---|---|---|---|---|
+| `camp08-p75-f3-contrarian` | **PRIMARY** | 3,678 | **0.5019** | +0.0000404 | 0.000 | **REJECTED** |
+| `camp08-p75-f3-momentum` | **PRIMARY** | 3,678 | **0.4965** | −0.0000404 | 0.000 | **REJECTED** |
+| `camp08-p75-f5-contrarian` | robustness | 3,678 | 0.5019 | +0.0000404 | 0.000 | **REJECTED** |
+| `camp08-p75-f5-momentum` | robustness | 3,678 | 0.4965 | −0.0000404 | 0.000 | **REJECTED** |
+
+Stage results identical across all four: **causality/leakage audit PASSED**
+(no look-ahead), single-pass FAILED, walk-forward FAILED, regime FAILED.
+
+**Provenance verified:** every experiment recorded
+`feature recorded in evidence: liquidation_density_hourly`.
+
+### Mandatory reporting (RD-13 §C)
+
+Cross-symbol correlation of hourly counts on the campaign panel:
+BTC–ETH +0.713, BTC–SOL +0.719, ETH–SOL +0.761 → **ρ̄ = +0.731**,
+**N_eff = 1.22 of 3 symbols**. Serial retention ×0.654 (hourly lag-1
+ρ ≈ +0.20). Effective per-fold signalled samples: **253** (folds=3) and
+**147** (folds=5) — both clearing the floor of 100 by 2.5× and 1.5×.
+
+**This was a well-powered merit rejection, not a power failure.**
+
+### Final verdict
+
+All four **REJECTED**. Hit rates **0.4965–0.5019** — the tightest
+clustering around a coin flip the program has produced. Only **two
+independent measurements** exist (the contrarian/momentum pair is
+algebraically complementary; the small departure from summing to exactly
+1.0 is the FLAT/zero-return hours).
+
+**Hourly liquidation density carries no 1-hour directional edge**, on the
+first campaign in project history where feature and outcome were both
+venue-native and a positive result would have been promotion-eligible.
+
+### Honest note on what this does and does not close
+
+It closes the **hourly** specification that RD-16 §E named and Backlog 3.5
+approved. It does **not** close the liquidation family: the window was
+200 days (venue retention, not data), regime coverage was narrow, and only
+the 1-hour horizon was tested. Multi-hour horizons on this feature remain
+untested — though RD-17 is standing counter-evidence that horizon
+extension alone rescues a null.

@@ -54,11 +54,13 @@ more permissive threshold in order to clear the bar, or dropping the
 RD-13 §C N_eff requirement. Any of those turns the gate into a
 formality.
 
-**Noted, not authorized:** a finer-grained (e.g. hourly) specification
-could multiply raw counts ~24× — but hourly data carries materially
-higher serial autocorrelation and possibly different cross-symbol
-dependence, both of which attack N_eff directly. It would need **its own
-feasibility review** first.
+~~**Noted, not authorized:** a finer-grained (e.g. hourly)
+specification...~~ — **RESOLVED 2026-08-05.** That review ran (Backlog
+3.5) and **refuted its own premise**: hourly serial autocorrelation is
+LOW (+0.18–0.22), not "materially higher", because liquidations are
+bursty events rather than a slowly-varying state. The specification was
+APPROVED, run as **Campaign 08**, and **REJECTED on merit** (RD-19) —
+hit rates 0.4965–0.5019, well-powered. Liquidations → NEAR-EXHAUSTED.
 
 ### 1.2 Next Funding/OI campaign — deep-history backfill first
 

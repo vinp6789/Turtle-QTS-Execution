@@ -36,12 +36,12 @@ they're found, never silently carried forward.
 |---|---|
 | **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **AWAITING A DECISION** — Campaign 08's parameters are locked and both prerequisites are closed, but it needs a new candidate family (`liquidation_density_rule`). The alternative reuses `funding_rate_threshold_rule` and stamps false provenance. See `RESEARCH_CAMPAIGN_08_liquidation_hourly.md` §7. Everything else executable is complete. |
+| **Current objective** | **Every cheap experiment in the queue is now spent.** Campaign 08 closed REJECTED (RD-19) — the first venue-native, promotion-eligible campaign, and it returned the same ~0.50 as every proxied one. Liquidations → NEAR-EXHAUSTED. The Live Recorder accumulates venue-native history; the next campaign needs materially more of it, or a genuinely new information class. |
 | **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **Human decision on Campaign 08 §7** (new candidate family vs. reused-with-false-provenance). Meanwhile the Live Recorder accumulates — check with `python scripts/recorder_health.py`. |
-| **Full regression** | **1,831 passed, 102 subtests, 0 failed** (20 launcher-concurrency, 25 recorder, 13 recorder-health tests added; **all job-tooling QA findings now closed, including L1/H1**) |
+| **Immediate next task** | **None executable.** All near-free experiments are spent and every remaining direction needs either accumulated live data (12–18 months) or a new data class. Strategic direction is a human decision. Monitor with `python scripts/recorder_health.py`. |
+| **Full regression** | **1,879 passed, 108 subtests, 0 failed** (29 liquidation-density family + 15 Campaign 08 sample tests added) |
 | **Approved alpha models** | **0** |
-| **Rejected hypotheses** | **24 registered** (Campaigns 01–05: 18; **Campaign 07: 6**) — but only ~**12 independent measurements** (contrarian/momentum pairs are algebraically complementary, RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) |
+| **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 
 ---
 
@@ -338,6 +338,15 @@ pre-fix code and passes against the fix).
 - **Pilot re-collection verified benign.** The requested range includes the 2026-06 pilot month, so the production checkpoint marched through it and re-fetched those 30 days, producing 90 conflict warnings (30 days × 3 symbols), confined to exactly `20260601`–`20260630`. A conflicting hour was re-decoded from source and compared field by field: **every market-data field is identical** (price, size, side, direction, method, liquidated_user, mark_price, source, source_detail); **only `ingested_at_utc` differs** (pilot `2026-07-28` vs re-fetch). First-seen values were correctly kept. **No duplicate rows were written and no data changed** — but note the precise wording: recollection *did* occur and changed nothing; "no recollection occurred" would be false.
 - Collection required **five** resumes from checkpoint across transient S3 outages (18 logged connectivity failures, zero deterministic). **No data was lost on any of them** — the Backlog 1.3 H1 durability invariant held throughout.
 
+**Campaign 08 EXECUTED AND CLOSED (2026-08-05) — all four experiments REJECTED on merit:**
+- **The first campaign in project history with BOTH feature and outcome Hyperliquid-native** — liquidation events from the venue's own S3 archive, 1h forward returns from the venue's own candles. No DEFER-ceiling: a positive result would have been the first **promotion-eligible** finding.
+- **Result:** 14,449 samples, 3,678 signalled (25.5%), hit rates **0.4965 / 0.5019** — the tightest clustering around a coin flip the program has produced. Causality PASSED; single-pass, walk-forward and regime FAILED. Two independent measurements, not four (RD-17 §D).
+- **Well-powered, not a power failure:** ρ̄ +0.731 → N_eff 1.22 of 3; effective per-fold signalled 253 (folds=3) and 147 (folds=5) against a floor of 100.
+- **This removes a standing objection.** Prior rejections could in principle have been artifacts of cross-venue proxying. A venue-native test returned the same ~0.50.
+- **Required the first new candidate family since Campaign 01** (`liquidation_density_rule`, `e938dc4`) — feature module, candidate type, spec factory, `evaluate_fn`, catalog entry, 29 tests. Reusing `funding_rate_threshold_rule` (the CAMP-04/05 path) would have stamped `feature_name="funding_rate_raw"` into every evidence package while testing liquidation density. **RD-19 §C makes exact provenance a rule.** One deliberate semantic difference: a count is non-negative, so the rule is **one-tailed**, unlike the signed funding rule.
+- **Liquidations family: LOCKED/READY → NEAR-EXHAUSTED.** Daily deferred (RD-16), hourly rejected (RD-19).
+- Full regression: **1,879 passed, 108 subtests, 0 failed.**
+
 **Backlog 3.3 + 3.4 (2026-08-05) — launcher race closed, Live Recorder DEPLOYED:**
 - **3.3 — H1/H2 closed (`4325782`).** Root cause proven deterministically *before* any change: the lock was created with `O_CREAT|O_EXCL` but written **empty**, and stamped with the child's pid only after the liveness probe and `Popen`. A second caller in that window read `''`, computed `holder_pid = -1`, and **skipped the liveness guard entirely**. Fix is 35 insertions: stamp the claiming process's own pid at creation, and refuse (never steal) an unstamped lock. 20 concurrency tests with real threads/processes; the prior suite had **zero** concurrency coverage, which is why an audit once declared this fixed when it was not.
 - **3.4 — Live Recorder deployed.** Scope strictly as approved: **Hyperliquid OI + funding + mark price, BTC/ETH/SOL, hourly**. One `metaAndAssetCtxs` call per cycle returns all three metrics for all symbols (live-verified; symbols located **by name** — SOL is at index 5, not 2). Written under its own `hyperliquid_live` source tag so these series never collide with the API-backfilled ones.
@@ -397,7 +406,7 @@ pre-fix code and passes against the fix).
 | ~~3.4~~ | ~~Deploy the Live Recorder~~ | 3.3 (done) | — | — | **Done 2026-08-05 (RD-18).** Running as `live_recorder`: HL OI/funding/mark, BTC/ETH/SOL, hourly data / 15-min poll. Monitoring: `scripts/recorder_health.py`. **Order-flow capture NOT built — remains NOT YET** |
 | ~~3.5~~ | ~~Hourly-liquidation feasibility screen (RD-16 §E)~~ | — | — | — | **Done 2026-08-05 — APPROVE** (p75, folds 3/5). RD-16 §E's fear is **refuted**: hourly serial autocorrelation is LOW (+0.18–0.22), so the 24× raw gain survives (×0.65). Cross-symbol dependence is scale-invariant (ρ̄ +0.817 hourly vs +0.818 daily) |
 | ~~3.6~~ | ~~Collect Hyperliquid 1h candles~~ | — | — | — | **Done 2026-08-05.** ~5,000 candles/symbol, `mark_price__*__hyperliquid_1h.csv`, 2026-01-09 → present. **0 duplicates, 0 non-1h steps**, still-forming candle excluded. Usable overlap with the liquidation window: **200 days ≈ 4,800 hourly samples** |
-| **3.7** | **Campaign 08 pre-registration** — hourly liquidation density, p75, folds 3/5, Hyperliquid-native feature AND outcome | 3.5, 3.6 (done) | — | — | **Parameters LOCKED 2026-08-05** (`docs/RESEARCH_CAMPAIGN_08_liquidation_hourly.md`), **not registered**. **BLOCKED on a platform decision (§7): no liquidation feature or candidate type exists.** Reusing `funding_rate_threshold_rule` (the CAMP-04/05 precedent) would stamp knowingly false provenance into the evidence record; a new `liquidation_density_rule` family (~300–400 LOC, additive) is recommended but is platform work needing authorization |
+| ~~3.7~~ | ~~Campaign 08 — hourly liquidation density~~ | — | — | — | **Done 2026-08-05 — all four REJECTED on merit (RD-19).** Hit rates 0.4965–0.5019; well-powered (N_eff 1.22, effective per-fold 253/147 vs floor 100). Required the first new candidate family since Campaign 01 (`liquidation_density_rule`, `e938dc4`) for correct provenance. Liquidations → NEAR-EXHAUSTED |
 
 ---
 
@@ -613,6 +622,19 @@ accordingly.)*
   difference — this is now the second confirmed instance of that exact
   failure shape within this one backlog item, worth watching for
   whenever a future collector borrows an existing pattern verbatim.
+- **RD-19 (2026-08-05)** — **Campaign 08 closure: hourly liquidation
+  density carries no 1-hour edge.** All four experiments REJECTED on
+  merit (0.4965–0.5019), well-powered (N_eff 1.22, effective per-fold
+  253/147 vs a floor of 100). Significant because it is the **first
+  venue-native, promotion-eligible campaign** — removing the standing
+  objection that prior rejections might be cross-venue-proxy artifacts.
+  Creates a rule (§C): **an evidence package must record the feature it
+  actually measured**; a campaign testing a feature with no matching
+  candidate family adds one rather than borrowing a family whose
+  identity is wrong. CAMP-04/05 are **not** retrofitted — their science
+  stands; only their provenance metadata is wrong, and that is recorded
+  rather than by rewriting sealed evidence. Liquidations →
+  NEAR-EXHAUSTED.
 - **RD-18 (2026-08-05)** — **Live Recorder promoted and deployed**,
   reversing a standing §5 deferral on measured evidence: RD-17 left OI
   Divergence as the sole untested mechanism (whose named unlock is this
@@ -943,7 +965,25 @@ accordingly.)*
              precondition unverified). Monitoring added:
              scripts/recorder_health.py (read-only, exit 0/1).
              1,831 tests passing.
-   ...        [next: verify the recorder over multiple cycles, then the
+2026-08-05   Backlog 3.5 -- hourly liquidation feasibility APPROVED
+             (a94854d). RD-16 Section E's fear refuted: hourly serial
+             autocorrelation is LOW (+0.18-0.22).
+2026-08-05   Backlog 3.6 -- Hyperliquid 1h outcome series collected
+             (3f3f4b0), ~5,000 candles/symbol. Time-sensitive: venue
+             retains 1h candles only ~210 days.
+2026-08-05   Backlog 3.7b -- liquidation_density_rule candidate family
+             added (e938dc4), first since Campaign 01, for correct
+             provenance. 29 tests.
+2026-08-05   CAMPAIGN 08 EXECUTED AND CLOSED -- hourly liquidation
+             density, four experiments, all REJECTED on merit. Hit rates
+             0.4965-0.5019; well-powered (N_eff 1.22, effective per-fold
+             253/147). First venue-native promotion-eligible campaign;
+             returned the same ~0.50 as every cross-venue one. RD-19
+             created. Liquidations -> NEAR-EXHAUSTED. 1,879 tests.
+   ...        [no executable backlog item remains: every near-free
+              experiment is spent, and each remaining direction needs
+              either 12-18 months of accumulated live data or a new
+              information class. Strategic direction is a human call.]
               hourly-liquidation feasibility screen (RD-16 Section E) --
               the last near-free experiment in the queue. The Live
               Recorder decision is CLOSED (RD-18, deployed); the launcher

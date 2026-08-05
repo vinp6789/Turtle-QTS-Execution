@@ -512,3 +512,44 @@ Hyperliquid OI history exists, so not promotion-eligible); outcome derived
 as `sum_open_interest_value / sum_open_interest`, validated against an
 independent price source over 18% of the window; survivorship;
 non-stationarity; asymmetric per-symbol starts.
+
+---
+
+## CAMP-08 — Hourly Liquidation Density (Hyperliquid-native)
+
+**Status: CLOSED — all four experiments REJECTED on merit.**
+
+**Hypothesis:** hourly liquidation-event density, extreme relative to
+that symbol's own distribution, carries 1-hour directional information.
+
+**Why it mattered:** the **first campaign in project history with BOTH
+feature and outcome Hyperliquid-native** — liquidation events from the
+venue's own S3 fill archive, 1h forward returns from the venue's own
+candles. No DEFER-ceiling: a positive result would have been the first
+**promotion-eligible** finding.
+
+**Pre-registration:** `docs/RESEARCH_CAMPAIGN_08_liquidation_hourly.md`,
+locked from the Backlog 3.5 feasibility measurement before any result was
+seen. p75 per-symbol threshold (BTC 77, ETH 6, SOL 5 counts/hour),
+n_folds 3 (PRIMARY) and 5, contrarian + momentum, `min_hit_rate = 0.55`,
+`min_signaled_samples = 100` per fold, bootstrap 1000/seed 7.
+
+**Final verdict:** **All REJECTED.** 14,449 samples, 3,678 signalled
+(25.5%). Hit rates **0.4965 / 0.5019** — the tightest clustering around a
+coin flip the program has produced. Causality PASSED throughout;
+single-pass, walk-forward and regime all FAILED. Only **two independent
+measurements** (contrarian/momentum are complementary).
+
+**Well-powered merit rejection, not a power failure.** ρ̄ = +0.731 →
+N_eff 1.22 of 3 symbols; serial retention ×0.654; effective per-fold
+signalled 253 (folds=3) and 147 (folds=5) against a floor of 100.
+
+**Platform work:** required a new `liquidation_density_rule` family
+(commit `e938dc4`) — the first since Campaign 01 — so evidence packages
+record `liquidation_density_hourly` rather than the `funding_rate_raw`
+that reusing the funding family would have stamped (the misstatement
+CAMP-04/05 carry).
+
+**What it does NOT close:** the liquidation family. The window was 200
+days (venue 1h-candle retention, not data), regime coverage narrow, and
+only the 1-hour horizon tested.

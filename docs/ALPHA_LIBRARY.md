@@ -50,6 +50,10 @@ deferred until there are enough approved models to justify it.
 | OI extremeness 72h horizon, momentum | `open_interest_extremeness_rule` | h72-t025-momentum-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
 | OI extremeness 120h horizon, contrarian | `open_interest_extremeness_rule` | h120-t040-contrarian-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
 | OI extremeness 120h horizon, momentum | `open_interest_extremeness_rule` | h120-t040-momentum-v1 | see `data/alpha_engine_research/campaign_07.jsonl` | Not applicable — no Hyperliquid historical OI source exists (DEFER-ceiling) | CAMP-07 |
+| Hourly liquidation density, contrarian (folds=3) | `liquidation_density_rule` | p75-f3-contrarian-v1 | see `data/alpha_engine_research/campaign_08.jsonl` | **Yes — Hyperliquid-native feature AND outcome (no DEFER-ceiling)** | CAMP-08 |
+| Hourly liquidation density, momentum (folds=3) | `liquidation_density_rule` | p75-f3-momentum-v1 | see `data/alpha_engine_research/campaign_08.jsonl` | **Yes — Hyperliquid-native feature AND outcome (no DEFER-ceiling)** | CAMP-08 |
+| Hourly liquidation density, contrarian (folds=5) | `liquidation_density_rule` | p75-f5-contrarian-v1 | see `data/alpha_engine_research/campaign_08.jsonl` | **Yes — Hyperliquid-native feature AND outcome (no DEFER-ceiling)** | CAMP-08 |
+| Hourly liquidation density, momentum (folds=5) | `liquidation_density_rule` | p75-f5-momentum-v1 | see `data/alpha_engine_research/campaign_08.jsonl` | **Yes — Hyperliquid-native feature AND outcome (no DEFER-ceiling)** | CAMP-08 |
 
 CAMP-01 (all four): hit rate 0.49–0.51 (indistinguishable from chance),
 causality audit passed (not a leakage artifact), sample floor cleared
