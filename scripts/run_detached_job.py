@@ -81,6 +81,21 @@ def _recorded_argv(d: Path):
         return None
 
 
+def _claim(lock_path: Path) -> Path:
+    """Create the lock and stamp it with THIS process's pid in one step.
+
+    O_CREAT|O_EXCL guarantees exactly one caller creates the file; writing
+    the pid immediately means every other caller either loses the create
+    or reads an identifiable holder. Raises FileExistsError if the lock
+    already exists (the caller decides whether it may be reclaimed)."""
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    try:
+        os.write(fd, str(os.getpid()).encode("utf-8"))
+    finally:
+        os.close(fd)
+    return lock_path
+
+
 def _acquire_lock(d: Path):
     """Atomically claim the right to start this job, or return None.
 
@@ -93,12 +108,19 @@ def _acquire_lock(d: Path):
     A lock left behind by a job that has since exited is reclaimed, but
     ONLY when its holder is provably gone -- never when liveness is
     merely undeterminable.
+
+    The lock is STAMPED WITH THE CLAIMING PROCESS'S OWN PID as part of
+    creating it. That is what makes the exclusion real: the original
+    implementation created the lock empty and only stamped it with the
+    child's pid after the liveness probe and Popen had finished, so for
+    the whole of that window (measured at 0.25s to ~35s) a second caller
+    read an empty lock, could not identify a holder, and stole it -- both
+    callers then spawned a child. Stamping happens before any slow work,
+    so the only unstamped window is between one os.open and one os.write.
     """
     lock_path = d / "lock"
     try:
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-        return lock_path
+        return _claim(lock_path)
     except FileExistsError:
         pass
     except OSError:
@@ -109,14 +131,19 @@ def _acquire_lock(d: Path):
         holder_raw = lock_path.read_text(encoding="utf-8").strip()
     except OSError:
         pass
-    holder_pid = int(holder_raw) if holder_raw.isdigit() else -1
-    if holder_pid > 0 and liveness(holder_pid, _recorded_argv(d)) != GONE:
+    if not holder_raw.isdigit():
+        # An unstamped lock means another caller created it microseconds
+        # ago and has not yet written its pid. Fail CLOSED -- stealing
+        # here is exactly the defect described above. (A lock left empty
+        # by a process killed inside that one-syscall window has to be
+        # removed by hand; the message in start() says so.)
+        return None
+    holder_pid = int(holder_raw)
+    if liveness(holder_pid, _recorded_argv(d)) != GONE:
         return None  # a live (or unverifiable) holder -- do not steal the lock
     try:
         lock_path.unlink()
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)
-        return lock_path
+        return _claim(lock_path)
     except OSError:
         return None
 
