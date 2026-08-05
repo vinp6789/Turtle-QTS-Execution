@@ -1,0 +1,144 @@
+{
+  "generated_at_utc": "2026-08-05T16:18:16Z",
+  "window": {
+    "start": "2025-07-28",
+    "end": "2026-07-28",
+    "hours": 8784
+  },
+  "serial_dependence": {
+    "BTC": {
+      "lag1": 0.22303702677538415,
+      "n_eff_serial": 5580.242140991564,
+      "n_hours": 8784
+    },
+    "ETH": {
+      "lag1": 0.2055792383180299,
+      "n_eff_serial": 5788.248294944168,
+      "n_hours": 8784
+    },
+    "SOL": {
+      "lag1": 0.18445695075984778,
+      "n_eff_serial": 6048.113559492265,
+      "n_hours": 8784
+    }
+  },
+  "cross_symbol": {
+    "pairs": {
+      "BTC-ETH": 0.795435445134722,
+      "BTC-SOL": 0.7832203874438373,
+      "ETH-SOL": 0.8708462206103287
+    },
+    "rho_bar": 0.816500684396296,
+    "n_eff_symbols": 1.1393841399238245
+  },
+  "grid": [
+    {
+      "percentile": 75,
+      "n_folds": 3,
+      "total": 6657,
+      "worst_fold": 1802,
+      "mean_fold": 2219.0,
+      "worst_effective_cross": 684.3900733809106,
+      "worst_effective_cross_and_serial": 452.3281301790084,
+      "clears_raw": true,
+      "clears_effective": true
+    },
+    {
+      "percentile": 75,
+      "n_folds": 5,
+      "total": 6657,
+      "worst_fold": 1051,
+      "mean_fold": 1331.4,
+      "worst_effective_cross": 399.1642436866465,
+      "worst_effective_cross_and_serial": 263.8162401876458,
+      "clears_raw": true,
+      "clears_effective": true
+    },
+    {
+      "percentile": 90,
+      "n_folds": 3,
+      "total": 2642,
+      "worst_fold": 654,
+      "mean_fold": 880.6666666666666,
+      "worst_effective_cross": 248.38574250339374,
+      "worst_effective_cross_and_serial": 164.1634834278976,
+      "clears_raw": true,
+      "clears_effective": true
+    },
+    {
+      "percentile": 90,
+      "n_folds": 5,
+      "total": 2642,
+      "worst_fold": 361,
+      "mean_fold": 528.4,
+      "worst_effective_cross": 137.1058915041669,
+      "worst_effective_cross_and_serial": 90.61623473619424,
+      "clears_raw": true,
+      "clears_effective": false
+    },
+    {
+      "percentile": 99,
+      "n_folds": 3,
+      "total": 264,
+      "worst_fold": 51,
+      "mean_fold": 88.0,
+      "worst_effective_cross": 19.36953037870502,
+      "worst_effective_cross_and_serial": 12.801739533368163,
+      "clears_raw": false,
+      "clears_effective": false
+    },
+    {
+      "percentile": 99,
+      "n_folds": 5,
+      "total": 264,
+      "worst_fold": 12,
+      "mean_fold": 52.8,
+      "worst_effective_cross": 4.557536559695298,
+      "worst_effective_cross_and_serial": 3.012174007851332,
+      "clears_raw": false,
+      "clears_effective": false
+    }
+  ],
+  "bootstrap": {
+    "p75_folds3": {
+      "mean": 2220.925,
+      "p05": 2035,
+      "p95": 2400,
+      "frac_ge_floor": 1.0
+    },
+    "p75_folds5": {
+      "mean": 1335.327,
+      "p05": 1198,
+      "p95": 1476,
+      "frac_ge_floor": 1.0
+    },
+    "p90_folds3": {
+      "mean": 883.047,
+      "p05": 781,
+      "p95": 992,
+      "frac_ge_floor": 1.0
+    },
+    "p90_folds5": {
+      "mean": 526.965,
+      "p05": 442,
+      "p95": 616,
+      "frac_ge_floor": 1.0
+    },
+    "p99_folds3": {
+      "mean": 88.38,
+      "p05": 60,
+      "p95": 119,
+      "frac_ge_floor": 0.256
+    },
+    "p99_folds5": {
+      "mean": 52.075,
+      "p05": 31,
+      "p95": 76,
+      "frac_ge_floor": 0.001
+    }
+  },
+  "timings_seconds": {
+    "build_panel_s": 20.657349199987948,
+    "total_s": 21.104587799985893
+  }
+}
