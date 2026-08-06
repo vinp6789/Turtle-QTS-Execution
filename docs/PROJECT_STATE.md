@@ -39,7 +39,7 @@ they're found, never silently carried forward.
 | **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
 | **Current blocker** | **Slippage has never been measured** — blocked on testnet credentials (see Current Blockers → Operational). Every cost figure in the project is therefore a lower bound. |
 | **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
-| **Full regression** | **1,921 passed, 0 failed** (verified 2026-08-06; +50 feasibility-gate tests over the 1,871 baseline) |
+| **Full regression** | **1,925 passed, 0 failed** (verified 2026-08-06) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 | **Active tracks** | A Research Framework · B Alpha Discovery · C Trading Engineering · D Reverse Engineering · E Data Platform. **Exactly one is active at a time** — see `ROADMAP.md`. Currently **Track A**. |
@@ -487,7 +487,7 @@ pre-fix code and passes against the fix).
 
 **Operational**
 - **OPEN — testnet credentials absent.** `TURTLE_DEPLOYMENT_ACCOUNT_ADDRESS` and a testnet `TURTLE_SECRET_HYPERLIQUID_WALLET_KEY_V1`, plus a funded wallet and a spot→perp transfer, are required before slippage can be measured or any order placed. Operator action; not a code defect.
-- **OPEN — live recorder is DEGRADED.** `python scripts/recorder_health.py` reports 216 rows across 9 series, **0 duplicates, 0 gaps**, lag within the hourly cadence — but **2 `RECORD_FAILED` lines** (malformed response or transport failure). Data integrity is intact; the failures are transient and self-healing by design, but the verdict is not GREEN.
+- ~~OPEN — live recorder is DEGRADED~~ — **CLOSED 2026-08-06, investigated and measured.** The 2 `RECORD_FAILED` events were **transport failures, not lost data**: `HTTP Error 429: Too Many Requests` and `URLError: getaddrinfo failed` (Errno 11001, DNS). Independent audit of all 9 series: **25 contiguous hourly observations, 2026-08-05T16:00 → 2026-08-06T16:00, 0 gaps, 0 duplicates**, and both failure hours (00:00 and 09:00) have their rows present. The 4-polls-per-hourly-slot design (RD-18 §B) absorbed both, exactly as intended. **The defect was in the monitor, not the recorder:** `recorder_health.py` escalated on the failure count before the gap/duplicate checks ran, producing a permanently-red verdict on a self-healed transient — the alert-fatigue mode the deployment review warned about. Fixed: transport failures are a NOTE when the series are contiguous, and escalate only alongside a real data defect. 4 new tests. Verdict is now **HEALTHY (with notes)**, exit 0.
 - ~~Evidence store gitignored~~ — **closed 2026-07-29**, `data/alpha_engine_research/` now tracked. `data/alpha_engine_historical/` (243 MB CSVs) remains deliberately gitignored — reconstructible from public archives, not the provenance-critical asset the evidence store is.
 - `railway.json` declares no persistent volume; `data/` is ephemeral on Railway today (affects future live deployment, not current research). (Backlog 2.2)
 - ~~OPEN — launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`)~~ — **CLOSED 2026-08-05 (`4325782`, Backlog 3.3).** Root cause proven deterministically before any change: the lock was created with `O_CREAT|O_EXCL` but **written empty**, and only stamped with the child's pid after the liveness probe and `Popen`. A second caller in that window read `''`, computed `holder_pid = -1` from `"".isdigit() == False`, and therefore **skipped the liveness guard entirely**, falling through to the steal path. Fix (35 insertions): a `_claim()` helper stamps the **claiming process's own pid** into the lock as part of creating it, before any slow work; and an unstamped/unparseable lock is now **refused rather than stolen**, closing the residual one-syscall window. 20 concurrency tests using real threads and real processes — the prior suite had zero concurrency coverage, which is why the defect survived an audit that claimed it fixed. **H2 resolved without a documentation edit:** `LONG_RUNNING_JOBS.md`'s atomicity claim was false when written and is now true.
@@ -1073,7 +1073,13 @@ accordingly.)*
 2026-08-06   VENUE MEASUREMENTS -- HL fees taker 4.5bp / maker 1.5bp;
              HLP hurdle +16.6%/yr trailing 12m; 177 live perps.
 2026-08-06   REORGANISED CAMPAIGN-DRIVEN -> TRACK-DRIVEN (A-E).
-             Documentation synchronised. 1,921 tests.
+             Documentation synchronised.
+2026-08-06   RECORDER INVESTIGATED -- 2 RECORD_FAILED events traced to
+             HTTP 429 and DNS getaddrinfo failure. Zero data loss: 25
+             contiguous hourly rows, 0 gaps, 0 dups, both failure hours
+             present. Defect was in the monitor, not the recorder;
+             recorder_health.py now classifies transport failures as a
+             note unless a data defect also fires. 1,925 tests.
    ...        [Track A active: an expectancy/profit-factor gate with
               bootstrap power. The tax gate forces asymmetric payoffs,
               which the current binomial hit-rate gate cannot score.

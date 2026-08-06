@@ -4,9 +4,11 @@ Synthetic on-disk state only; no network, no real recorder. The monitor
 is READ-ONLY, so every test also asserts it wrote nothing.
 """
 
+import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -128,13 +130,14 @@ class TestFailureModes(unittest.TestCase):
             self.assertFalse(healthy)
             self.assertIn("running but writing nothing", "\n".join(lines))
 
-    def test_record_failed_lines_detected(self):
+    def test_record_failed_lines_are_reported(self):
         with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
             _seed(store)
             _job(rt, pid=999999, log="RECORDED x\nRECORD_FAILED TimeoutError: boom\n")
             healthy, lines = self._base(store, rt)
-            self.assertFalse(healthy)
-            self.assertIn("RECORD_FAILED", "\n".join(lines))
+            self.assertFalse(healthy)   # the dead pid, not the failed poll
+            self.assertIn("RECORD_FAILED=1", "\n".join(lines))
+
 
     def test_skipped_warnings_detected(self):
         with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
@@ -200,3 +203,65 @@ class TestReadOnly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTransportFailureClassification(unittest.TestCase):
+    """A RECORD_FAILED is a failed POLL, not lost data.
+
+    The recorder polls four times per hourly slot (RD-18 section B), so a
+    transient HTTP 429 or DNS failure costs nothing. Measured on the live
+    deployment 2026-08-06: two RECORD_FAILED events (HTTP 429, and
+    getaddrinfo Errno 11001), both in hours whose rows are present, with
+    25 contiguous hourly observations and zero gaps across all nine
+    series. Escalating on the count alone produced a permanently-red
+    monitor on a self-healed transient.
+    """
+
+    def _check(self, store, rt):
+        """Process liveness is stubbed ALIVE so the verdict under test is the
+        transport-failure classification alone, not process introspection."""
+        with mock.patch.object(rh, "liveness", return_value=rh.ALIVE_AND_MATCHES):
+            return rh.check("live_recorder", rt, store, 90.0, 2.0)
+
+    def test_transport_failure_with_contiguous_series_is_a_note_not_degradation(self):
+        with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
+            _seed(store)
+            _job(rt, pid=os.getpid(),
+                 log="RECORDED x\nRECORD_FAILED HTTPError: HTTP Error 429: Too Many Requests\n")
+            healthy, lines = self._check(store, rt)
+            text = "\n".join(lines)
+            self.assertTrue(healthy, msg=text)
+            self.assertIn("HEALTHY (with notes)", text)
+            self.assertIn("Informational, not degradation", text)
+
+    def test_transport_failure_escalates_when_a_gap_also_exists(self):
+        with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
+            _seed(store, hours=3, step_hours=5)   # a real gap
+            _job(rt, pid=os.getpid(),
+                 log="RECORDED x\nRECORD_FAILED URLError: getaddrinfo failed\n")
+            healthy, lines = self._check(store, rt)
+            text = "\n".join(lines)
+            self.assertFalse(healthy)
+            self.assertIn("cost real samples", text)
+
+    def test_transport_failure_escalates_when_duplicates_exist(self):
+        with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
+            _seed(store)
+            path = next(p for p in Path(store).iterdir() if p.name.endswith(".csv"))
+            lines_ = path.read_text(encoding="utf-8").splitlines()
+            path.write_text("\n".join(lines_ + [lines_[-1]]) + "\n", encoding="utf-8")
+            _job(rt, pid=os.getpid(), log="RECORDED x\nRECORD_FAILED boom\n")
+            healthy, out = self._check(store, rt)
+            self.assertFalse(healthy)
+            self.assertIn("cost real samples", "\n".join(out))
+
+    def test_no_failures_reports_plain_healthy(self):
+        with tempfile.TemporaryDirectory() as store, tempfile.TemporaryDirectory() as rt:
+            _seed(store)
+            _job(rt, pid=os.getpid(), log="RECORDED x\n")
+            healthy, lines = self._check(store, rt)
+            text = "\n".join(lines)
+            self.assertTrue(healthy, msg=text)
+            self.assertIn("VERDICT: HEALTHY", text)
+            self.assertNotIn("with notes", text)
+
