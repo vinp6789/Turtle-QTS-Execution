@@ -79,6 +79,8 @@ from secrets_boundary import SigningBoundary, SigningPurpose
 from exchange_adapter import (
     AmendRequest,
     Balance,
+    Candle,
+    CandleInterval,
     CancelAllRequest,
     CancelRequest,
     ConnectionState,
@@ -246,6 +248,37 @@ class HyperliquidAdapter(ExchangeAdapter):
         self._require_connected()
         body = self._info("metaAndAssetCtxs")
         return codec.parse_funding_rate(body, symbol, _now())
+
+    def get_candles(
+        self, symbol: Symbol, interval: CandleInterval, limit: int
+    ) -> Tuple[Candle, ...]:
+        """CandleSource (D6 context extension): read-only CLOSED OHLCV bars,
+        oldest -> newest. Never places, amends, cancels, records a mapping,
+        or mutates adapter state.
+
+        Returns AT MOST `limit` bars; fewer is legal and expected for a young
+        market or beyond the venue's retention window. Callers must check
+        length, never assume it.
+        """
+        self._require_connected()
+        if not isinstance(limit, int) or limit <= 0:
+            raise ExchangeAdapterError(f"limit must be a positive int, got {limit!r}")
+        step = codec.interval_ms(interval)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        # +2 bars of slack so the in-progress bar can be dropped and still
+        # leave `limit` closed bars available.
+        start_ms = now_ms - step * (limit + 2)
+        body = self._info(
+            "candleSnapshot",
+            req={
+                "coin": symbol.value,
+                "interval": codec.hl_interval(interval),
+                "startTime": start_ms,
+                "endTime": now_ms,
+            },
+        )
+        candles = codec.parse_candles(body, symbol, interval, now_ms)
+        return candles[-limit:]
 
     def get_order_status(self, exchange_order_id: str) -> Order:
         self._require_connected()

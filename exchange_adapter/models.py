@@ -212,6 +212,69 @@ class FundingRate:
     timestamp_utc: str
 
 
+class CandleInterval(Enum):
+    """Bar sizes a CandleSource may be asked for. Values are the
+    venue-agnostic canonical spellings; a concrete adapter translates
+    these into its own native strings internally (nothing exchange-native
+    crosses this boundary -- see this module's own docstring)."""
+
+    M1 = "1m"
+    M5 = "5m"
+    M15 = "15m"
+    H1 = "1h"
+    H4 = "4h"
+    D1 = "1d"
+
+
+@dataclass(frozen=True)
+class Candle:
+    """One CLOSED OHLCV bar. Immutable by construction.
+
+    Only closed bars are ever represented: a partially-formed (still
+    accumulating) bar is never a Candle, because its high/low/close and
+    volume would change after observation -- which would make any
+    indicator computed from it non-deterministic on re-read. A
+    CandleSource must exclude the in-progress bar.
+
+    `open_time_utc` is the bar's OPEN timestamp (canonical UTC string),
+    which is the field callers order and de-duplicate on.
+    """
+
+    symbol: Symbol
+    interval: CandleInterval
+    open_time_utc: str
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+
+    def __post_init__(self):
+        if not isinstance(self.symbol, Symbol):
+            raise TypeError(f"Candle.symbol must be a Symbol, got {type(self.symbol).__name__}")
+        if not isinstance(self.interval, CandleInterval):
+            raise TypeError(
+                f"Candle.interval must be a CandleInterval, got {type(self.interval).__name__}"
+            )
+        if not isinstance(self.open_time_utc, str) or not self.open_time_utc:
+            raise ValueError("Candle.open_time_utc must be a non-empty string")
+        for name in ("open", "high", "low", "close", "volume"):
+            value = getattr(self, name)
+            if not isinstance(value, Decimal):
+                raise TypeError(f"Candle.{name} must be a Decimal, got {type(value).__name__}")
+        for name in ("open", "high", "low", "close"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"Candle.{name} must be positive, got {getattr(self, name)}")
+        if self.volume < 0:
+            raise ValueError(f"Candle.volume must be non-negative, got {self.volume}")
+        if self.high < self.low:
+            raise ValueError(f"Candle.high {self.high} is below Candle.low {self.low}")
+        if self.high < max(self.open, self.close):
+            raise ValueError(f"Candle.high {self.high} is below open/close")
+        if self.low > min(self.open, self.close):
+            raise ValueError(f"Candle.low {self.low} is above open/close")
+
+
 @dataclass(frozen=True)
 class HealthStatus:
     connection_state: ConnectionState

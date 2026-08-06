@@ -38,6 +38,8 @@ Resolver = Callable[[str], Optional[str]]
 
 from exchange_adapter import (
     Balance,
+    Candle,
+    CandleInterval,
     ExchangeAdapterError,
     Fill,
     FundingRate,
@@ -336,3 +338,78 @@ def parse_funding_rate(meta_and_asset_ctxs_body: list, symbol: Symbol, checked_a
         next_funding_time_utc=next_hour.isoformat(),
         timestamp_utc=checked_at_utc,
     )
+
+
+# Canonical CandleInterval -> Hyperliquid native interval string.
+# Hyperliquid uses the same spellings; the map is explicit so a future
+# divergence is a one-line change here, never a caller change.
+_HL_INTERVAL = {
+    CandleInterval.M1: "1m",
+    CandleInterval.M5: "5m",
+    CandleInterval.M15: "15m",
+    CandleInterval.H1: "1h",
+    CandleInterval.H4: "4h",
+    CandleInterval.D1: "1d",
+}
+
+_INTERVAL_MS = {
+    CandleInterval.M1: 60_000,
+    CandleInterval.M5: 300_000,
+    CandleInterval.M15: 900_000,
+    CandleInterval.H1: 3_600_000,
+    CandleInterval.H4: 14_400_000,
+    CandleInterval.D1: 86_400_000,
+}
+
+
+def hl_interval(interval: CandleInterval) -> str:
+    try:
+        return _HL_INTERVAL[interval]
+    except KeyError as exc:
+        raise ExchangeAdapterError(f"unsupported CandleInterval: {interval!r}") from exc
+
+
+def interval_ms(interval: CandleInterval) -> int:
+    try:
+        return _INTERVAL_MS[interval]
+    except KeyError as exc:
+        raise ExchangeAdapterError(f"unsupported CandleInterval: {interval!r}") from exc
+
+
+def parse_candles(
+    body, symbol: Symbol, interval: CandleInterval, now_ms: int
+) -> Tuple[Candle, ...]:
+    """candleSnapshot -> CLOSED candles, oldest -> newest, de-duplicated.
+
+    The venue returns the still-forming bar as the final element. Its
+    high/low/close/volume can still change, so including it would make any
+    indicator computed from it non-deterministic on re-read -- it is
+    excluded by comparing the bar's CLOSE time against `now_ms`.
+    """
+    if not isinstance(body, list):
+        raise ExchangeAdapterError(
+            f"candleSnapshot body must be a list, got {type(body).__name__}"
+        )
+    step = interval_ms(interval)
+    by_open = {}
+    for raw in body:
+        if not isinstance(raw, dict):
+            raise ExchangeAdapterError(f"candleSnapshot entry must be an object, got {raw!r}")
+        try:
+            open_ms = int(raw["t"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ExchangeAdapterError(f"candleSnapshot entry missing valid 't': {raw!r}") from exc
+        # Exclude the in-progress bar: it has not closed yet.
+        if open_ms + step > now_ms:
+            continue
+        by_open[open_ms] = Candle(
+            symbol=symbol,
+            interval=interval,
+            open_time_utc=_iso(open_ms),
+            open=_decimal(raw.get("o"), "candle.o"),
+            high=_decimal(raw.get("h"), "candle.h"),
+            low=_decimal(raw.get("l"), "candle.l"),
+            close=_decimal(raw.get("c"), "candle.c"),
+            volume=_decimal(raw.get("v"), "candle.v"),
+        )
+    return tuple(by_open[k] for k in sorted(by_open))

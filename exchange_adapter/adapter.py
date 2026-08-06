@@ -26,7 +26,7 @@ subclass can skip them:
 
 import threading
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Tuple, runtime_checkable
 
 from secrets_boundary import SigningBoundary
 
@@ -42,6 +42,8 @@ from .models import (
     AmendRequest,
     AuditRecord,
     Balance,
+    Candle,
+    CandleInterval,
     CancelAllRequest,
     CancelRequest,
     ExchangeCapabilities,
@@ -260,3 +262,32 @@ class ExchangeAdapter(ABC):
         return f"{type(self).__name__}(exchange_name={self._exchange_name!r}, version={self._adapter_version!r})"
 
     __str__ = __repr__
+
+
+@runtime_checkable
+class CandleSource(Protocol):
+    """OPTIONAL capability: read-only historical OHLCV bars.
+
+    Deliberately a separate Protocol rather than a new abstract method on
+    ExchangeAdapter. Adding an abstract method to the frozen ExchangeAdapter
+    contract would break every existing concrete adapter and every test
+    double -- that is not an additive change. A Protocol adds a capability
+    that adapters MAY implement and callers MUST feature-detect
+    (`isinstance(adapter, CandleSource)`), so nothing existing changes.
+
+    Contract every implementation must honour:
+      - CLOSED bars only; the in-progress bar is excluded (a bar whose
+        high/low/close/volume can still change would make any indicator
+        computed from it non-deterministic on re-read).
+      - Ordered OLDEST -> NEWEST by open_time_utc.
+      - No duplicate open_time_utc.
+      - Returns at most `limit` bars; FEWER is legal (young market, venue
+        retention). Callers must check length, never assume it.
+      - Read-only: never places, amends, cancels, records a mapping, or
+        mutates any adapter state.
+      - Raises rather than returning fabricated or partial bars.
+    """
+
+    def get_candles(
+        self, symbol: Symbol, interval: CandleInterval, limit: int
+    ) -> Tuple[Candle, ...]: ...

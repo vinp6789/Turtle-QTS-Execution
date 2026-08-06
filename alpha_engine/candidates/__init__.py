@@ -62,6 +62,10 @@ from .funding_rate_candidate import (
     FundingRateThresholdRuleCandidate,
     funding_rate_candidate_specification,
 )
+from .trend_momentum_candidate import (
+    TrendMomentumRuleCandidate,
+    trend_momentum_candidate_specification,
+)
 from .liquidation_density_candidate import (
     LiquidationDensityRuleCandidate,
     liquidation_density_candidate_specification,
@@ -81,6 +85,8 @@ __all__ = [
     "funding_rate_candidate_specification",
     "FundingRateThresholdRuleCandidate",
     "liquidation_density_candidate_specification",
+    "TrendMomentumRuleCandidate",
+    "trend_momentum_candidate_specification",
     "LiquidationDensityRuleCandidate",
     "open_interest_candidate_specification",
     "OpenInterestThresholdRuleCandidate",

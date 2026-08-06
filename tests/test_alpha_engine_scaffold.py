@@ -163,6 +163,10 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
             set(module.__all__),
             {
                 "FundingRateFeature", "OpenInterestFeature", "LiquidationDensityFeature",
+                "TrendMomentumFeature",
+                # Shared ATR primitive: one implementation used by both the
+                # feature (normalisation) and the candle bridge (exit sizing).
+                "atr_from_candles", "true_ranges", "wilder_atr", "ATR_PERIOD",
                 "FeatureValue", "FeatureMetadata", "FeatureError",
                 "percentile_rank_centered", "zscore",
                 "PCTRANK_NAME", "PCTRANK_VERSION", "ZSCORE_NAME", "ZSCORE_VERSION",
@@ -176,6 +180,8 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
             {
                 "CandidateSpecification", "funding_rate_candidate_specification",
                 "liquidation_density_candidate_specification",
+                "TrendMomentumRuleCandidate",
+                "trend_momentum_candidate_specification",
                 "LiquidationDensityRuleCandidate",
                 "FundingRateThresholdRuleCandidate", "open_interest_candidate_specification",
                 "OpenInterestThresholdRuleCandidate",
@@ -205,6 +211,8 @@ class TestLayerPackagesImportCleanly(unittest.TestCase):
             {
                 "ApprovedFundingAlphaStrategy", "load_approved_specifications",
                 "STRATEGY_NAME", "ExecutionBridgeError",
+                # D6 candle-derived sibling bridge (EMA+MACD+ATR).
+                "ApprovedCandleAlphaStrategy", "CANDLE_INTERVAL",
             },
         )
 

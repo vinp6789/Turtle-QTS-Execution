@@ -27,6 +27,8 @@ docstring).
 from .errors import FeatureError
 from .funding_rate_feature import FundingRateFeature
 from .liquidation_density_feature import LiquidationDensityFeature
+from .atr import ATR_PERIOD, atr_from_candles, true_ranges, wilder_atr
+from .trend_momentum_feature import TrendMomentumFeature
 from .models import FeatureMetadata, FeatureValue
 from .open_interest_feature import OpenInterestFeature
 from .open_interest_rolling import (
@@ -41,6 +43,11 @@ from .open_interest_rolling import (
 __all__ = [
     "FundingRateFeature",
     "LiquidationDensityFeature",
+    "TrendMomentumFeature",
+    "atr_from_candles",
+    "true_ranges",
+    "wilder_atr",
+    "ATR_PERIOD",
     "OpenInterestFeature",
     "FeatureValue",
     "FeatureMetadata",

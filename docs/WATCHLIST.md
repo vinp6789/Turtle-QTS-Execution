@@ -1,14 +1,39 @@
 # WATCHLIST.md
 
+This document holds **two separate lists that must never be confused**:
+
+1. **The executable trading universe** (below) — the instruments the Alpha
+   Engine may research and trade. An enforced guardrail, wired into
+   `alpha_engine.watchlist` and refused at construction time if violated.
+   Owned by **Track E**.
+2. **The Reverse Engineering watchlist** (§ at the end) — *systems* to
+   study for mechanism candidates. Enforced by nothing; it is a reading
+   list. Owned by **Track D**.
+
+The first constrains capital. The second constrains attention. Merging
+them would make a research target look like a trading permission.
+
+---
+
+# Part 1 — Executable trading universe
+
 The watchlist is the configurable universe the Alpha Engine is allowed to
 research and trade — "generate alpha only from a configurable watchlist"
 is a system objective stated in `PROJECT_CONSTITUTION.md` §1 item 6.
 
 ## Current watchlist
 
-**BTC, ETH, SOL** — the symbols used throughout Research Campaign 01 and
-the only symbols the historical data pipeline has backfilled to date
+**BTC, ETH, SOL** — the symbols used throughout Campaigns 01–08 and the
+only symbols the historical data pipeline has backfilled
 (`docs/HISTORICAL_DATA.md`).
+
+**Pending expansion (Track E, `ROADMAP.md` E1).** The cross-sectional
+mechanism requires a materially wider universe: `[M]` three symbols carry
+an effective sample size of 1.61 directionally, thirty carry 4.54, and
+thirty market-neutral carry 21.58 (`docs/MECHANISMS.md`). Any expansion
+must be **reconstructed point-in-time** — the 30-symbol panel used in
+feasibility work was selected by *today's* volume, which is survivorship
+bias and is not admissible in a pre-registration.
 
 There is **no persisted watchlist file** in the repository (verified — no
 `*.json` watchlist file exists anywhere). The watchlist used by Campaign
@@ -77,7 +102,7 @@ permanent regardless of later watchlist changes).
 
 ## Future automation plan
 
-Per `docs/STRATEGIC_GAP_ANALYSIS.md` (#6, #8, #9) and `ROADMAP.md` §2:
+Per `docs/STRATEGIC_GAP_ANALYSIS.md` (#6, #8, #9) and `ROADMAP.md` Track C (C4):
 today the watchlist is an **enforced guardrail** ("never evaluate outside
 this list"), not yet a **driver** ("automatically evaluate every member").
 The intended end state (`PROJECT_CONSTITUTION.md` §8):
@@ -93,7 +118,7 @@ evaluate against the watchlist at all, (2) a model-combination policy
 `alpha_engine/portfolio/selection.py`), and (3) a per-asset evidence
 ranking layer (today: none exists — `compare_experiments()` ranks
 experiments, not assets). None of this should be built before item (1)
-exists; see `ROADMAP.md` §2 for the explicit sequencing rationale.
+exists; see `ROADMAP.md` Track C (C4) for the explicit sequencing rationale.
 
 ## Current implementation status
 
@@ -118,3 +143,48 @@ exists; see `ROADMAP.md` §2 for the explicit sequencing rationale.
 See `docs/ALPHA_ENGINE.md` for the full technical architecture and
 `alpha_engine/watchlist.py`'s own module docstring for the exact
 validation rules.
+
+---
+
+# Part 2 — Reverse Engineering watchlist (Track D)
+
+**Systems to study, not instruments to trade.** Nothing here is a
+permission, a hypothesis, or a commitment to build.
+
+**Output contract:** studying a system produces **a row in
+`docs/MECHANISMS.md` and nothing else** — no code, no campaign, no report
+series. The mechanism column below is a *pointer* to that table, not a
+copy of it; mechanism status, evidence and next actions live there and are
+deliberately not repeated here.
+
+**Compatibility rule (standing, `PROJECT_CONSTITUTION.md` §5 and
+`docs/HISTORICAL_DATA.md`):** no paid datasets, no paid APIs, no paid
+software. A system that cannot be studied and reproduced from free,
+open-source or public resources is marked **NOT COMPATIBLE** and dropped —
+not deferred.
+
+| # | System / body of work | Why it is worth studying | Free-data compatible? |
+|---|---|---|---|
+| **1** | **HLP (Hyperliquid vault)** | **Study first.** The only target whose mechanism *and* returns are both directly measurable from public endpoints. `[M]` +16.6 %/yr trailing 12 m — the project's own hurdle rate | **Yes** — `vaultDetails`, free, keyless |
+| 2 | **CTA / managed-futures programmes** | The largest body of publicly documented systematic trading; published methodology and long track records | **Yes** — academic papers, public factsheets |
+| 3 | **Trend following (as a documented industry, not as an indicator)** | Studying *why* it worked and where it decayed, given the family is permanently rejected here (Constitution §4). **Studying is permitted; re-implementing is not** | **Yes** |
+| 4 | **Basis / cash-and-carry** | The clearest example of a mechanism with an identifiable counterparty and an economic reason to pay | Partly — `[M]` HL spot volume ≈ 0 for the watchlist, so no deliverable leg exists on the production venue |
+| 5 | **Relative value / statistical arbitrage** | Directly informs the highest-ranked untested mechanism | **Yes** — public literature |
+| 6 | **Liquidity provision / market making** | HLP's actual business; the structural way to *earn* the maker rebate rather than pay the taker fee | **Yes** to study. `[M]` Live execution is constrained: 0.13 bp spreads, REST-only adapter |
+| 7 | **Capacity-constrained strategies** | `[E]` limits-to-arbitrage is the best-documented reason a retail-size edge can persist at all | **Yes** |
+| 8 | **Session effects** | Untested here; cheap to test as a by-product of an existing harness | **Yes** — timestamps |
+| 9 | **Liquidity sweeps / stop hunts** | Would need market-wide order flow, which the project does not have | **Blocked** — RD-18 §C, adapter is REST-only and reads only the account's own fills |
+| 10 | **Calendar effects** | Cheap; `[E]` weak and heavily arbitraged, so low expected value | **Yes** — timestamps |
+| 11 | **Perpetual mechanics** (funding settlement, fee tiers, staking discounts, liquidation engine design) | `[M]` The highest-certainty non-predictive lever measured so far: fee tier and staking discounts move the breakeven for **every** future campaign at once | **Yes** — `userFees`, public docs |
+
+**Explicitly excluded as NOT COMPATIBLE:** anything requiring private
+order flow, colocation, exchange relationships, prime brokerage, paid
+market-data subscriptions, or proprietary datasets. Renaissance/Medallion
+is studied only as **published external commentary** — `[E]` its edge is
+capacity and turnover, not a secret signal — and never as a reproducible
+target.
+
+**How a study closes.** Each target is timeboxed and ends in exactly one
+of: a new `MECHANISMS.md` row · an update to an existing row · or a
+recorded **NOT COMPATIBLE** verdict with the reason. A study that produces
+none of these three was not finished.

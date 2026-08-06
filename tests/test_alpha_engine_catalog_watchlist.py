@@ -29,6 +29,7 @@ class TestCatalog(unittest.TestCase):
                 "liquidation_density_rule",   # Campaign 08, Backlog 3.7(b)
                 "open_interest_extremeness_rule",
                 "open_interest_threshold_rule",
+                "trend_momentum_rule",        # EMA+MACD+ATR, D6 candle-derived
             ),
         )
 

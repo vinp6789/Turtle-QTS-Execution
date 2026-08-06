@@ -220,11 +220,17 @@ class TestAdditiveOnly(unittest.TestCase):
     """The existing families must be untouched."""
 
     def test_all_four_families_registered(self):
+        """Inventory guard. Named "four" when liquidation_density was the
+        fourth family; trend_momentum_rule (EMA+MACD+ATR, the first
+        candle-derived family) is the fifth. The assertion, not the name,
+        is what this test enforces: adding a family must be a deliberate,
+        reviewed change that updates this list."""
         self.assertEqual(list_candidate_types(), (
             "funding_rate_threshold_rule",
             "liquidation_density_rule",
             "open_interest_extremeness_rule",
             "open_interest_threshold_rule",
+            "trend_momentum_rule",
         ))
 
     def test_existing_families_keep_their_feature_identities(self):

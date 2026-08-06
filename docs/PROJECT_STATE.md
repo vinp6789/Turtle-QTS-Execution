@@ -34,59 +34,83 @@ they're found, never silently carried forward.
 
 | | |
 |---|---|
-| **Current phase** | Alpha Engine: research phase, between campaigns. Execution Engine: frozen, dormant, stable, no live capital. |
+| **Current phase** | Alpha Engine: research phase, reorganising from campaign-driven to track-driven. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
-| **Current objective** | **Every cheap experiment in the queue is now spent.** Campaign 08 closed REJECTED (RD-19) — the first venue-native, promotion-eligible campaign, and it returned the same ~0.50 as every proxied one. Liquidations → NEAR-EXHAUSTED. The Live Recorder accumulates venue-native history; the next campaign needs materially more of it, or a genuinely new information class. |
-| **Current blocker** | No blocker on either running job. **Open technical debt (does not affect either running job):** the job-launcher's duplicate-start guard has a real, reproduced concurrency race (see Current Blockers → Operational) — deferred by explicit decision, to be closed before the *next* long-running collection campaign is *started* (not before these two, which are already past the vulnerable window). |
-| **Immediate next task** | **None executable.** All near-free experiments are spent and every remaining direction needs either accumulated live data (12–18 months) or a new data class. Strategic direction is a human decision. Monitor with `python scripts/recorder_health.py`. |
-| **Full regression** | **1,879 passed, 108 subtests, 0 failed** (29 liquidation-density family + 15 Campaign 08 sample tests added) |
+| **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
+| **Current blocker** | **Slippage has never been measured** — blocked on testnet credentials (see Current Blockers → Operational). Every cost figure in the project is therefore a lower bound. |
+| **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
+| **Full regression** | **1,921 passed, 0 failed** (verified 2026-08-06; +50 feasibility-gate tests over the 1,871 baseline) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
+| **Active tracks** | A Research Framework · B Alpha Discovery · C Trading Engineering · D Reverse Engineering · E Data Platform. **Exactly one is active at a time** — see `ROADMAP.md`. Currently **Track A**. |
 
 ---
 
 ## Current Phase
 
-**Alpha Engine — research phase, five campaigns closed, sixth not yet pre-registered.**
-Campaigns 01–05 (Open Interest level, Funding Rate absolute, Funding Rate
-venue-relative, Funding Delta, OI Velocity) all ran end-to-end — real
-data, real evidence, real governance — and all closed REJECTED. A
-one-month outcome-blind liquidation pilot has since completed
-successfully (below), and a chain of verified engineering/documentation
-prerequisites stands between here and Campaign 06's feasibility review.
+**Alpha Engine — eight campaigns closed, all REJECTED; reorganising from
+campaign-driven to track-driven.** Campaigns 01–05, 07 and 08 ran
+end-to-end — real data, real evidence, real governance. Campaign 06 was
+deferred at the feasibility gate (RD-16). Zero models have cleared
+governance.
+
+A power/cost/tax audit of every closed configuration (2026-08-06,
+`RESEARCH_BACKLOG.md` §1) established that the limiting factor was never
+the hypotheses: it was that no campaign had a cost model, and the sample
+gate in use was not a power criterion. **The next unit of work is a track,
+not a campaign** — see `ROADMAP.md`.
 
 **Execution Engine — dormant, stable, unchanged.** No work planned except
 an authorized critical-defect correction (`PROJECT_CONSTITUTION.md` §9) or
-the outstanding testnet operator actions (`ROADMAP.md` §4), neither gated
-by nor gating Alpha Engine research.
+the outstanding testnet operator actions (`ROADMAP.md` Track C), neither
+gated by nor gating Alpha Engine research.
+
+### Active tracks
+
+Tracks are **ownership boundaries, not parallel workstreams** — this is a
+single-developer project, and exactly one track is active at a time.
+
+| Track | Owns | State |
+|---|---|---|
+| **A · Research Framework** | Statistics, power, cost/tax models, acceptance criteria, governance process | **ACTIVE** |
+| **B · Alpha Discovery** | Mechanisms, campaigns, the research ledger | Idle — blocked on A |
+| **C · Trading Engineering** | Execution, risk, sizing, portfolio construction | Frozen (§9); one open item (slippage) |
+| **D · Reverse Engineering** | Studying working systems for mechanism candidates | Not started |
+| **E · Data Platform** | Historical datasets, collectors, the live recorder | Steady-state |
 
 ---
 
 ## Current Objective
 
-All Priority 0/1.x and 2.1 items are closed. The 12-month liquidation
-backfill (1.5) completed and passed independent audit; the feasibility
-gate (1.6) then **DEFERRED Campaign 06** (RD-16) — measured cross-symbol
-correlation ρ̄ = +0.818 gives **N_eff = 1.14** effective independent
-series from 3 symbols, and no threshold/fold configuration reaches the
-locked `min_signaled_samples = 100` per fold on an effective-sample
-basis. The mechanism is **untested, not rejected**; revisit trigger is
-≈18 further months of archive accumulation.
+**Give Track A a gate that can score the designs Track B must actually
+run.** Every campaign to date was gated on a binomial hit rate against a
+0.55 bar that was never derived. Three measurements closed that question:
 
-**Campaign 06 was a leaf in the dependency graph, not a prerequisite —
-its deferral frees capacity rather than unblocking work.** What actually
-opened the next research step was **Backlog 2.1's completion**
-(2026-07-30), which deepened Binance funding/OI/mark-price history to
-2020–2021.
+- `[M]` **Costs exist and bind.** Hyperliquid base fees taker **4.5 bp** /
+  maker **1.5 bp** (live, `/info userFees`, 2026-08-06); funding 5.10 %/yr
+  ⇒ **1.40 bp/day**. Mean \|move\|: 1h **39.8 bp** · 24h **218.8 bp** ·
+  72h **371.3 bp** · 120h **444.1 bp**. A 1-hour horizon has a **0.6138**
+  breakeven — CAMP-08's measured effect was **0.4 bp** against a **9.4 bp**
+  cost.
+- `[M]` **The sample gate was not a power gate.** 100 effective samples
+  ⇒ MDE **0.6384**; a 0.55 bar needs **783**. Only CAMP-08 (n_eff 1,177)
+  ever cleared it.
+- `[M]` **Indian VDA tax forces asymmetric payoffs.** Gross PF must exceed
+  **1.4535**; symmetric payoffs therefore need a **0.6169** hit rate,
+  which is implausible. At 1.5:1 the requirement falls to **0.5132**.
 
-The **DEX-first venue ceiling has been narrowed but not removed**
-(Backlog 3.1, 2026-08-05): Hyperliquid funding now spans **~37 months**
-(2023-07-01 → present) against Binance's 77 — from 22% to ~48% of
-Binance's span. Under Constitution §6 a finding that exists only on CEX
-data is never promotion-eligible, so any funding campaign remains
-replication-limited by the shorter Hyperliquid history. Next is **3.2**,
-the outcome-blind N_eff screen. See **Immediate Backlog** for the exact
-ordered chain.
+The gate now enforces cost, power and tax
+(`alpha_engine/feasibility.py`, 50 tests). **It still scores only a
+binomial hit rate**, so it cannot score an asymmetric design — closing
+that is the immediate next task.
+
+**Hurdle rate, measured:** the HLP vault returned `[M]` **+16.6 %/yr**
+time-weighted over the trailing 12 months at $398 M TVL (≈11.4 % after
+tax). Any research outcome must beat that net, or a deposit dominates it.
+
+The **DEX-first venue ceiling** remains: Hyperliquid funding spans ~37
+months against Binance's 77, so a CEX-only finding is never
+promotion-eligible (Constitution §6).
 
 ---
 
@@ -121,6 +145,28 @@ ordered chain.
   selection + execution bridge) → degradation/retirement.
 - Full audit remediation (A1–C4, B1–B6) — hardening pass, additive only.
 - Evidence: `alpha_engine/DECISIONS.md` D1–D9; `tests/test_alpha_engine_*`.
+- **D6 execution-context extension — BUILT AND TESTED (2026-08-06).**
+  OHLCV candles reach strategies through the sanctioned read-only
+  market-data seam: `Candle`/`CandleInterval` (`exchange_adapter/models.py`),
+  the optional `CandleSource` protocol (`exchange_adapter/adapter.py`),
+  `hyperliquid_adapter` candle fetch/parse excluding the in-progress bar,
+  and `MarketDataView.supports_candles()`/`get_candles()`. Additive only —
+  no frozen module's public API changed, no order/signing/risk path
+  touched. Also `alpha_engine/features/atr.py` (one Wilder ATR shared by
+  feature and bridge so the two can never diverge) and a catalog-driven
+  candle execution bridge.
+- **Feasibility gate — BUILT (2026-08-06).** `alpha_engine/feasibility.py`:
+  cost model, breakeven, effective sample size, MDE, and the VDA tax gate.
+  50 tests. **Independently audited the same day; four defects found and
+  fixed** — hit-indicator vs return correlation, eigenstructure vs
+  equicorrelation, fees omitted from the tax gate, and a docstring that
+  described the MDE approximation's direction backwards. Each defect has a
+  named regression test.
+- **Power/cost/tax audit of the entire closed record (2026-08-06).** All
+  15 closed configurations re-scored: 13 UNDERPOWERED, 1 DISPUTED,
+  CAMP-08 UNECONOMIC. **None could answer its own question.**
+  `docs/RESEARCH_BACKLOG.md` §1. No sealed evidence, fingerprint or
+  governance decision was altered.
 
 ### Historical Pipeline
 - `errors.py` / `models.py` / `storage.py` (CSV, incremental merge) →
@@ -415,14 +461,14 @@ pre-fix code and passes against the fix).
 | Item | Why deferred | Where it will land |
 |---|---|---|
 | **Campaign 06 (Liquidations)** | **Deferred at the feasibility gate 2026-08-05 (RD-16)** — N_eff = 1.14 of 3 symbols; effective per-fold samples 40.2 vs a floor of 100. Mechanism **untested, not rejected**. Trigger: ≈264 worst-fold raw signalled samples (~18 further months of archive). Do **not** revisit by lowering the floor, loosening the threshold, or dropping the N_eff requirement. | `RESEARCH_DECISIONS.md` RD-16 |
-| **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` §1.3 |
-| **Historical Validation Layer (HVL)** | Trigger: the first campaign producing a SUPPORTED hypothesis (RD-11). Nothing has ever passed governance. | `ROADMAP.md` §2 |
+| **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` Track B |
+| **Historical Validation Layer (HVL)** | Trigger: the first campaign producing a SUPPORTED hypothesis (RD-11). Nothing has ever passed governance. | `ROADMAP.md` Track A (A5) |
 | **"Robustness Validation" as a separate layer** | Rejected on Constitution §5 — its contents (Monte Carlo, parameter sensitivity → Research; stress/spread/fills → HVL; latency/delay → Paper Trading) dissolve into three existing homes with nothing left over. Zero concrete instances exist to justify a fourth layer. | Not scheduled — absorbed into HVL/Research/Paper Trading design notes |
 | ~~**Live Sample Recorder**~~ | **PROMOTED AND DEPLOYED 2026-08-05 (Backlog 3.4).** The §5 threshold was crossed by measurement, not opinion: RD-17 closed three OI mechanisms on merit leaving only Divergence (whose named unlock is this recorder), and Backlog 3.2 measured that Hyperliquid history **cannot be extended backwards**. Scoped strictly to HL-native OI/funding/mark snapshots — **order-flow capture remains NOT YET**, since the frozen adapter is REST-only by its own declaration and RD-07's "verify HL historical order-flow" precondition is still unverified. | Running as job `live_recorder` |
-| **Telegram Operations Console** | Deferred until paper/live trading is actually imminent — nothing trades today, so a full ops console has nothing to operate (§5 simplicity). **Not dropped** — full four-tier design preserved verbatim: **Monitoring** (read-only) → **Notifications** (event fan-out) → **Operations** (capital-affecting, confirmation-gated) → **Explainability** (deterministic retrieval only, never generative inference). One-path-only constraint (shared Operations Service, no parallel business logic in any client) and the forbidden-actions list (no alpha approval, no threshold changes, no Risk Manager/Governance bypass, no Live Mode switch via any operational channel) both carry forward unchanged. | `ROADMAP.md` §3; also listed in Definition of Done |
+| **Telegram Operations Console** | Deferred until paper/live trading is actually imminent — nothing trades today, so a full ops console has nothing to operate (§5 simplicity). **Not dropped** — full four-tier design preserved verbatim: **Monitoring** (read-only) → **Notifications** (event fan-out) → **Operations** (capital-affecting, confirmation-gated) → **Explainability** (deterministic retrieval only, never generative inference). One-path-only constraint (shared Operations Service, no parallel business logic in any client) and the forbidden-actions list (no alpha approval, no threshold changes, no Risk Manager/Governance bypass, no Live Mode switch via any operational channel) both carry forward unchanged. | `ROADMAP.md` Track C (C4); also listed in Definition of Done |
 | **`min_mean_directional_return` as a runner-recognized key** | Withdrawn after verification — the governance gate is meant to inspect mean directional return / expectancy sign at review time (CAMP-01 precedent, see Backlog 1.1); adding a mechanical runner key would migrate judgment out of the one deliberately human-owned gate. | Superseded by Backlog 1.1 |
 | **`docs/RESEARCH_INSIGHTS.md`** (proposed new document) | Rejected — ~80% duplicates `ALPHA_LIBRARY.md` / `RESEARCH_LEDGER.md` / RD-12 with no consistency mechanism between four documents (§5). | Not created; durable findings recorded via RD entries instead |
-| **RD-11's full deferred set** | Same HVL trigger. Rolling threshold recalculation, rolling normalization, trade simulation, stop/TP optimization, equity curve, drawdown, profit factor, expectancy, average R, slippage/fee/liquidity models, Constitution no-hindsight amendment. | `ROADMAP.md` §2 |
+| **RD-11's full deferred set** | Same HVL trigger. Rolling threshold recalculation, rolling normalization, trade simulation, stop/TP optimization, equity curve, drawdown, profit factor, expectancy, average R, slippage/fee/liquidity models, Constitution no-hindsight amendment. | `ROADMAP.md` Track A (A5) |
 
 ---
 
@@ -435,9 +481,13 @@ pre-fix code and passes against the fix).
 
 **Scientific**
 - ~~Zero overlap between mark-price coverage and the liquidation archive~~ — **closed 2026-07-29.** Hyperliquid-native daily-candle mark price now covers 2025-07-27→2026-07-28 (367/367/367 rows, BTC/ETH/SOL) — full overlap with the liquidation archive's own window. Binance secondary-source coverage for the same window still filling in (see Active Work) but is not itself blocking.
-- Measured cross-symbol correlation (+0.85–0.90) means the pilot's raw per-fold sample counts overstate true statistical power by roughly 2.5–3×; the feasibility review (Backlog 1.6) may reject Campaign 06 outright.
+- ~~Measured cross-symbol correlation (+0.85–0.90) means raw per-fold counts overstate power~~ — **closed 2026-08-05 (RD-16)**, and now generalised: the dependence haircut is enforced in code for every future campaign.
+- **OPEN — the gate cannot score an asymmetric design.** The VDA tax gate makes symmetric-payoff designs untradeable (`[M]` 0.6169 required hit rate), but `feasibility.assess()` scores only a binomial hit rate. An expectancy/profit-factor gate with bootstrap power is required before any new pre-registration is locked. **This is the current Track A task.**
+- **OPEN — slippage has never been measured.** `slippage_bps_per_side` defaults to 0.0 deliberately, so every breakeven in the project is a **lower bound** and every feasibility verdict is optimistic. Blocked on testnet credentials.
 
 **Operational**
+- **OPEN — testnet credentials absent.** `TURTLE_DEPLOYMENT_ACCOUNT_ADDRESS` and a testnet `TURTLE_SECRET_HYPERLIQUID_WALLET_KEY_V1`, plus a funded wallet and a spot→perp transfer, are required before slippage can be measured or any order placed. Operator action; not a code defect.
+- **OPEN — live recorder is DEGRADED.** `python scripts/recorder_health.py` reports 216 rows across 9 series, **0 duplicates, 0 gaps**, lag within the hourly cadence — but **2 `RECORD_FAILED` lines** (malformed response or transport failure). Data integrity is intact; the failures are transient and self-healing by design, but the verdict is not GREEN.
 - ~~Evidence store gitignored~~ — **closed 2026-07-29**, `data/alpha_engine_research/` now tracked. `data/alpha_engine_historical/` (243 MB CSVs) remains deliberately gitignored — reconstructible from public archives, not the provenance-critical asset the evidence store is.
 - `railway.json` declares no persistent volume; `data/` is ephemeral on Railway today (affects future live deployment, not current research). (Backlog 2.2)
 - ~~OPEN — launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`)~~ — **CLOSED 2026-08-05 (`4325782`, Backlog 3.3).** Root cause proven deterministically before any change: the lock was created with `O_CREAT|O_EXCL` but **written empty**, and only stamped with the child's pid after the liveness probe and `Popen`. A second caller in that window read `''`, computed `holder_pid = -1` from `"".isdigit() == False`, and therefore **skipped the liveness guard entirely**, falling through to the steal path. Fix (35 insertions): a `_claim()` helper stamps the **claiming process's own pid** into the lock as part of creating it, before any slow work; and an unstamped/unparseable lock is now **refused rather than stolen**, closing the residual one-syscall window. 20 concurrency tests using real threads and real processes — the prior suite had zero concurrency coverage, which is why the defect survived an audit that claimed it fixed. **H2 resolved without a documentation edit:** `LONG_RUNNING_JOBS.md`'s atomicity claim was false when written and is now true.
@@ -467,7 +517,32 @@ pre-fix code and passes against the fix).
 
 ---
 
-## Next 10 Executable Tasks (strictly ordered)
+## Next Actions (track-ordered, current)
+
+*(The historical task chain below this section is retained for the record;
+every item in it is closed. Forward-looking sequencing lives in
+`ROADMAP.md`, organised by track — not duplicated here.)*
+
+| # | Track | Task | Blocked by |
+|---|---|---|---|
+| 1 | **A** | Expectancy/profit-factor gate with bootstrap power (asymmetric designs) | — |
+| 2 | **A** | Derive the acceptance bar from cost + tax; retire the inherited 0.55 | 1 |
+| 3 | **C** | Commit the D6 extension | — |
+| 4 | **D** | Study HLP — the one system whose mechanism *and* returns are both measurable | — |
+| 5 | **E** | Wide-universe candle collection + point-in-time universe reconstruction | — |
+| 6 | **B** | Cross-sectional pre-registration, **asymmetric payoffs only** | 1, 2, 5 |
+| 7 | **C** | Measure realised slippage at size | testnet credentials |
+| 8 | **E** | Route `data/alpha_engine_historical` through `config/loader.py`; declare a Railway volume (Backlog 2.2) | — |
+
+**Governance item awaiting a reviewer (not performed):** the power audit
+recommends relabelling CAMP-01–05 and CAMP-07 t040/120h from REJECTED to
+**UNRESOLVED**, and CAMP-07 t025 to **DISPUTED**. CAMP-08 stays REJECTED.
+This requires reviewer ≠ researcher and changes no sealed artifact —
+see `RESEARCH_BACKLOG.md` §1.
+
+---
+
+## Historical task chain (all closed — retained for the record)
 
 1. ~~Track `data/alpha_engine_research/` in git~~ — **done 2026-07-29.**
 2. ~~Fix `storage.py::merge_and_write` durability~~ — **done 2026-07-29**, 4 new tests, orphaned `.tmp` removed.
@@ -980,13 +1055,28 @@ accordingly.)*
              253/147). First venue-native promotion-eligible campaign;
              returned the same ~0.50 as every cross-venue one. RD-19
              created. Liquidations -> NEAR-EXHAUSTED. 1,879 tests.
-   ...        [no executable backlog item remains: every near-free
-              experiment is spent, and each remaining direction needs
-              either 12-18 months of accumulated live data or a new
-              information class. Strategic direction is a human call.]
-              hourly-liquidation feasibility screen (RD-16 Section E) --
-              the last near-free experiment in the queue. The Live
-              Recorder decision is CLOSED (RD-18, deployed); the launcher
-              concurrency race is CLOSED (3.3). Start no new campaign
-              until recorder deployment is verified.]
+2026-08-06   D6 EXECUTION CONTEXT -- OHLCV candles reach strategies via
+             the sanctioned read-only market-data seam. Additive; no
+             frozen module's public API changed.
+2026-08-06   FEASIBILITY GATE BUILT -- cost, power and VDA tax gates
+             (alpha_engine/feasibility.py). Independently audited the
+             same day; four defects found and fixed (hit-indicator vs
+             return correlation, eigenstructure vs equicorrelation, fees
+             omitted from the tax gate, MDE approximation direction
+             mis-documented). 50 tests.
+2026-08-06   POWER AUDIT OF THE CLOSED RECORD -- all 15 configurations
+             re-scored: 13 UNDERPOWERED, 1 DISPUTED, CAMP-08 UNECONOMIC.
+             None could answer its own question. Root cause:
+             min_signaled_samples=100 is a count, not a power criterion
+             (100 effective samples => MDE 0.6384; a 0.55 bar needs 783).
+             No sealed evidence or governance decision altered.
+2026-08-06   VENUE MEASUREMENTS -- HL fees taker 4.5bp / maker 1.5bp;
+             HLP hurdle +16.6%/yr trailing 12m; 177 live perps.
+2026-08-06   REORGANISED CAMPAIGN-DRIVEN -> TRACK-DRIVEN (A-E).
+             Documentation synchronised. 1,921 tests.
+   ...        [Track A active: an expectancy/profit-factor gate with
+              bootstrap power. The tax gate forces asymmetric payoffs,
+              which the current binomial hit-rate gate cannot score.
+              Slippage remains unmeasured and blocks nothing until a
+              candidate approaches deployment.]
 ```

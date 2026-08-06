@@ -7,6 +7,7 @@ this same interface unchanged.
 
 Public API:
     ExchangeAdapter          -- the abstract interface
+    CandleSource             -- OPTIONAL read-only OHLCV capability
     MockExchangeAdapter       -- no-network test double (testing only)
     Typed models (models.py)
     Closed error hierarchy (errors.py)
@@ -14,7 +15,7 @@ Public API:
     IdempotencyCache (idempotency.py)
 """
 
-from .adapter import ExchangeAdapter
+from .adapter import CandleSource, ExchangeAdapter
 from .errors import (
     ExchangeAdapterError,
     ExchangeAuthenticationError,
@@ -33,6 +34,8 @@ from .models import (
     AmendRequest,
     AuditRecord,
     Balance,
+    Candle,
+    CandleInterval,
     CancelAllRequest,
     CancelRequest,
     ConnectionState,
@@ -74,6 +77,9 @@ __all__ = [
     "Balance",
     "MarkPrice",
     "FundingRate",
+    "Candle",
+    "CandleInterval",
+    "CandleSource",
     "HealthStatus",
     "ReconciliationReport",
     "AuditRecord",

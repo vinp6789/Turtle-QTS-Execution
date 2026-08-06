@@ -21,9 +21,10 @@ nothing new -- only the entry.
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 from ..features import (
+    TrendMomentumFeature,
     PCTRANK_NAME,
     PCTRANK_VERSION,
     FundingRateFeature,
@@ -31,6 +32,10 @@ from ..features import (
     OpenInterestFeature,
 )
 from .errors import CandidateError
+from .trend_momentum_candidate import (
+    TrendMomentumRuleCandidate,
+    trend_momentum_candidate_specification,
+)
 from .liquidation_density_candidate import (
     LiquidationDensityRuleCandidate,
     liquidation_density_candidate_specification,
@@ -60,6 +65,13 @@ class CatalogEntry:
     feature_version: str
     specification_factory: Callable
     evaluate_fn: Callable
+    # D6 (candle-derived families only). When set, this family's feature is
+    # computed FROM CANDLES by a generic execution bridge that never imports
+    # the family: feature_fn(symbol, computed_at_utc, candles) -> FeatureValue.
+    # Families whose feature comes from a single provider reading (funding,
+    # open interest) leave both None and are served by their own bridge.
+    feature_fn: Optional[Callable] = None
+    warmup_periods: Optional[int] = None
 
     def __post_init__(self):
         for field_name in ("name", "candidate_type", "feature_name", "feature_version"):
@@ -70,11 +82,28 @@ class CatalogEntry:
             raise CandidateError("CatalogEntry.specification_factory must be callable")
         if not callable(self.evaluate_fn):
             raise CandidateError("CatalogEntry.evaluate_fn must be callable")
+        # feature_fn and warmup_periods are declared together or not at all:
+        # a bridge that knows how to compute the feature but not how much
+        # history it needs would have to guess, and guessing a warmup
+        # silently changes what the indicator measures.
+        if (self.feature_fn is None) != (self.warmup_periods is None):
+            raise CandidateError(
+                "CatalogEntry.feature_fn and warmup_periods must be declared together"
+            )
+        if self.feature_fn is not None:
+            if not callable(self.feature_fn):
+                raise CandidateError("CatalogEntry.feature_fn must be callable")
+            if not isinstance(self.warmup_periods, int) or isinstance(self.warmup_periods, bool)                     or self.warmup_periods <= 0:
+                raise CandidateError(
+                    f"CatalogEntry.warmup_periods must be a positive int, "
+                    f"got {self.warmup_periods!r}"
+                )
 
 
 _FUNDING_METADATA = FundingRateFeature.metadata()
 _OI_METADATA = OpenInterestFeature.metadata()
 _LIQUIDATION_METADATA = LiquidationDensityFeature.metadata()
+_TREND_MOMENTUM_METADATA = TrendMomentumFeature.metadata()
 
 CANDIDATE_CATALOG = MappingProxyType({
     "funding_rate_threshold_rule": CatalogEntry(
@@ -106,6 +135,20 @@ CANDIDATE_CATALOG = MappingProxyType({
     # actually testing liquidation density (the misstatement CAMP-04 and
     # CAMP-05 carry). Campaign 08 could be promotion-eligible, so its
     # provenance must be exact.
+    # First candle-derived family (D6 context extension). Its own family
+    # rather than a reuse: every other factory stamps its own feature
+    # identity, so reusing one would record the wrong feature_name in
+    # every evidence package -- the exact defect RD-19 made a rule.
+    "trend_momentum_rule": CatalogEntry(
+        name="trend_momentum_rule",
+        candidate_type="rule_based",
+        feature_name=_TREND_MOMENTUM_METADATA.name,
+        feature_version=_TREND_MOMENTUM_METADATA.version,
+        specification_factory=trend_momentum_candidate_specification,
+        evaluate_fn=TrendMomentumRuleCandidate.evaluate,
+        feature_fn=TrendMomentumFeature.compute,
+        warmup_periods=TrendMomentumFeature.WARMUP_PERIODS,
+    ),
     "liquidation_density_rule": CatalogEntry(
         name="liquidation_density_rule",
         candidate_type="rule_based",

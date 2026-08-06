@@ -25,9 +25,12 @@ strategy.py's module docstring.
 
 from .errors import ExecutionBridgeError
 from .strategy import STRATEGY_NAME, ApprovedFundingAlphaStrategy, load_approved_specifications
+from .candle_strategy import CANDLE_INTERVAL, ApprovedCandleAlphaStrategy
 
 __all__ = [
     "ApprovedFundingAlphaStrategy",
+    "ApprovedCandleAlphaStrategy",
+    "CANDLE_INTERVAL",
     "load_approved_specifications",
     "STRATEGY_NAME",
     "ExecutionBridgeError",
