@@ -14,27 +14,93 @@ still needs its own proposal and approval per `REVIEW_PROTOCOL.md`, and
 per Constitution §5 nothing is built ahead of a concrete, present need.
 Every trigger condition stated below is the actual gate, not a suggestion.
 
-## The tracks
+## ARCHITECTURE FROZEN — 2026-08-07
 
-Tracks are **ownership boundaries, not parallel workstreams.** This is a
-single-developer project; **exactly one track is active at a time**, and
-`PROJECT_STATE.md` records which. Tracks exchange outputs and never modify
-each other's work.
+**The project architecture is frozen as of this document.** Tracks A–D,
+the governance pipeline, the five-stage gate, the feasibility gate and
+the execution stack are settled. No further restructuring, renaming, new
+tracks or process redesign — unless a future reviewer demonstrates the
+architecture itself is broken.
 
-| Track | Purpose | Consumes | Produces |
-|---|---|---|---|
-| **A · Research Framework** | Scientific methodology | — | Gates, statistics, acceptance criteria |
-| **B · Alpha Discovery** | Find mechanisms | A's gates, D's candidates, E's data | Ledger entries, approved candidates |
-| **C · Trading Engineering** | Deploy validated alpha | B's approved candidates | Execution, risk, sizing |
-| **D · Reverse Engineering** | Study working systems | Public information only | Mechanism candidates for B |
-| **E · Data Platform** | Best free dataset possible | — | Datasets for B |
+**The default answer to any proposed architectural change is:**
 
-**Track D never implements. Track C never discovers alpha. Track E never
-does research.**
+> *"Can this be accomplished within the existing architecture?"*
+
+Only a demonstrable **no** reopens the question.
+
+**The next phase is execution, not framework design.** Priorities, in
+order: produce new evidence · build missing capabilities · ship a
+deployable product · validate ideas with data · improve through measured
+results rather than redesign.
+
+**This freeze governs architecture, not knowledge.** Track D continues to
+recommend improvements; mechanisms continue to be screened, rejected and
+recorded; the Ledger continues to grow. What is frozen is the *shape* of
+the project, not its content.
 
 ---
 
-## Track A — Research Framework
+## The tracks
+
+Project Alpha has **two equally important outputs**: validated scientific
+knowledge, and a deployable systematic trading platform. They are
+different deliverables and neither waits for the other.
+
+| Track | Purpose | Output | Cadence |
+|---|---|---|---|
+| **A · Alpha Research** | Discover, screen and reject mechanisms under unchanged governance | Validated knowledge; occasionally an approved model | Slow, rigorous |
+| **B · Product Development** | Deliver a usable trading system that improves over time | A deployable platform | Continuous |
+| **C · Reverse Engineering** | Structured competitive intelligence on working systematic businesses | Evidence-backed mechanism candidates for A, design patterns for B | Continuous, low intensity |
+| **D · Continuous Learning** | Extract knowledge from everything the platform does | Ranked, evidence-backed recommendations — **never a deployment** | Continuous, automated |
+
+**Research feeds Product. Product does not wait for Research to finish.**
+
+**Track D feeds Research. It never feeds Execution.** Self-improving does
+not mean self-modifying: the system may discover improvements, and may
+never silently deploy them (Constitution §8/§10).
+
+**How three parallel tracks work with one developer.** Tracks run in
+parallel as *streams of work*, not as simultaneous engineering. The
+operating rule: **at most one track holds an active engineering task at a
+time**; the other two progress through analysis, reading, or unattended
+jobs, which need attention in minutes rather than hours. This is the
+honest reconciliation of "parallel tracks" with a single-operator
+project, and it is why Track C's output contract is a document rather
+than a system.
+
+**Tracks exchange outputs and never modify each other's work.** Track C
+never implements. Track B never invents alpha — it consumes what governance
+approves and improves everything around it. Track A's standards are
+unchanged: same five-stage gate, same pre-registration, same
+reviewer ≠ researcher, same evidence sealing.
+
+**Supersedes the previous A–E structure (2026-08-06).** That scheme split
+methodology from mechanisms and execution from data, which put two tracks
+in permanent idle. The mapping, so no work is lost:
+
+| Old | New |
+|---|---|
+| A Research Framework | **A · Alpha Research** (methodology, A1–A5) |
+| B Alpha Discovery | **A · Alpha Research** (mechanisms, A6–A7) |
+| C Trading Engineering | **B · Product Development** (execution, B1–B4) |
+| E Data Platform | **B · Product Development** (data, B5–B7) |
+| D Reverse Engineering | **C · Reverse Engineering** (unchanged) |
+
+**Naming hazard, resolved here.** "Track B" previously also referred to the
+2026-08-06 science-vs-engineering split in which a gate-rejected strategy
+was used as a pipeline-validation harness. That usage is **historical
+only** and is now written as "pipeline validation" wherever it appears.
+Track letters in this document refer solely to the three tracks above.
+
+
+---
+
+## Track A — Alpha Research
+
+**Governance is unchanged.** Everything in `RESEARCH_PLAYBOOK.md`, `PROJECT_CONSTITUTION.md` §6 and `RESEARCH_DECISIONS.md` applies exactly as before. Negative results remain the expected outcome and remain valuable.
+
+### A-i · Methodology
+
 
 **Owns:** statistics, power analysis, MDE, bootstrap, permutation, cost
 model, slippage model, tax model, acceptance criteria, research
@@ -111,7 +177,9 @@ liquidation pilot), carried forward unchanged:
 
 ---
 
-## Track B — Alpha Discovery
+
+### A-ii · Mechanism discovery
+
 
 **Owns:** mechanisms, campaigns, `RESEARCH_LEDGER.md`, `ALPHA_LIBRARY.md`.
 Every idea goes Mechanism → Evidence → Candidate → Review. No direct
@@ -121,14 +189,13 @@ implementation.
 power audit and pre-registration gates are `docs/RESEARCH_BACKLOG.md`.
 Neither is duplicated here.
 
-### B1. Cross-sectional relative value — highest-ranked untested mechanism
+### A6. Cross-sectional relative value — highest-ranked untested mechanism
 
 `[M]` Clears power (panel N_eff 8,460, MDE 0.5152) and cost (breakeven
 0.5255). **Must be specified with asymmetric payoffs** — a symmetric
-design needs a 0.6169 hit rate and is a foregone failure. Blocked on **A1**
-and **E1**.
+design needs a 0.6169 hit rate and is a foregone failure. Blocked on **A1** and **B5**.
 
-### B2. Then, one at a time
+### A7. Then, one at a time
 
 Liquidity provision · volatility as a conditioner (never a standalone
 signal) · calendar effects as a by-product of the cross-sectional harness.
@@ -160,7 +227,17 @@ halvings, LUNA, FTX, the ETF era), and asymmetric per-symbol start dates.
 
 ---
 
-## Track C — Trading Engineering
+
+---
+
+## Track B — Product Development
+
+**Purpose: deliver a usable trading system now, and improve it as research delivers.** This track does not wait for an approved alpha. It owns execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment and the data platform that feeds all of them.
+
+**It never invents alpha.** Signal admission remains governance's decision alone (Constitution §4/§7).
+
+### B-i · Execution, risk and operations
+
 
 **Owns:** execution, ATR exits, maker/taker routing, risk management,
 position sizing, volatility targeting, portfolio construction, slippage,
@@ -173,11 +250,11 @@ permitted only to correct an explicitly authorized
 correctness/security/capital-protection defect. Everything below is
 additive work outside the frozen boundary, or an operator action.
 
-### C1. Commit the D6 extension
+### B1. Commit the D6 extension
 
 Built and tested; additive only. No frozen module's public API changed.
 
-### C2. Measure realised slippage at size — **blocked on operator action**
+### B2. Measure realised slippage at size — **blocked on operator action**
 
 The single most valuable unmeasured input in the project. Every breakeven
 is a lower bound until this exists. Requires:
@@ -192,13 +269,13 @@ is a lower bound until this exists. Requires:
    (`docs/PRODUCTION_CHECKLIST.md`).
 5. Mainnet rollout — **NO-GO** until 1–4 are complete.
 
-### C3. Maker/taker routing
+### B3. Maker/taker routing
 
 `[M]` Moves the 24 h breakeven from 0.5238 to 0.5169 and the 1 h from
 0.6138 to 0.5377. Deterministic, requires no hypothesis. Build when a
 candidate is approaching deployment.
 
-### C4. Deferred until there is something to operate
+### B4. Deferred until there is something to operate
 
 - **Alpha Library formalization** — worth building once 2–3 models are
   approved; nothing to curate before then.
@@ -232,12 +309,61 @@ candidate is approaching deployment.
 
 ---
 
-## Track D — Reverse Engineering
+
+### B-ii · Data platform
+
+
+**Owns:** the best free historical dataset obtainable. **No research, no
+strategy, no indicators — data quality only.**
+
+**Already held:** Binance funding 77 months (BTC/ETH from 2020-01, SOL
+from 2020-09) · Binance OI + mark price from 2021-01/2022-01 · Hyperliquid
+funding ~37 months · Hyperliquid liquidations 367/367 days audited
+(2,138,761 events, rows/event exactly 2.0000) · Hyperliquid 1h candles
+~200 days · live recorder running since 2026-08-05.
+
+### B5. Wide-universe candle collection + point-in-time universe reconstruction
+
+Track B's hard dependency. The 30-symbol panel used in the cross-sectional
+feasibility work was selected by **today's** volume, which is survivorship
+bias — the universe must be reconstructed point-in-time before any
+pre-registration relies on it.
+
+### B6. Route `data/alpha_engine_historical` through `config/loader.py`
+
+With an environment override, and declare a persistent Railway volume
+(`railway.json` currently declares none — `data/` is ephemeral there,
+which will affect live trading, not just research, if left unfixed).
+
+### B7. Probe additional free sources
+
+Yahoo, Ken French, CFTC. **Probe first, build nothing until a specific
+pre-registered hypothesis needs the data.** Each must be verified free,
+keyless or already-credentialed, and point-in-time safe.
+
+### Data constraints, standing
+
+- **No paid datasets, APIs or software.** Anything requiring payment is
+  marked **NOT COMPATIBLE**. Coinalyze remains excluded on this basis
+  (requires registration/credential), as recorded in `HISTORICAL_DATA.md`.
+- **Hyperliquid history cannot be extended backwards** — the venue's own
+  coverage boundary was reached. Data not captured now is unrecoverable,
+  which is why the live recorder runs continuously.
+- **Requester-pays S3 archives carry no published retention guarantee**,
+  unlike Binance's decade-plus public archives.
+
+---
+
+
+---
+
+## Track C — Reverse Engineering
+
 
 **Owns:** the study of systems that demonstrably make money, to generate
 mechanism candidates for Track B. **Not started.**
 
-**Output contract — the whole track.** Track D produces **rows in
+**Output contract — the whole track.** Track C produces **rows in
 `docs/MECHANISMS.md` and nothing else.** No code, no campaign, no separate
 report series. This contract exists because an unbounded literature review
 is the most likely way this track fails.
@@ -257,63 +383,195 @@ hurdle rate at `[M]` +16.6 %/yr.
 
 ---
 
-## Track E — Data Platform
+## Track D — Continuous Learning & Self-Improvement
 
-**Owns:** the best free historical dataset obtainable. **No research, no
-strategy, no indicators — data quality only.**
+**Purpose: continuously extract knowledge from everything the platform
+does, and turn it into ranked, evidence-backed recommendations.**
 
-**Already held:** Binance funding 77 months (BTC/ETH from 2020-01, SOL
-from 2020-09) · Binance OI + mark price from 2021-01/2022-01 · Hyperliquid
-funding ~37 months · Hyperliquid liquidations 367/367 days audited
-(2,138,761 events, rows/event exactly 2.0000) · Hyperliquid 1h candles
-~200 days · live recorder running since 2026-08-05.
+**Track D never changes trading logic. It produces evidence; Research
+decides what to adopt; Governance decides what deploys.**
 
-### E1. Wide-universe candle collection + point-in-time universe reconstruction
+### D0. The governance boundary — read before anything else
 
-Track B's hard dependency. The 30-symbol panel used in the cross-sectional
-feasibility work was selected by **today's** volume, which is survivorship
-bias — the universe must be reconstructed point-in-time before any
-pre-registration relies on it.
+`PROJECT_CONSTITUTION.md` §8 already defines self-improvement, and §10
+names the absence of live parameter optimisation as *"the single most
+important invariant in the entire system."* **Track D requires no
+Constitution amendment**, because it is not a new philosophy — it is
+*instrumentation of the loop §8 already mandates*:
 
-### E2. Route `data/alpha_engine_historical` through `config/loader.py`
+```
+Track D (new)                          Constitution Section 8 (unchanged)
+Observe -> Measure -> Explain ->       New hypothesis (pre-registered)
+Generate -> Estimate EV -> Rank ->  ->   -> Research (five-stage gate)
+Recommend                                -> Evidence (sealed)
+                                         -> Governance (reviewer != researcher)
+                                         -> Library grows
+```
 
-With an environment override, and declare a persistent Railway volume
-(`railway.json` currently declares none — `data/` is ephemeral there,
-which will affect live trading, not just research, if left unfixed).
+Track D is the **front half**. It stops at *Recommend*. Everything after
+that is the existing pipeline, unchanged.
 
-### E3. Probe additional free sources
+**Four structural rules, not norms:**
 
-Yahoo, Ken French, CFTC. **Probe first, build nothing until a specific
-pre-registered hypothesis needs the data.** Each must be verified free,
-keyless or already-credentialed, and point-in-time safe.
+1. **Track D emits no `TradeIntent`, ever**, and has no import path to
+   the execution bridge. Enforceable by the same test that already
+   fences `alpha_engine` from frozen modules.
+2. **Track D writes only to its own surface.** It never edits
+   `RESEARCH_LEDGER.md`, `RESEARCH_DECISIONS.md`, `ALPHA_LIBRARY.md`, a
+   campaign report, or any sealed evidence package. New evidence
+   *references* earlier work; the immutable record is never rewritten.
+3. **Generation is free; testing is budgeted.** Track D may propose
+   without limit, but any candidate entering pre-registration increments
+   cumulative **K**, and the acceptance bar is Bonferroni-corrected for
+   it. `[M]` The cost is real but survivable: a 0.55 bar needs 783
+   effective samples at K=1, 1,569 at K=28 (today), 1,865 at K=100 and
+   2,235 at K=500 — against 8,460 achievable in the best measured
+   configuration. **An unbudgeted scanner would silently invalidate the
+   research program; a budgeted one does not.**
+4. **RD-02 boundary.** Track D's expected-value scores rank what to
+   *attempt*. No threshold, bar, direction, horizon or acceptance
+   criterion in any pre-registration may be derived from them — the same
+   fence `RESEARCH_BACKLOG.md` §2 already operates under.
 
-### Data constraints, standing
+### D1. What already exists — reuse, do not rebuild
 
-- **No paid datasets, APIs or software.** Anything requiring payment is
-  marked **NOT COMPATIBLE**. Coinalyze remains excluded on this basis
-  (requires registration/credential), as recorded in `HISTORICAL_DATA.md`.
-- **Hyperliquid history cannot be extended backwards** — the venue's own
-  coverage boundary was reached. Data not captured now is unrecoverable,
-  which is why the live recorder runs continuously.
-- **Requester-pays S3 archives carry no published retention guarantee**,
-  unlike Binance's decade-plus public archives.
+Roughly 60 % of Track D is built. Rebuilding any of it would be the
+duplication this restructure exists to prevent.
+
+| Track D capability | Already provided by |
+|---|---|
+| "Is a strategy degrading?" | `alpha_engine/lifecycle/degradation.py` — and it holds a model to **its own pre-registered bar**, inventing no drift threshold |
+| Immutable experiment graph substrate | `alpha_engine/registry/` — append-only, content-fingerprinted, 86 experiments |
+| Organisational memory / the "why" graph | `RESEARCH_DECISIONS.md` — 19 RD entries, append-only |
+| Mechanism ↔ information-class relationships | `MECHANISMS.md` |
+| Expected-value ranking | `RESEARCH_BACKLOG.md` §2 |
+| Cost / power / tax arithmetic | `alpha_engine/feasibility.py` |
+| Observability pattern | `scripts/recorder_health.py` |
+
+**Genuinely missing:** execution-quality attribution, performance
+decomposition, the opportunity scanner, and the cross-linking layer that
+turns isolated records into a graph.
+
+### D2. Staged activation — each stage gated on its inputs existing
+
+Constitution §5 forbids building ahead of a concrete need. **Track D's
+entire input list is currently empty**: zero approved models, zero live
+trades, zero fills, zero paper-trading history. Building the measurement
+system before the thing it measures would be the exact premature
+abstraction §5 prohibits.
+
+| Stage | Trigger | Scope |
+|---|---|---|
+| **D-0 · Defined** | **Now** | This section. Zero code. Track D exists as a contract |
+| **D-1 · Execution quality** | First paper deployment producing fills | Slippage, fill quality, spread capture, latency, rejected/missed orders. **This is the measurement B2 is blocked on** — Track D's first stage and the product track's first unknown are the same thing |
+| **D-2 · Performance attribution** | First approved model trading | Decompose into alpha, beta, execution, costs, slippage, funding, portfolio construction, leverage, diversification, regime, timing, and **luck vs persistent edge** |
+| **D-3 · Knowledge graph + scanner** | ≥3 campaigns run under the post-restructure methodology | Cross-linking, contradiction surfacing, stale-assumption detection, opportunity scanning with EV scoring |
+
+**Nothing in D-1..D-3 is authorised by appearing here** — each needs its
+own proposal per `REVIEW_PROTOCOL.md`.
+
+
+### D-scope. Track D is not a strategy generator
+
+**Track D improves every layer of the platform, not only trading
+strategies.** Its standing question is:
+
+> *"What is the single highest-value improvement for the project right now?"*
+
+Layers it observes and improves: **data quality · research quality ·
+experimental design · statistical methodology · deployment quality ·
+execution quality · portfolio construction · performance attribution ·
+documentation quality · research prioritisation.**
+
+The guiding loop — every layer improves, not just the last one:
+
+```
+Data -> Research -> Knowledge -> Product -> Live Validation
+  ^                                                  |
+  +------------------ Self Improvement <-------------+
+```
+
+`[R]` This is why Track D is worth having at all. The project's most
+expensive error was never a bad strategy — it was eight campaigns run
+with a sample gate that was not a power criterion. That is a
+*methodology* defect, in a layer no strategy generator would ever look at.
+
+### D4. The Knowledge ROI Gate — Track D's prioritisation engine
+
+**Every Track D recommendation must carry all eight fields. A
+recommendation missing any of them is not a recommendation.**
+
+| Field | Meaning |
+|---|---|
+| Expected engineering effort | Build cost, in developer-days |
+| Expected research effort | Design, screening and analysis cost |
+| Expected execution effort | Operational cost to run and monitor it |
+| **Evidence quality** | `[M]` measured · `[R]` repository fact · `[E]` external · `[I]` inference |
+| **P(changing project direction)** | Would the answer alter what we do next? A result that changes nothing scores zero |
+| Expected business impact | Effect on deployable, after-cost, after-tax return |
+| **Scientific value if negative** | What a null result closes permanently |
+| **Knowledge ROI** | The composite priority |
+
+**Composition** (a convention, not a law — the inputs are ordinal
+judgements, so the output ranks and never measures):
+
+```
+Knowledge ROI = ( P(direction change) x business impact
+                  + scientific value if negative )
+                / ( engineering + research + execution effort )
+```
+
+**The numerator's second term is the point.** A negative result carries
+value here, so a cheap experiment that permanently closes a mechanism can
+outrank an expensive one that might pay. `[R]` That is the arithmetic
+behind killing carry, session-boundary and funding-cap in roughly one day
+each — high scientific value, near-zero cost, and each removed a month of
+prospective engineering.
+
+**Hard limits.** Knowledge ROI exists **only to order work**. It never
+changes a scientific conclusion, never bypasses governance, never edits a
+Research Decision, and never enters a pre-registration. It answers one
+question and no other:
+
+> *"If there is time for only one experiment this week, which creates the most value?"*
+
+This is the same RD-02 fence `RESEARCH_BACKLOG.md` §2 already operates
+under: **rank what to attempt; never touch what is concluded.**
+
+### D5. Prohibitions — structural, not advisory
+
+Nothing in Track D may: generate a `TradeIntent` · modify execution ·
+deploy a strategy · modify a parameter · alter a Research Decision ·
+alter a campaign result · modify sealed evidence · bypass reviewer
+separation · bypass the five-stage scientific gate.
+
+**Track D proposes. The scientific process disposes.**
+
+### D3. Success criterion
+
+Track D succeeds when **the next experiment is chosen by evidence rather
+than by argument**. `[R]` Eight campaigns were selected by reasoning from
+a family list; the power audit later showed none could answer its own
+question. A Track D that would have caught that before the campaign ran
+has paid for itself.
+
 
 ---
 
 ## Long-term architecture (destination, not current work)
 
 ```
-Data Acquisition                    (Track E)
+Data Acquisition                    (Track B-ii)
         ↓
-Research Validation                 (Track A gates, Track B campaigns)
+Research Validation                 (Track A-i gates, A-ii campaigns)
         ↓   signal quality: hit rate, magnitude, causality, bootstrap,
         ↓   walk-forward, regime robustness, power, cost, tax
-Historical Validation               (Track A — HVL, not yet triggered)
+Historical Validation               (Track A-i — HVL, not yet triggered)
         ↓   trade quality: entries/exits, SL/TP, fees, slippage,
         ↓   liquidity, expectancy, profit factor, R-multiple, drawdown
 Governance                          (reviewer ≠ researcher — the one
         ↓                            deliberate human-judgment gate)
-Paper Trading                       (Track C — real execution-condition
+Paper Trading                       (Track B-i — real execution-condition
         ↓                            stress: delay, randomized fills)
 Live Trading  ⟷  Execution Engine   (frozen, veto authority — owns sizing,
         ↓         leverage, exposure, kill switches, drawdown and daily

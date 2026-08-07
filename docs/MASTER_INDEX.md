@@ -20,19 +20,21 @@ document, not for understanding current state.
 
 ## Track ownership
 
-Work is organised into five tracks (`ROADMAP.md`). Tracks are **ownership
-boundaries, not parallel workstreams** — exactly one is active at a time,
-and `PROJECT_STATE.md` records which. Deliberately recorded once, here,
-rather than as a column on every table below.
+Work runs in four parallel tracks (`ROADMAP.md`). Project Alpha has two
+equally important outputs — **validated scientific knowledge** and a
+**deployable trading platform** — and neither waits for the other.
+Recorded once, here, rather than as a column on every table below.
 
 | Track | Owns (code) | Owns (docs) |
 |---|---|---|
-| **A · Research Framework** | `alpha_engine/{validation,governance,registry,lifecycle}/`, `alpha_engine/feasibility.py` | `RESEARCH_PLAYBOOK.md`, `RESEARCH_DECISIONS.md`, `REVIEW_PROTOCOL.md` |
-| **B · Alpha Discovery** | `alpha_engine/{features,candidates}/`, `research/campaign_*` | `MECHANISMS.md`, `RESEARCH_BACKLOG.md`, `RESEARCH_LEDGER.md`, `ALPHA_LIBRARY.md`, `RESEARCH_CAMPAIGN_*.md`, `RESEARCH_PLAN.md` |
-| **C · Trading Engineering** | Modules 1–10, `app/`, `trading_system/`, `orchestration/`, `composition_root/`, `alpha_engine/{execution_bridge,portfolio}/` | All Execution Engine docs (frozen), `DEPLOYMENT.md`, `OPERATIONS.md`, `PRODUCTION_CHECKLIST.md` |
-| **D · Reverse Engineering** | *(none by design — produces `MECHANISMS.md` rows only)* | `WATCHLIST.md` Part 2 |
-| **E · Data Platform** | `alpha_engine/{historical,data_sources}/`, collection scripts | `HISTORICAL_DATA.md`, `WATCHLIST.md` Part 1, `LONG_RUNNING_JOBS.md` |
+| **A · Alpha Research** | `alpha_engine/{validation,governance,registry,lifecycle,features,candidates}/`, `alpha_engine/feasibility.py`, `research/campaign_*` | `RESEARCH_PLAYBOOK.md`, `RESEARCH_DECISIONS.md`, `MECHANISMS.md`, `RESEARCH_BACKLOG.md`, `RESEARCH_LEDGER.md`, `ALPHA_LIBRARY.md`, `RESEARCH_CAMPAIGN_*.md`, `RESEARCH_PLAN.md`, `REVIEW_PROTOCOL.md` |
+| **B · Product Development** | Modules 1–10, `app/`, `trading_system/`, `orchestration/`, `composition_root/`, `alpha_engine/{execution_bridge,portfolio,historical,data_sources}/`, collection scripts | All Execution Engine docs (frozen), `DEPLOYMENT.md`, `OPERATIONS.md`, `PRODUCTION_CHECKLIST.md`, `HISTORICAL_DATA.md`, `LONG_RUNNING_JOBS.md`, `WATCHLIST.md` Part 1 |
+| **C · Reverse Engineering** | *(none by design — produces `MECHANISMS.md` rows only)* | `WATCHLIST.md` Part 2 |
+| **D · Continuous Learning** | `alpha_engine/lifecycle/` (degradation, already built); future attribution modules | *(no document of its own until stage D-3; writes only to its own surface, never to the immutable record)* |
 | *(cross-track)* | — | `PROJECT_STATE.md`, `ROADMAP.md`, `MASTER_INDEX.md`, `PROJECT_CONSTITUTION.md`, `CHANGELOG.md` |
+
+Supersedes the A–E scheme of 2026-08-06; the mapping lives in
+`ROADMAP.md` and is not duplicated here.
 
 **Reference — open only the specific document a task needs:**
 
@@ -46,7 +48,7 @@ rather than as a column on every table below.
 | `RESEARCH_BACKLOG.md` | Power/cost/tax audit of the closed record, ranked mechanism backlog, twelve-month plan, and the ten pre-registration gates |
 | `RESEARCH_CAMPAIGN_01_open_interest.md` … `_08_liquidation_hourly.md` | Full pre-registration + methodology + results per campaign (detail behind the ledger's condensed entries) |
 | `ALPHA_LIBRARY.md` | Catalog of approved/rejected/retired/experimental/future-candidate alpha models |
-| `WATCHLIST.md` | Two lists: Part 1 the executable trading universe (Track E, enforced in code); Part 2 the Reverse Engineering study targets (Track D, a reading list) |
+| `WATCHLIST.md` | Two lists: Part 1 the executable trading universe (Track B, enforced in code); Part 2 the Reverse Engineering study targets (Track C, a reading list) |
 | `HISTORICAL_DATA.md` | Historical data pipeline: source comparison, update frequency, limitations, point-in-time considerations, biases |
 | `STRATEGIC_GAP_ANALYSIS.md` | Point-in-time (2026-07-23, pre-Campaign-01) item-by-item assessment against the long-term vision — see its status banner; completion-estimate headline now lives in `PROJECT_STATE.md` |
 | `../alpha_engine/DECISIONS.md` | Alpha Engine decision log (D1 onward) |
@@ -65,7 +67,7 @@ rather than as a column on every table below.
 | `OPERATIONS.md` | Runbook: endpoints, monitoring, emergency stop, Telegram, backups |
 | `LONG_RUNNING_JOBS.md` | Runbook for jobs that outlive a chat session: detached start, reattach/monitor, recovery after any interruption, reboot behaviour. Read before starting or recovering a multi-hour/multi-day collection job. |
 | `PRODUCTION_CHECKLIST.md` | Pre-deploy / pre-live-trading checklist |
-| `../FINAL_PRODUCTION_AUDIT.md` | Final independent production audit (2026-07-21) — regression, fix-by-fix verification, verdict. Still active reference: outstanding SEC-1/OBS-1 items are cited directly by `ROADMAP.md` Track C. |
+| `../FINAL_PRODUCTION_AUDIT.md` | Final independent production audit (2026-07-21) — regression, fix-by-fix verification, verdict. Still active reference: outstanding SEC-1/OBS-1 items are cited directly by `ROADMAP.md` Track B. |
 | `../MODULE_10_FREEZE.md` | Module 10 (Hyperliquid Adapter) freeze package — architecture, known limitations, runbook, validation evidence. Still the authoritative Module 10 reference. |
 
 **Archive — superseded snapshots, kept for history only, never authoritative:**
@@ -113,7 +115,7 @@ candidates.)*
 | `RESEARCH_CAMPAIGN_04_funding_delta.md` | Campaign 04 — Funding Delta (closed, rejected) |
 | `RESEARCH_CAMPAIGN_05_oi_velocity.md` | Campaign 05 — Open Interest Velocity (closed, rejected; carried a DEFER-ceiling — no Hyperliquid OI history) |
 | `ALPHA_LIBRARY.md` | Catalog of approved/rejected/retired/experimental/future-candidate alpha models |
-| `WATCHLIST.md` | Two lists: Part 1 the executable trading universe (Track E, enforced in code); Part 2 the Reverse Engineering study targets (Track D, a reading list) |
+| `WATCHLIST.md` | Two lists: Part 1 the executable trading universe (Track B, enforced in code); Part 2 the Reverse Engineering study targets (Track C, a reading list) |
 | `HISTORICAL_DATA.md` | Historical data pipeline: source comparison, update frequency, limitations, point-in-time considerations, biases |
 | `STRATEGIC_GAP_ANALYSIS.md` | Point-in-time (2026-07-23) item-by-item assessment against the long-term vision — see its status banner |
 | `RESEARCH_DECISIONS.md` | Research-program decision log (RD-01 onward) — organizational memory: the *why* behind cross-campaign prioritize/defer/retire decisions; descriptive, non-normative, no predictions |
@@ -179,7 +181,7 @@ this is a living number, don't hardcode it elsewhere).
 1. `PROJECT_CONSTITUTION.md` → `ALPHA_ENGINE.md` → `RESEARCH_PLAYBOOK.md`
    → `RESEARCH_DECISIONS.md` → `RESEARCH_LEDGER.md` → `MECHANISMS.md` →
    `RESEARCH_BACKLOG.md` → `ALPHA_LIBRARY.md` → `WATCHLIST.md` →
-   `HISTORICAL_DATA.md` → `ROADMAP.md` Track A/B.
+   `HISTORICAL_DATA.md` → `ROADMAP.md` Track A.
 
 **Reviewing any change:** `REVIEW_PROTOCOL.md`.
 

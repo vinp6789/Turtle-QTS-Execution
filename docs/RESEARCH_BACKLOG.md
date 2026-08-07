@@ -56,7 +56,7 @@ Inputs, all measured, none assumed:
 | **CAMP-07 72h t025** | 72 | 1,035 | +0.191 | 749 | **0.551** | 0.518 | 0.501 | **DISPUTED** — flips to adequately powered under one-sided testing (MDE 0.545) |
 | CAMP-07 120h | 120 | 333 | +0.191 | 241 | 0.590 | 0.518 | 0.523 | UNDERPOWERED |
 | **CAMP-08 p75** | **1** | **3,678** | **+0.522** | **1,177** | **0.541** | **0.614** | 0.502 | **UNECONOMIC** |
-| trend_momentum *(Track B)* | 1 | 726 | +0.679 | 308 | 0.580 | 0.614 | 0.435 | UNECONOMIC + UNDERPOWERED |
+| trend_momentum *(pipeline validation)* | 1 | 726 | +0.679 | 308 | 0.580 | 0.614 | 0.435 | UNECONOMIC + UNDERPOWERED |
 
 > **Correction, 2026-08-06.** An earlier version of this table computed
 > N_eff from **return** correlation. The pooled statistic is a binary
@@ -72,7 +72,7 @@ Inputs, all measured, none assumed:
 
 1. **Economically meaningful hypothesis?** For 13 of 15, yes — the 24h
    and 72h horizons carry a 0.518–0.524 breakeven, comfortably below the
-   0.55 bar. **For CAMP-08 and Track B, no:** at 1h the breakeven is
+   0.55 bar. **For CAMP-08 and the pipeline-validation strategy, no:** at 1h the breakeven is
    **0.614**, above their own bar, so both could have *passed* their gate
    and lost money. CAMP-08's measured mean directional return of **0.4 bp**
    against a **9.4 bp** cost `[M]` settles it arithmetically.
@@ -102,7 +102,7 @@ Inputs, all measured, none assumed:
 | CAMP-07 t025 | CLOSED / REJECTED | **DISPUTED** | Verdict flips on the one-sided/two-sided choice (MDE 0.551 vs 0.545 against a 0.55 bar). A judgement call, not arithmetic |
 | CAMP-06 | DEFERRED | **DEFERRED** (unchanged) | RD-16 reached the right answer by the right reasoning `[R]` |
 | CAMP-08 | CLOSED / REJECTED | **CLOSED — REJECTED (economically, at 1h)** | Powered *and* the effect is 23× below cost. The strongest result in the program |
-| trend_momentum | Track B, unrecorded | **CLOSED — REJECTED (Track B)** | z = −3.5 is a real negative finding; also uneconomic |
+| trend_momentum | pipeline validation, unrecorded | **CLOSED — REJECTED (pipeline validation)** | z = −3.5 is a real negative finding; also uneconomic |
 
 **Nothing above changes a sealed evidence package, a fingerprint, or a
 recorded governance decision.** The Constitution's append-only guarantee
@@ -248,7 +248,7 @@ payoffs. **The specification must use asymmetric payoffs (≥1.5 : 1).**
 **Methodological consequence:** an asymmetric design must be gated on
 **expectancy and profit factor**, with power derived by bootstrap over the
 payoff distribution — not on a binomial hit rate. That method does not yet
-exist and is Track A's first task.
+exist and is Track A's first task (A1).
 
 > **Correction, 2026-08-06.** An earlier version of this section reported
 > the tax bar as **0.5924** and panel N_eff as **11,790**. The first

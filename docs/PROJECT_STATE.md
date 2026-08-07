@@ -42,7 +42,7 @@ they're found, never silently carried forward.
 | **Full regression** | **1,942 passed, 0 failed** (verified 2026-08-07) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
-| **Active tracks** | A Research Framework · B Alpha Discovery · C Trading Engineering · D Reverse Engineering · E Data Platform. **Exactly one is active at a time** — see `ROADMAP.md`. Currently **Track A**. |
+| **Active tracks** | **A Alpha Research · B Product Development · C Reverse Engineering · D Continuous Learning** — parallel streams; at most one holds an active *engineering* task at a time. **Track D is at stage D-0 (defined, zero code)** — its inputs do not exist yet. See `ROADMAP.md`. |
 
 ---
 
@@ -62,28 +62,47 @@ not a campaign** — see `ROADMAP.md`.
 
 **Execution Engine — dormant, stable, unchanged.** No work planned except
 an authorized critical-defect correction (`PROJECT_CONSTITUTION.md` §9) or
-the outstanding testnet operator actions (`ROADMAP.md` Track C), neither
+the outstanding testnet operator actions (`ROADMAP.md` Track B), neither
 gated by nor gating Alpha Engine research.
 
 ### Active tracks
 
-Tracks are **ownership boundaries, not parallel workstreams** — this is a
-single-developer project, and exactly one track is active at a time.
+Project Alpha now has **two equally important outputs**: validated
+scientific knowledge, and a deployable systematic trading platform.
+Three tracks run **in parallel**; research no longer gates the product.
 
 | Track | Owns | State |
 |---|---|---|
-| **A · Research Framework** | Statistics, power, cost/tax models, acceptance criteria, governance process | **ACTIVE** |
-| **B · Alpha Discovery** | Mechanisms, campaigns, the research ledger | Idle — blocked on A |
-| **C · Trading Engineering** | Execution, risk, sizing, portfolio construction | Frozen (§9); one open item (slippage) |
-| **D · Reverse Engineering** | Studying working systems for mechanism candidates | Not started |
-| **E · Data Platform** | Historical datasets, collectors, the live recorder | Steady-state |
+| **A · Alpha Research** | Methodology (A1–A5) and mechanism discovery (A6–A7). Governance, evidence standards and the five-stage gate are **unchanged** | **ACTIVE** — A1, the expectancy/profit-factor gate |
+| **B · Product Development** | Execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment (B1–B4) and the data platform (B5–B7) | **ACTIVE** — B1 (D6 commit) done; B2 blocked on credentials |
+| **C · Reverse Engineering** | Structured competitive intelligence on working systematic businesses | **ACTIVE** — output contract is `MECHANISMS.md` rows only |
+| **D · Continuous Learning** | Observe → measure → explain → rank → **recommend**. Never deploys | **D-0 — DEFINED, ZERO CODE.** Every input is currently empty: 0 approved models, 0 live trades, 0 fills. Activates in stages as data appears |
+
+**Operating rule for a single developer:** at most one track holds an
+active *engineering* task at a time; the others progress through
+analysis, reading or unattended jobs. Parallel streams, sequential
+engineering.
+
+**ARCHITECTURE FROZEN 2026-08-07.** Tracks A–D and the governance
+pipeline are settled. The default answer to any proposed architectural
+change is *"can this be done within the existing architecture?"* — only a
+demonstrable no reopens it. Full statement in `ROADMAP.md`, not repeated
+here. The freeze governs the project's *shape*, not its knowledge.
+
+**Self-improving is not self-modifying.** Track D may discover
+improvements; it may never deploy one. Constitution §8/§10 are unchanged
+and required no amendment — Track D instruments the loop §8 already
+defines, and stops at *Recommend*.
+
+**Supersedes the A–E structure of 2026-08-06** — mapping in `ROADMAP.md`,
+recorded there once and not duplicated here. No work was dropped.
 
 ---
 
 ## Current Objective
 
-**Give Track A a gate that can score the designs Track B must actually
-run.** Every campaign to date was gated on a binomial hit rate against a
+**Give Track A's methodology a gate that can score the designs its
+mechanism work must actually run.** Every campaign to date was gated on a binomial hit rate against a
 0.55 bar that was never derived. Three measurements closed that question:
 
 - `[M]` **Costs exist and bind.** Hyperliquid base fees taker **4.5 bp** /
@@ -461,11 +480,11 @@ pre-fix code and passes against the fix).
 | Item | Why deferred | Where it will land |
 |---|---|---|
 | **Campaign 06 (Liquidations)** | **Deferred at the feasibility gate 2026-08-05 (RD-16)** — N_eff = 1.14 of 3 symbols; effective per-fold samples 40.2 vs a floor of 100. Mechanism **untested, not rejected**. Trigger: ≈264 worst-fold raw signalled samples (~18 further months of archive). Do **not** revisit by lowering the floor, loosening the threshold, or dropping the N_eff requirement. | `RESEARCH_DECISIONS.md` RD-16 |
-| **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` Track B |
+| **Open Interest Divergence / longer-horizon OI** | DEFER-ceiling **unchanged** by Backlog 2.1 — verified: no Hyperliquid `open_interest` series exists at all (2.1 was Binance-only). Knowledge-only until a live OI recorder exists. | `ROADMAP.md` Track A-ii |
 | **Historical Validation Layer (HVL)** | Trigger: the first campaign producing a SUPPORTED hypothesis (RD-11). Nothing has ever passed governance. | `ROADMAP.md` Track A (A5) |
 | **"Robustness Validation" as a separate layer** | Rejected on Constitution §5 — its contents (Monte Carlo, parameter sensitivity → Research; stress/spread/fills → HVL; latency/delay → Paper Trading) dissolve into three existing homes with nothing left over. Zero concrete instances exist to justify a fourth layer. | Not scheduled — absorbed into HVL/Research/Paper Trading design notes |
 | ~~**Live Sample Recorder**~~ | **PROMOTED AND DEPLOYED 2026-08-05 (Backlog 3.4).** The §5 threshold was crossed by measurement, not opinion: RD-17 closed three OI mechanisms on merit leaving only Divergence (whose named unlock is this recorder), and Backlog 3.2 measured that Hyperliquid history **cannot be extended backwards**. Scoped strictly to HL-native OI/funding/mark snapshots — **order-flow capture remains NOT YET**, since the frozen adapter is REST-only by its own declaration and RD-07's "verify HL historical order-flow" precondition is still unverified. | Running as job `live_recorder` |
-| **Telegram Operations Console** | Deferred until paper/live trading is actually imminent — nothing trades today, so a full ops console has nothing to operate (§5 simplicity). **Not dropped** — full four-tier design preserved verbatim: **Monitoring** (read-only) → **Notifications** (event fan-out) → **Operations** (capital-affecting, confirmation-gated) → **Explainability** (deterministic retrieval only, never generative inference). One-path-only constraint (shared Operations Service, no parallel business logic in any client) and the forbidden-actions list (no alpha approval, no threshold changes, no Risk Manager/Governance bypass, no Live Mode switch via any operational channel) both carry forward unchanged. | `ROADMAP.md` Track C (C4); also listed in Definition of Done |
+| **Telegram Operations Console** | Deferred until paper/live trading is actually imminent — nothing trades today, so a full ops console has nothing to operate (§5 simplicity). **Not dropped** — full four-tier design preserved verbatim: **Monitoring** (read-only) → **Notifications** (event fan-out) → **Operations** (capital-affecting, confirmation-gated) → **Explainability** (deterministic retrieval only, never generative inference). One-path-only constraint (shared Operations Service, no parallel business logic in any client) and the forbidden-actions list (no alpha approval, no threshold changes, no Risk Manager/Governance bypass, no Live Mode switch via any operational channel) both carry forward unchanged. | `ROADMAP.md` Track B (B4); also listed in Definition of Done |
 | **`min_mean_directional_return` as a runner-recognized key** | Withdrawn after verification — the governance gate is meant to inspect mean directional return / expectancy sign at review time (CAMP-01 precedent, see Backlog 1.1); adding a mechanical runner key would migrate judgment out of the one deliberately human-owned gate. | Superseded by Backlog 1.1 |
 | **`docs/RESEARCH_INSIGHTS.md`** (proposed new document) | Rejected — ~80% duplicates `ALPHA_LIBRARY.md` / `RESEARCH_LEDGER.md` / RD-12 with no consistency mechanism between four documents (§5). | Not created; durable findings recorded via RD entries instead |
 | **RD-11's full deferred set** | Same HVL trigger. Rolling threshold recalculation, rolling normalization, trade simulation, stop/TP optimization, equity curve, drawdown, profit factor, expectancy, average R, slippage/fee/liquidity models, Constitution no-hindsight amendment. | `ROADMAP.md` Track A (A5) |
@@ -525,14 +544,20 @@ every item in it is closed. Forward-looking sequencing lives in
 
 | # | Track | Task | Blocked by |
 |---|---|---|---|
-| 1 | **A** | Expectancy/profit-factor gate with bootstrap power (asymmetric designs) | — |
-| 2 | **A** | Derive the acceptance bar from cost + tax; retire the inherited 0.55 | 1 |
-| 3 | **C** | Commit the D6 extension | — |
-| 4 | **D** | Study HLP — the one system whose mechanism *and* returns are both measurable | — |
-| 5 | **E** | Wide-universe candle collection + point-in-time universe reconstruction | — |
-| 6 | **B** | Cross-sectional pre-registration, **asymmetric payoffs only** | 1, 2, 5 |
-| 7 | **C** | Measure realised slippage at size | testnet credentials |
-| 8 | **E** | Route `data/alpha_engine_historical` through `config/loader.py`; declare a Railway volume (Backlog 2.2) | — |
+| 1 | **B** | Arm testnet paper deployment end-to-end (config, smoke, unattended run) | — |
+| 2 | **A** | A1 — expectancy/profit-factor gate with bootstrap power | — |
+| 3 | **C** | Study HLP — the one system whose mechanism *and* returns are both measurable | — |
+| 4 | **B** | B5 — wide-universe collection + point-in-time universe reconstruction | — |
+| 5 | **A** | A2 — derive the acceptance bar from cost + tax; retire the inherited 0.55 | 2 |
+| 6 | **C** | Cross-asset correlation of HIP-3 vs crypto perps — **the single measurement that decides the long-term business shape** | — |
+| 7 | **B** | B2 — measure realised slippage at size | testnet credentials |
+| 8 | **A** | A6 — cross-sectional pre-registration, asymmetric payoffs only | 2, 5, 4 |
+| 9 | **B** | B6 — route historical data through `config/loader.py`; declare a Railway volume | — |
+| 10 | **D** | D-1 execution-quality attribution — **same measurement as B2**; do not build twice | first fills |
+
+**Ordering changed 2026-08-07:** product work now leads. The previous
+ordering had every product task waiting behind a research result, which
+is the sequencing this restructure exists to remove.
 
 **Governance item awaiting a reviewer (not performed):** the power audit
 recommends relabelling CAMP-01–05 and CAMP-07 t040/120h from REJECTED to

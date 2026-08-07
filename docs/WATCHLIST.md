@@ -5,10 +5,10 @@ This document holds **two separate lists that must never be confused**:
 1. **The executable trading universe** (below) — the instruments the Alpha
    Engine may research and trade. An enforced guardrail, wired into
    `alpha_engine.watchlist` and refused at construction time if violated.
-   Owned by **Track E**.
+   Owned by **Track B (Product Development)**.
 2. **The Reverse Engineering watchlist** (§ at the end) — *systems* to
    study for mechanism candidates. Enforced by nothing; it is a reading
-   list. Owned by **Track D**.
+   list. Owned by **Track C (Reverse Engineering)**.
 
 The first constrains capital. The second constrains attention. Merging
 them would make a research target look like a trading permission.
@@ -27,7 +27,7 @@ is a system objective stated in `PROJECT_CONSTITUTION.md` §1 item 6.
 only symbols the historical data pipeline has backfilled
 (`docs/HISTORICAL_DATA.md`).
 
-**Pending expansion (Track E, `ROADMAP.md` E1).** The cross-sectional
+**Pending expansion (Track B, `ROADMAP.md` B5).** The cross-sectional
 mechanism requires a materially wider universe: `[M]` three symbols carry
 an effective sample size of 1.61 directionally, thirty carry 4.54, and
 thirty market-neutral carry 21.58 (`docs/MECHANISMS.md`). Any expansion
@@ -102,7 +102,7 @@ permanent regardless of later watchlist changes).
 
 ## Future automation plan
 
-Per `docs/STRATEGIC_GAP_ANALYSIS.md` (#6, #8, #9) and `ROADMAP.md` Track C (C4):
+Per `docs/STRATEGIC_GAP_ANALYSIS.md` (#6, #8, #9) and `ROADMAP.md` Track B (B4):
 today the watchlist is an **enforced guardrail** ("never evaluate outside
 this list"), not yet a **driver** ("automatically evaluate every member").
 The intended end state (`PROJECT_CONSTITUTION.md` §8):
@@ -118,7 +118,7 @@ evaluate against the watchlist at all, (2) a model-combination policy
 `alpha_engine/portfolio/selection.py`), and (3) a per-asset evidence
 ranking layer (today: none exists — `compare_experiments()` ranks
 experiments, not assets). None of this should be built before item (1)
-exists; see `ROADMAP.md` Track C (C4) for the explicit sequencing rationale.
+exists; see `ROADMAP.md` Track B (B4) for the explicit sequencing rationale.
 
 ## Current implementation status
 
@@ -146,7 +146,7 @@ validation rules.
 
 ---
 
-# Part 2 — Reverse Engineering watchlist (Track D)
+# Part 2 — Reverse Engineering watchlist (Track C)
 
 **Systems to study, not instruments to trade.** Nothing here is a
 permission, a hypothesis, or a commitment to build.
