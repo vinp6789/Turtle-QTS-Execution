@@ -46,6 +46,7 @@ Supersedes the A–E scheme of 2026-08-06; the mapping lives in
 | `RESEARCH_LEDGER.md` | Permanent scientific record — one entry per completed campaign; rejected hypotheses never deleted |
 | `MECHANISMS.md` | **The master mechanism table.** Every future research action comes from it. Mechanism ≠ information class ≠ indicator |
 | `RESEARCH_BACKLOG.md` | Power/cost/tax audit of the closed record, ranked mechanism backlog, twelve-month plan, and the ten pre-registration gates |
+| `PLATFORM_QUALIFICATION.md` | **Proof the measurement platform is qualified**, not any strategy. 10 of 12 items qualified; the 2 that are not are stated rather than waived |
 | `ALPHA_SCORECARD.md` | **Business Performance Reference.** What every mechanism actually made, gross / after cost / after tax; failure classification A–G; the counterfactuals. Reference it instead of re-deriving "what was our best alpha?" |
 | `RESEARCH_CAMPAIGN_01_open_interest.md` … `_08_liquidation_hourly.md` | Full pre-registration + methodology + results per campaign (detail behind the ledger's condensed entries) |
 | `ALPHA_LIBRARY.md` | Catalog of approved/rejected/retired/experimental/future-candidate alpha models |
