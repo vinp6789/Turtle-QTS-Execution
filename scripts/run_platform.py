@@ -41,6 +41,7 @@ from hyperliquid_adapter.transport import MAINNET_BASE_URL, TESTNET_BASE_URL
 
 from alpha_engine.platform import StrategyLoadError, describe, load_strategies
 from execution_sim import SimulatedTransport
+from measurement import EquityLog
 
 _log = logging.getLogger("turtle.platform")
 
@@ -82,6 +83,33 @@ def _simulated_state(settings, strategies):
     return state
 
 
+def _attach_equity_log(state, path):
+    """Record one measurement row per cycle.
+
+    Wraps run_one_cycle rather than modifying it: AppState is frozen, and
+    the recording is a pure read of the snapshot AccountingSync has
+    already refreshed. A failure to RECORD must never fail a CYCLE -- the
+    trading path does not depend on measurement.
+    """
+    log = EquityLog(path)
+    inner = state.run_one_cycle
+    names = tuple(s.name for s in state.strategies)
+
+    def wrapped():
+        result = inner()
+        try:
+            log.record(state.engine.portfolio_manager.get_snapshot(),
+                       cycle_seq=state.cycles_run, strategy_names=names)
+        except Exception as exc:                      # noqa: BLE001
+            _log.error("equity row not recorded: %s: %s", type(exc).__name__, exc)
+        return result
+
+    state.run_one_cycle = wrapped
+    state.equity_log = log
+    _log.info("equity history -> %s (resuming at cycle_seq %d)", log.path, log.last_cycle_seq)
+    return state
+
+
 def main() -> int:
     settings = AppSettings.from_env()
     configure_logging(settings.log_level, settings.log_format)
@@ -106,6 +134,7 @@ def main() -> int:
         state = _simulated_state(settings, strategies)
     else:
         state = AppState.create(settings, strategies=strategies)
+    _attach_equity_log(state, os.environ.get("EQUITY_LOG_PATH", "data/measurement/equity.jsonl"))
     app = create_app(state=state)
     uvicorn.run(app, host=settings.host, port=settings.port, log_config=None)
     return 0
