@@ -39,7 +39,7 @@ they're found, never silently carried forward.
 | **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
 | **Current blocker** | **Slippage has never been measured** — blocked on testnet credentials (see Current Blockers → Operational). Every cost figure in the project is therefore a lower bound. |
 | **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
-| **Full regression** | **1,925 passed, 0 failed** (verified 2026-08-06) |
+| **Full regression** | **1,942 passed, 0 failed** (verified 2026-08-07) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 | **Active tracks** | A Research Framework · B Alpha Discovery · C Trading Engineering · D Reverse Engineering · E Data Platform. **Exactly one is active at a time** — see `ROADMAP.md`. Currently **Track A**. |

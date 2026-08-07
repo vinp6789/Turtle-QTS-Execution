@@ -152,6 +152,24 @@ def run_validation(
     hit_rate = (Decimal(hits) / Decimal(signaled)) if signaled > 0 else None
     mean_directional_return = (sum(directional_returns) / Decimal(signaled)) if signaled > 0 else None
 
+    # Payoff decomposition (additive, 2026-08-07). Derived from the same
+    # directional_returns already computed above -- no second pass over
+    # the samples, no new inputs, no change to any existing number.
+    #
+    # Exactly-zero directional returns belong to NEITHER leg. They are
+    # already counted as signaled-but-not-a-hit above, and folding them
+    # into the losses would understate mean_loss by diluting it with
+    # non-events.
+    wins = [r for r in directional_returns if r > 0]
+    losses = [-r for r in directional_returns if r < 0]   # positive magnitudes
+    mean_win = (sum(wins) / Decimal(len(wins))) if wins else None
+    mean_loss = (sum(losses) / Decimal(len(losses))) if losses else None
+    # PF = gross profit / gross loss. Undefined -- NOT infinite -- with no
+    # losing sample to divide by; reported as None rather than fabricated,
+    # the same discipline hit_rate follows at zero signals. With losses but
+    # no wins it is a well-defined 0.
+    gross_profit_factor = (sum(wins) / sum(losses)) if losses else None
+
     criteria_results = []
     for key, required in specification.acceptance_criteria.items():
         if key == _MIN_HIT_RATE_KEY:
@@ -184,4 +202,7 @@ def run_validation(
         criteria_results=tuple(criteria_results),
         overall_passed=overall_passed,
         sample_set_fingerprint=fingerprint_samples(samples),
+        mean_win=mean_win,
+        mean_loss=mean_loss,
+        gross_profit_factor=gross_profit_factor,
     )

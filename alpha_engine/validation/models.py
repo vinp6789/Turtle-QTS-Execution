@@ -203,6 +203,44 @@ class ValidationResult:
     # construction; run_validation() always populates it.
     sample_set_fingerprint: Optional[str] = None
 
+    # ---- Payoff decomposition (additive, 2026-08-07) ----------------
+    # WHY THESE EXIST. hit_rate alone cannot decide whether a strategy is
+    # tradeable. Indian VDA tax is levied on GROSS gains with no loss
+    # set-off, so viability turns on the gross profit factor, not on how
+    # often the direction was right. A campaign could clear
+    # min_hit_rate and still be untradeable; without these fields that
+    # was not even checkable after the fact.
+    #
+    # Same additive contract as sample_set_fingerprint above: Optional,
+    # defaulted, appended last, so every existing construction site,
+    # sealed evidence package and stored campaign keeps working
+    # unchanged. A None here means "not computed by the code that
+    # produced this result", never "zero".
+    mean_win: Optional[Decimal] = None
+    mean_loss: Optional[Decimal] = None          # positive magnitude
+    gross_profit_factor: Optional[Decimal] = None
+
+    @property
+    def payoff_ratio(self) -> Optional[Decimal]:
+        """mean_win / mean_loss -- the win/loss ratio a payoff-shape gate needs.
+
+        None when either leg is absent, because a ratio with no
+        denominator is undefined, not infinite.
+        """
+        if self.mean_win is None or self.mean_loss is None or self.mean_loss == 0:
+            return None
+        return self.mean_win / self.mean_loss
+
+    @property
+    def expectancy(self) -> Optional[Decimal]:
+        """Mean profit per signaled sample.
+
+        Deliberately an alias of mean_directional_return rather than a
+        second stored field: they are the same quantity, and storing it
+        twice would create two things to keep consistent.
+        """
+        return self.mean_directional_return
+
     def __post_init__(self):
         if not isinstance(self.candidate_name, str) or not self.candidate_name.strip():
             raise ValidationError("ValidationResult.candidate_name must be a non-empty string")
@@ -257,6 +295,27 @@ class ValidationResult:
         ):
             raise ValidationError("ValidationResult.sample_set_fingerprint must be a non-empty string or None")
 
+        # Payoff decomposition: type, sign, and the one consistency rule
+        # that matters -- nothing may be reported when nothing signaled.
+        for field_name in ("mean_win", "mean_loss", "gross_profit_factor"):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            if not isinstance(value, Decimal):
+                raise ValidationError(f"ValidationResult.{field_name} must be a Decimal or None")
+            if value < 0:
+                raise ValidationError(
+                    f"ValidationResult.{field_name} must be non-negative -- mean_loss is a "
+                    f"MAGNITUDE, not a signed return"
+                )
+        if self.signaled_samples == 0 and any(
+            getattr(self, f) is not None for f in ("mean_win", "mean_loss", "gross_profit_factor")
+        ):
+            raise ValidationError(
+                "ValidationResult payoff fields must be None when signaled_samples is 0 -- "
+                "never fabricate a payoff from zero signals"
+            )
+
     def to_dict(self) -> Dict[str, Any]:
         """The JSON-native Mapping a future Evidence Package would seal
         verbatim. Pure function of this object's own fields."""
@@ -276,4 +335,15 @@ class ValidationResult:
             "criteria_results": [c.to_dict() for c in self.criteria_results],
             "overall_passed": self.overall_passed,
             "sample_set_fingerprint": self.sample_set_fingerprint,
+            # Payoff decomposition. Emitted as strings (or null) for the
+            # same reason every other Decimal here is: canonical JSON
+            # must not go through binary float. `payoff_ratio` is derived
+            # and emitted for the reader's convenience; it is never
+            # stored, so it cannot disagree with its two inputs.
+            "mean_win": str(self.mean_win) if self.mean_win is not None else None,
+            "mean_loss": str(self.mean_loss) if self.mean_loss is not None else None,
+            "gross_profit_factor": (
+                str(self.gross_profit_factor) if self.gross_profit_factor is not None else None
+            ),
+            "payoff_ratio": str(self.payoff_ratio) if self.payoff_ratio is not None else None,
         }

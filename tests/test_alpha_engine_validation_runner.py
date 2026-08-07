@@ -402,3 +402,160 @@ class TestEndToEndResearchLoop(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPayoffDecomposition(unittest.TestCase):
+    """mean_win / mean_loss / gross_profit_factor (additive, 2026-08-07).
+
+    WHY THESE EXIST. hit_rate cannot decide tradeability. Indian VDA tax
+    is levied on GROSS gains with no loss set-off, so viability turns on
+    the gross profit factor. Before these fields, a campaign could clear
+    min_hit_rate and be untradeable, and nothing in the sealed evidence
+    made that checkable after the fact.
+
+    Every expected value below is derived by hand in the test.
+    """
+
+    def _run(self, pairs):
+        """pairs: (feature_value, realized_outcome). Threshold 0.0005,
+        momentum convention -> a positive feature above threshold goes
+        LONG, so directional_return == realized_outcome."""
+        samples = tuple(_sample(Decimal(v), o) for v, o in pairs)
+        return run_validation(
+            FundingRateThresholdRuleCandidate.evaluate,
+            _spec(direction_convention="momentum",
+                  acceptance_criteria={"min_hit_rate": 0.0}),
+            samples,
+            clock=lambda: "2026-01-01T00:00:00+00:00",
+        )
+
+    def test_mean_win_and_mean_loss_are_means_of_their_own_legs(self):
+        # wins +0.02, +0.04 -> mean 0.03 ; losses -0.01, -0.03 -> mean 0.02
+        r = self._run([("0.001", "0.02"), ("0.001", "0.04"),
+                       ("0.001", "-0.01"), ("0.001", "-0.03")])
+        self.assertEqual(r.signaled_samples, 4)
+        self.assertEqual(r.hits, 2)
+        self.assertEqual(r.mean_win, Decimal("0.03"))
+        self.assertEqual(r.mean_loss, Decimal("0.02"))
+
+    def test_mean_loss_is_a_positive_magnitude_not_a_signed_return(self):
+        r = self._run([("0.001", "0.01"), ("0.001", "-0.05")])
+        self.assertGreater(r.mean_loss, 0)
+
+    def test_gross_profit_factor_is_gross_win_over_gross_loss(self):
+        # sum wins 0.06 / sum losses 0.04 = 1.5
+        r = self._run([("0.001", "0.02"), ("0.001", "0.04"),
+                       ("0.001", "-0.01"), ("0.001", "-0.03")])
+        self.assertEqual(r.gross_profit_factor, Decimal("1.5"))
+
+    def test_exact_zero_outcomes_belong_to_neither_leg(self):
+        """A zero is already signaled-but-not-a-hit; folding it into the
+        losses would dilute mean_loss with a non-event."""
+        r = self._run([("0.001", "0.02"), ("0.001", "-0.02"), ("0.001", "0")])
+        self.assertEqual(r.signaled_samples, 3)
+        self.assertEqual(r.hits, 1)
+        self.assertEqual(r.mean_win, Decimal("0.02"))
+        self.assertEqual(r.mean_loss, Decimal("0.02"))   # not 0.01
+        self.assertEqual(r.gross_profit_factor, Decimal("1"))
+
+    def test_profit_factor_is_undefined_not_infinite_without_a_losing_sample(self):
+        r = self._run([("0.001", "0.02"), ("0.001", "0.03")])
+        self.assertEqual(r.mean_win, Decimal("0.025"))
+        self.assertIsNone(r.mean_loss)
+        self.assertIsNone(r.gross_profit_factor)
+        self.assertIsNone(r.payoff_ratio)
+
+    def test_profit_factor_is_a_well_defined_zero_with_losses_but_no_wins(self):
+        r = self._run([("0.001", "-0.02"), ("0.001", "-0.03")])
+        self.assertIsNone(r.mean_win)
+        self.assertEqual(r.mean_loss, Decimal("0.025"))
+        self.assertEqual(r.gross_profit_factor, Decimal("0"))
+
+    def test_payoff_ratio_is_derived_never_stored(self):
+        r = self._run([("0.001", "0.04"), ("0.001", "-0.02")])
+        self.assertEqual(r.payoff_ratio, Decimal("2"))
+        self.assertNotIn("payoff_ratio", ValidationResult.__dataclass_fields__)
+
+    def test_expectancy_is_an_alias_of_mean_directional_return(self):
+        r = self._run([("0.001", "0.04"), ("0.001", "-0.02")])
+        self.assertIs(r.expectancy, r.mean_directional_return)
+
+    def test_short_signals_fold_direction_in_before_the_split(self):
+        """A SHORT that profits from a negative move is a WIN, not a loss."""
+        samples = (_sample(Decimal("-0.001"), "-0.03"),)
+        r = run_validation(
+            FundingRateThresholdRuleCandidate.evaluate,
+            _spec(direction_convention="momentum",
+                  acceptance_criteria={"min_hit_rate": 0.0}),
+            samples, clock=lambda: "2026-01-01T00:00:00+00:00")
+        self.assertEqual(r.hits, 1)
+        self.assertEqual(r.mean_win, Decimal("0.03"))
+        self.assertIsNone(r.mean_loss)
+
+    def test_all_payoff_fields_are_none_when_nothing_signals(self):
+        r = self._run([("0.0001", "0.02")])   # below threshold -> FLAT
+        self.assertEqual(r.signaled_samples, 0)
+        self.assertIsNone(r.mean_win)
+        self.assertIsNone(r.mean_loss)
+        self.assertIsNone(r.gross_profit_factor)
+        self.assertIsNone(r.payoff_ratio)
+
+    def test_to_dict_emits_the_new_keys_as_strings_or_null(self):
+        d = self._run([("0.001", "0.04"), ("0.001", "-0.02")]).to_dict()
+        self.assertEqual(d["mean_win"], "0.04")
+        self.assertEqual(d["mean_loss"], "0.02")
+        self.assertEqual(d["gross_profit_factor"], "2")
+        self.assertEqual(d["payoff_ratio"], "2")
+
+    def test_existing_numbers_are_unchanged_by_the_addition(self):
+        r = self._run([("0.001", "0.02"), ("0.001", "-0.01")])
+        self.assertEqual(r.hit_rate, Decimal("0.5"))
+        self.assertEqual(r.mean_directional_return, Decimal("0.005"))
+
+
+class TestPayoffBackwardCompatibility(unittest.TestCase):
+    """The fields are additive: nothing that worked before may break."""
+
+    def _minimal(self, **kw):
+        base = dict(
+            candidate_name="c", candidate_version="v1",
+            validated_at_utc="2026-01-01T00:00:00+00:00",
+            total_samples=1, unavailable_samples=0, flat_samples=0,
+            signaled_samples=1, hits=1, hit_rate=Decimal("1"),
+            mean_directional_return=Decimal("0.01"),
+            criteria_results=(CriterionCheck("min_hit_rate", 0.5, Decimal("1"),
+                                             CriterionOutcome.PASS),),
+            overall_passed=True,
+        )
+        base.update(kw)
+        return ValidationResult(**base)
+
+    def test_construction_without_the_new_fields_still_works(self):
+        r = self._minimal()
+        self.assertIsNone(r.mean_win)
+        self.assertIsNone(r.gross_profit_factor)
+        self.assertIsNone(r.payoff_ratio)
+
+    def test_none_means_not_computed_never_zero(self):
+        self.assertIsNone(self._minimal().gross_profit_factor)
+
+    def test_negative_magnitudes_are_rejected(self):
+        with self.assertRaises(ValidationError):
+            self._minimal(mean_loss=Decimal("-0.02"))
+
+    def test_non_decimal_payoff_values_are_rejected(self):
+        with self.assertRaises(ValidationError):
+            self._minimal(mean_win=0.02)
+
+    def test_payoff_fields_may_not_be_set_when_nothing_signaled(self):
+        with self.assertRaises(ValidationError):
+            ValidationResult(
+                candidate_name="c", candidate_version="v1",
+                validated_at_utc="2026-01-01T00:00:00+00:00",
+                total_samples=1, unavailable_samples=1, flat_samples=0,
+                signaled_samples=0, hits=0, hit_rate=None,
+                mean_directional_return=None,
+                criteria_results=(CriterionCheck("min_hit_rate", 0.5, None,
+                                                 CriterionOutcome.NOT_EVALUATED),),
+                overall_passed=False, mean_win=Decimal("0.01"),
+            )
