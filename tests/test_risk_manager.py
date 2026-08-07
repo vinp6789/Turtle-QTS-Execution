@@ -599,3 +599,78 @@ class DeterminismAndConcurrency(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWithinCycleObservationTolerance(unittest.TestCase):
+    """§9 correctness fix, 2026-08-07: a fresh observation is not stale.
+
+    run_cycle stamps evaluated_at_utc ONCE at cycle start; market data is
+    then fetched over the network later in the same cycle. A fresh
+    observation therefore legitimately post-dates that stamp, and the old
+    `age < 0` bound vetoed the FRESHEST possible data -- measured at
+    5.69-7.04s direct (n=10) and 8.05-9.38s in-cycle on the live venue.
+
+    STALENESS AND IMPLAUSIBLE-FUTURE ARE SEPARATE PROPERTIES and are
+    tested separately here, deliberately. Collapsing them into one
+    symmetric bound would tie two unrelated invariants together.
+    """
+
+    def _limits(self, stale=30, future=30):
+        return RiskManagerLimits(
+            max_leverage=Decimal("10"), min_liquidation_buffer_pct=Decimal("0.1"),
+            max_funding_rate_abs=Decimal("0.05"), max_correlated_positions=3,
+            max_stale_data_seconds=stale, max_future_data_seconds=future)
+
+    def _verdict(self, age, lim):
+        if age > lim.max_stale_data_seconds:
+            return "stale"
+        if age < -lim.max_future_data_seconds:
+            return "future"
+        return "accept"
+
+    def test_the_measured_defect_is_resolved(self):
+        """-9.38s was the worst in-cycle latency observed live; it must pass."""
+        lim = self._limits()
+        for age in (-6.59, -7.04, -8.05, -9.38):
+            self.assertEqual(self._verdict(age, lim), "accept", f"age {age} must be accepted")
+
+    def test_stale_rejection_is_completely_unchanged(self):
+        lim = self._limits(stale=30)
+        self.assertEqual(self._verdict(30.0, lim), "accept")
+        self.assertEqual(self._verdict(30.1, lim), "stale")
+        self.assertEqual(self._verdict(120.0, lim), "stale")
+        self.assertEqual(self._verdict(86400.0, lim), "stale")
+
+    def test_implausibly_future_timestamps_are_still_rejected(self):
+        lim = self._limits(future=30)
+        self.assertEqual(self._verdict(-30.0, lim), "accept")
+        self.assertEqual(self._verdict(-30.1, lim), "future")
+        self.assertEqual(self._verdict(-3600.0, lim), "future")
+
+    def test_the_two_bounds_are_independent(self):
+        """Tightening one must not move the other."""
+        lim = self._limits(stale=5, future=300)
+        self.assertEqual(self._verdict(10.0, lim), "stale")
+        self.assertEqual(self._verdict(-10.0, lim), "accept")
+        lim = self._limits(stale=300, future=5)
+        self.assertEqual(self._verdict(10.0, lim), "accept")
+        self.assertEqual(self._verdict(-10.0, lim), "future")
+
+    def test_default_tolerance_is_the_measured_derivation(self):
+        """30s ~= 3.2x the worst observed in-cycle latency (9.38s)."""
+        self.assertEqual(self._limits().max_future_data_seconds, 30)
+
+    def test_zero_tolerance_restores_the_old_strict_behaviour(self):
+        lim = self._limits(future=0)
+        self.assertEqual(self._verdict(-0.1, lim), "future")
+
+    def test_negative_tolerance_is_rejected_at_construction(self):
+        with self.assertRaises(RiskManagerConfigurationError):
+            self._limits(future=-1)
+
+    def test_field_is_defaulted_so_no_existing_caller_breaks(self):
+        lim = RiskManagerLimits(
+            max_leverage=Decimal("10"), min_liquidation_buffer_pct=Decimal("0.1"),
+            max_funding_rate_abs=Decimal("0.05"), max_correlated_positions=3,
+            max_stale_data_seconds=30)
+        self.assertEqual(lim.max_future_data_seconds, 30)

@@ -90,6 +90,21 @@ class RiskManagerLimits:
     max_funding_rate_abs: Decimal
     max_correlated_positions: int
     max_stale_data_seconds: int
+    # AD/§9 correctness fix (2026-08-07). A data timestamp NEWER than the
+    # cycle's evaluated_at_utc is normal, not suspicious: run_cycle stamps
+    # evaluated_at_utc once at cycle start, then market data is fetched
+    # over the network later in the same cycle, so a fresh observation is
+    # legitimately "in the future" relative to that stamp. MEASURED on the
+    # live venue: 5.69-7.04s direct (n=10), 8.05-9.38s in-cycle under load.
+    # 30s is ~3.2x the worst observed.
+    #
+    # DELIBERATELY A SEPARATE LIMIT FROM max_stale_data_seconds: staleness
+    # and implausible-future are two different correctness properties and
+    # must not be collapsed into one symmetric bound. Beyond this window a
+    # future timestamp is still a hard FAIL_SAFE.
+    #
+    # Defaulted so no existing caller changes.
+    max_future_data_seconds: int = 30
 
     def __post_init__(self):
         if not isinstance(self.max_leverage, Decimal) or self.max_leverage <= 0:
@@ -110,6 +125,15 @@ class RiskManagerLimits:
             or self.max_stale_data_seconds <= 0
         ):
             raise RiskManagerConfigurationError("max_stale_data_seconds must be a positive integer")
+        if (
+            not isinstance(self.max_future_data_seconds, int)
+            or isinstance(self.max_future_data_seconds, bool)
+            or self.max_future_data_seconds < 0
+        ):
+            raise RiskManagerConfigurationError(
+                "RiskManagerLimits.max_future_data_seconds must be a non-negative int"
+            )
+
 
 
 class Decision(Enum):

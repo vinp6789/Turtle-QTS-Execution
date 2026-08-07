@@ -144,9 +144,21 @@ class RiskManager:
 
         for label, ts in self._timestamps_to_check(portfolio_snapshot, open_positions, funding_info, correlation_info):
             age = _age_seconds(evaluated_at_utc, ts)
-            if age < 0 or age > self._limits.max_stale_data_seconds:
+            # Two DISTINCT correctness properties, deliberately not merged:
+            #   stale  -- the observation is too OLD to trust
+            #   future -- the observation is implausibly AHEAD of the clock
+            # A small negative age is neither: run_cycle stamps
+            # evaluated_at_utc once at cycle start and market data is
+            # fetched over the network later in the same cycle, so a fresh
+            # observation legitimately post-dates that stamp. Rejecting it
+            # vetoed the FRESHEST possible data (measured: 5.7-9.4s on the
+            # live venue). Stale rejection below is unchanged.
+            if age > self._limits.max_stale_data_seconds:
                 missing_reasons.append(ReasonCode.STALE_DATA)
                 violated.append(f"{label}:stale(age={age}s)")
+            elif age < -self._limits.max_future_data_seconds:
+                missing_reasons.append(ReasonCode.STALE_DATA)
+                violated.append(f"{label}:future(age={age}s)")
 
         if portfolio_snapshot is not None and portfolio_snapshot.equity <= 0:
             missing_reasons.append(ReasonCode.NON_POSITIVE_EQUITY)
