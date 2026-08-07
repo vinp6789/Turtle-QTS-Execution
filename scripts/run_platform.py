@@ -42,7 +42,7 @@ from hyperliquid_adapter.transport import MAINNET_BASE_URL, TESTNET_BASE_URL
 
 from alpha_engine.platform import StrategyLoadError, describe, load_strategies
 from execution_sim import SimulatedTransport
-from measurement import EquityLog
+from measurement import EquityLog, build_all, to_json
 
 _log = logging.getLogger("turtle.platform")
 
@@ -121,6 +121,30 @@ def _attach_equity_log(state, path):
     return state
 
 
+def _attach_scoreboard_api(app, state, entries):
+    """GET /scoreboard -- the business report, as JSON.
+
+    ADDITIVE: a router added to the already-built app; app/api is frozen
+    and untouched. The endpoint CALCULATES NOTHING -- it calls
+    measurement.build_all() and serialises. Every value, status and
+    reason originates in the metrics engine.
+    """
+    from fastapi import APIRouter
+
+    router = APIRouter()
+
+    @router.get("/scoreboard", tags=["monitoring"])
+    def scoreboard():
+        return to_json(build_all(
+            strategies=state.strategies, equity_log=state.equity_log,
+            store=state.engine.event_store,
+            position_manager=state.engine.position_manager, entries=entries))
+
+    app.include_router(router)
+    _log.info("scoreboard API -> GET /scoreboard")
+    return app
+
+
 def main() -> int:
     settings = AppSettings.from_env()
     configure_logging(settings.log_level, settings.log_format)
@@ -147,6 +171,7 @@ def main() -> int:
         state = AppState.create(settings, strategies=strategies)
     _attach_equity_log(state, os.environ.get("EQUITY_LOG_PATH", "data/measurement/equity.jsonl"))
     app = create_app(state=state)
+    _attach_scoreboard_api(app, state, entries)
     uvicorn.run(app, host=settings.host, port=settings.port, log_config=None)
     return 0
 

@@ -10,6 +10,9 @@ enforces it.
 """
 
 from .equity_log import SCHEMA_VERSION, EquityLog, idempotency_key, row_from_snapshot
+from .validity import (
+    REQUIREMENTS, Metric, MetricStatus, classify,
+)
 from .scoreboard import (
     HLP_BENCHMARK_NET_ANNUAL, build, build_all, closed_trades, to_json,
 )
@@ -25,4 +28,5 @@ __all__ = [
     "cost_attribution",
     "build", "build_all", "closed_trades", "to_json",
     "HLP_BENCHMARK_NET_ANNUAL",
+    "Metric", "MetricStatus", "classify", "REQUIREMENTS",
 ]

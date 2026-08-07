@@ -34,7 +34,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from event_store import EventType
 
 from .equity_log import EquityLog
-from .metrics import compute, to_jsonable
+from .metrics import compute, period_returns, to_jsonable
+from .validity import Metric, MetricStatus, as_dict as validity_as_dict, classify
 
 # The benchmark every strategy is measured against.
 # MEASURED 2026-08-06: HLP vault +16.6%/yr time-weighted, trailing 12
@@ -117,7 +118,7 @@ def _verdict(m: Dict[str, Any]) -> Dict[str, Any]:
 
     cagr = m.get("cagr")
     if cagr is None:
-        reasons.append("CAGR not yet computable (under 30 days of history)")
+        reasons.append("CAGR not yet computable (insufficient elapsed time)")
     elif cagr < HLP_BENCHMARK_NET_ANNUAL:
         reasons.append(
             f"underperforms the HLP benchmark ({cagr} vs {HLP_BENCHMARK_NET_ANNUAL} net)")
@@ -139,6 +140,19 @@ def build(*, strategy_name: str, equity_log: EquityLog, store, position_manager,
     rows = equity_log.read_all()
     trades = closed_trades(store, position_manager)
     m = compute(rows, trades)
+
+    # Validity is decided from the SHAPE of the data, never from a value.
+    from datetime import datetime
+    elapsed_days = None
+    if len(rows) >= 2:
+        try:
+            t0 = datetime.fromisoformat(rows[0]["observed_at_utc"])
+            t1 = datetime.fromisoformat(rows[-1]["observed_at_utc"])
+            elapsed_days = Decimal(str((t1 - t0).total_seconds() / 86400.0))
+        except (KeyError, TypeError, ValueError):
+            elapsed_days = None
+    classified = classify(m, return_count=len(period_returns(rows)),
+                          elapsed_days=elapsed_days)
 
     cagr = m.get("cagr")
     report: Dict[str, Any] = {
@@ -177,6 +191,10 @@ def build(*, strategy_name: str, equity_log: EquityLog, store, position_manager,
         "observations": m.get("observations"),
     }
     report.update(_verdict(m))
+    # Every metric, with its validity. The API reads this and calculates
+    # nothing.
+    report["metrics"] = validity_as_dict(classified)
+    report["elapsed_days"] = elapsed_days
     if enabled_strategy_count > 1:
         report["attribution_warning"] = MULTI_STRATEGY_UNSUPPORTED
     return report
