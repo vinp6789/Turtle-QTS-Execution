@@ -25,7 +25,11 @@ enabled = true
 [strategies.params]
 symbols = ["BTC", "ETH", "SOL"]
 cadence_seconds = 3600
-threshold = "0.40"
+# 0.01, NOT the 0.40 the research campaign froze. This is an ENGINE TEST:
+# a threshold that never fires cannot exercise the pipeline, which is this
+# plugin's only purpose. It is a harness setting, not a research parameter --
+# the campaign's own 0.40 remains untouched in its sealed evidence.
+threshold = "0.01"
 direction_convention = "momentum"
 atr_stop_mult = "2.0"
 atr_t1_mult = "3.0"

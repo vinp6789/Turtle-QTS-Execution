@@ -23,16 +23,63 @@ orders.
 import logging
 import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
 from app.api import create_app
-from app.runtime import AppSettings, AppState
 from app.observability import configure_logging
+from app.runtime import AppSettings, AppState
+from app.runtime.accounting import AccountingSync
+from app.runtime.engine_builder import _risk_limits, build_engine_from_settings
+
+from composition_root import build_engine
+from composition_root.deployment import load_deployment_settings
+from config import load_config
+from exchange_adapter import Symbol
+from hyperliquid_adapter.transport import MAINNET_BASE_URL, TESTNET_BASE_URL
 
 from alpha_engine.platform import StrategyLoadError, describe, load_strategies
+from execution_sim import SimulatedTransport
 
 _log = logging.getLogger("turtle.platform")
+
+
+def _simulated_state(settings, strategies):
+    """Build the engine with SimulatedTransport injected.
+
+    Replicates build_engine_from_settings, differing in exactly one
+    argument -- transport= -- because that function does not expose the
+    seam and is frozen. The adapter, order lifecycle, position tracking,
+    event store and accounting are the REAL ones; only the venue's
+    answers are simulated.
+    """
+    env = os.environ
+    config = load_config(settings.engine_config_path, env=env)
+    deployment = load_deployment_settings(env)
+    store_path = Path(settings.event_store_path)
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+
+    base_url = MAINNET_BASE_URL if config.exchange.network == "mainnet" else TESTNET_BASE_URL
+    transport = SimulatedTransport(base_url=base_url)
+    _log.warning("EXECUTION IS SIMULATED -- real market data, local deterministic fills")
+
+    engine = build_engine(
+        config=config, deployment=deployment, risk_limits=_risk_limits(settings),
+        event_store_path=store_path, env=env, transport=transport,
+    )
+    if settings.initial_deposit > 0:
+        engine.portfolio_manager.deposit(
+            settings.initial_deposit, request_id="app_accounting:initial-deposit:v1")
+    state = AppState(
+        settings=settings, engine=engine,
+        universe=tuple(Symbol(s) for s in config.universe.symbols),
+        risk_profile=config.risk.active_profile_params,
+        strategies=tuple(strategies),
+        accounting=AccountingSync(engine, target_leverage=settings.target_leverage),
+    )
+    state.simulated_transport = transport      # for equity persistence
+    return state
 
 
 def main() -> int:
@@ -55,7 +102,10 @@ def main() -> int:
         if entry.warning:
             _log.warning("%s", entry.warning)
 
-    state = AppState.create(settings, strategies=strategies)
+    if os.environ.get("EXECUTION_MODE", "").lower() == "simulated":
+        state = _simulated_state(settings, strategies)
+    else:
+        state = AppState.create(settings, strategies=strategies)
     app = create_app(state=state)
     uvicorn.run(app, host=settings.host, port=settings.port, log_config=None)
     return 0

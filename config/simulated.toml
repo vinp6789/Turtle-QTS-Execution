@@ -1,0 +1,88 @@
+# Turtle Execution Engine -- HYPERLIQUID TESTNET, PIPELINE VALIDATION (TRACK B).
+#
+# PURPOSE: engineering validation of the execution stack. The strategy this
+# deployment runs (EMA+MACD+ATR, trend_momentum_rule) was REJECTED by the
+# five-stage research gate on 2026-08-06 (hit rate 0.4353 vs a 0.55 bar).
+# It is used here ONLY to generate genuine, deterministic TradeIntents so the
+# order lifecycle can be exercised. It is NOT an approved alpha model and
+# nothing produced by this deployment is evidence of alpha.
+#
+# THE STRATEGY IS EXPECTED TO LOSE. Success here is measured by zero crashes,
+# zero duplicate orders, correct reconciliation, correct TP/SL handling and
+# clean restart recovery -- never by PnL.
+#
+# This file contains NO secret material. Keys are resolved by reference
+# through the Secrets/Signing Boundary. Set before running:
+#   ENGINE_CONFIG_PATH=config/testnet.toml
+#   ENGINE_STORE_PATH=data/testnet/events        <- testnet-scoped, never shared
+#   TURTLE_DEPLOYMENT_ACCOUNT_ADDRESS=0x...      <- public address
+#   TURTLE_SECRET_HYPERLIQUID_WALLET_KEY_V1=...  <- testnet key ONLY
+
+[environment]
+# "paper" keeps the engine off the venue entirely. Switch to "live" only
+# when arming against testnet -- "live" here means "really submit orders",
+# and the venue is still testnet per [exchange].network below.
+mode = "live"
+
+[exchange]
+name = "hyperliquid"
+network = "testnet"
+
+[universe]
+symbols = ["BTC", "ETH", "SOL"]
+
+[risk]
+# CAPITAL_PRESERVATION deliberately: this deployment exists to exercise the
+# stack, not to express conviction. Smallest risk per trade, fewest
+# concurrent positions, tightest heat cap of the three profiles.
+profile = "CAPITAL_PRESERVATION"
+max_daily_loss_pct = 0.02
+max_drawdown_from_peak_pct = 0.15
+auto_flatten_enabled = false
+auto_flatten_confirmation_seconds = 60
+
+[risk.profiles.GROWTH]
+risk_pct_per_trade = 0.020
+max_positions = 4
+sizing_mode = "conviction_weighted"
+heat_cap = 0.10
+ruin_threshold = 0.50
+
+[risk.profiles.BALANCED]
+risk_pct_per_trade = 0.010
+max_positions = 3
+sizing_mode = "fixed"
+heat_cap = 0.05
+ruin_threshold = 0.60
+
+[risk.profiles.CAPITAL_PRESERVATION]
+risk_pct_per_trade = 0.005
+max_positions = 2
+sizing_mode = "fixed"
+heat_cap = 0.02
+ruin_threshold = 0.75
+
+[operational]
+# Retry/staleness values are the example defaults, unchanged. This
+# deployment is a test of the stack AS CONFIGURED FOR PRODUCTION; tuning
+# them here would mean validating something other than what will ship.
+max_retries = 5
+retry_base_delay_seconds = 0.5
+retry_max_delay_seconds = 30.0
+clock_drift_tolerance_ms = 250
+data_staleness_price_ms = 5000
+data_staleness_orderbook_ms = 3000
+data_staleness_position_ms = 10000
+
+[secrets]
+signing_key_ref = "hyperliquid_signing_key_v1"
+telegram_bot_token_ref = "telegram_bot_token_v1"
+wallet_key_ref = "hyperliquid_wallet_key_v1"
+
+[telegram]
+enabled = false
+chat_id = "0"
+
+[logging]
+level = "INFO"
+directory = "data/testnet/logs"
