@@ -401,3 +401,133 @@ def assess(
         )
     return Verdict(breakeven, mde, pre_registered_bar, n_eff, cost,
                    mean_abs_move_bps, tax_bar, reasons)
+
+
+# ------------------------------------------- A1: asymmetric-design gating
+
+def profit_factor(payoffs):
+    """Gross profit factor of a realised payoff series.
+
+    Payoffs are signed per-trade results in any consistent unit. Zeros
+    belong to neither leg, exactly as in the validation runner.
+
+    Returns None when there is no losing trade: a ratio with no
+    denominator is undefined, not infinite. Returns 0.0 for losses with
+    no wins, which is well defined.
+    """
+    wins = sum(p for p in payoffs if p > 0)
+    losses = -sum(p for p in payoffs if p < 0)
+    if losses <= 0:
+        return None
+    return wins / losses
+
+
+def bootstrap_profit_factor_power(
+    payoffs, *, n_trades, threshold=MIN_GROSS_PROFIT_FACTOR,
+    n_resamples=1000, seed=7,
+):
+    """Probability that `n_trades` drawn from this payoff distribution
+    produce a gross profit factor above `threshold`.
+
+    WHY THIS EXISTS. minimum_detectable_effect() answers "how many
+    samples to detect a hit rate", which is the wrong question for an
+    asymmetric design: the tax gate forces win/loss ratios away from 1,
+    and there the binomial has no closed form worth trusting. Resampling
+    the actual payoff distribution answers the question directly and
+    makes no distributional assumption at all.
+
+    DETERMINISTIC by construction -- an explicit seed, never a global RNG
+    (Constitution Section 5). Two runs over identical inputs are
+    byte-identical.
+
+    NOT a backtest and NOT out-of-sample. It answers only "is this
+    payoff shape statistically distinguishable from the tax threshold at
+    this sample size?" -- a power question, asked before any campaign is
+    locked, from a pilot or prior payoff distribution.
+    """
+    import random
+    if not payoffs:
+        raise ValueError("payoffs must be non-empty")
+    if n_trades < 1:
+        raise ValueError("n_trades must be at least 1")
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be at least 1")
+    rng = random.Random(seed)
+    pool = list(payoffs)
+    cleared = 0
+    for _ in range(n_resamples):
+        draw = [pool[rng.randrange(len(pool))] for _ in range(n_trades)]
+        pf = profit_factor(draw)
+        # An undefined PF (no losing trade in the draw) clears any finite
+        # threshold -- it is an unbroken winning run, not a missing value.
+        if pf is None or pf > threshold:
+            cleared += 1
+    return cleared / n_resamples
+
+
+def required_trades_for_profit_factor(
+    payoffs, *, threshold=MIN_GROSS_PROFIT_FACTOR, target_power=0.80,
+    n_resamples=1000, seed=7, max_trades=20_000,
+):
+    """Smallest n_trades whose bootstrap power reaches `target_power`.
+
+    Doubling search then bisection -- power is monotone in n_trades for a
+    fixed distribution, so this is well defined. Returns None when
+    `max_trades` cannot reach the target, which is the honest answer for
+    a payoff shape that is simply not viable: no sample size rescues a
+    distribution whose expectancy is below the threshold.
+    """
+    lo, hi = 1, 1
+    while hi <= max_trades:
+        if bootstrap_profit_factor_power(payoffs, n_trades=hi, threshold=threshold,
+                                         n_resamples=n_resamples, seed=seed) >= target_power:
+            break
+        lo, hi = hi, hi * 2
+    else:
+        return None
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if bootstrap_profit_factor_power(payoffs, n_trades=mid, threshold=threshold,
+                                         n_resamples=n_resamples, seed=seed) >= target_power:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+
+def derive_acceptance_bar(
+    *, mean_abs_move_bps, horizon_hours, win_loss_ratio=1.0,
+    entry_is_maker=False, exit_is_maker=False, slippage_bps_per_side=0.0,
+    funding_bps_per_day=FUNDING_BPS_PER_DAY,
+):
+    """The per-campaign acceptance bar, DERIVED rather than inherited.
+
+    Returns (bar, components). The bar is the binding constraint of two:
+
+      cost breakeven  -- below it the campaign can pass and lose money
+      tax threshold   -- below it the campaign can profit and still be
+                         untradeable by an Indian taxpayer
+
+    `[R]` Replaces `min_hit_rate = 0.55`, which was copied unexamined
+    into all eight pre-registrations and appears in no derivation
+    anywhere in the repository. It was simultaneously too low to be
+    tradeable and too high to be detectable at the samples available.
+
+    The bar is a floor, not a target. A campaign may pre-register a
+    HIGHER bar; it may never register a lower one.
+    """
+    cost = round_trip_cost_bps(
+        horizon_hours=horizon_hours, entry_is_maker=entry_is_maker,
+        exit_is_maker=exit_is_maker, slippage_bps_per_side=slippage_bps_per_side,
+        funding_bps_per_day=funding_bps_per_day,
+    )
+    breakeven = breakeven_hit_rate(mean_abs_move_bps, cost, win_loss_ratio=win_loss_ratio)
+    tax_bar = tax_viable_hit_rate(
+        win_loss_ratio=win_loss_ratio, mean_abs_move_bps=mean_abs_move_bps, cost_bps=cost)
+    bar = max(breakeven, tax_bar)
+    return bar, {
+        "cost_bps": cost,
+        "breakeven_hit_rate": breakeven,
+        "tax_viable_hit_rate": tax_bar,
+        "binding": "tax" if tax_bar >= breakeven else "cost",
+    }

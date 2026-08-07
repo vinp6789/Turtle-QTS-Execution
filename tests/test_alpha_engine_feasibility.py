@@ -42,6 +42,10 @@ from alpha_engine.feasibility import (
     round_trip_cost_bps,
     survives_vda_tax,
     tax_viable_hit_rate,
+    profit_factor,
+    bootstrap_profit_factor_power,
+    required_trades_for_profit_factor,
+    derive_acceptance_bar,
 )
 
 # Measured 2026-08-06 from Hyperliquid 1h candles, BTC/ETH/SOL pooled,
@@ -387,3 +391,94 @@ class TestCrossSectionalConfiguration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestA1AsymmetricGating(unittest.TestCase):
+    """A1: expectancy / profit-factor gating for asymmetric designs.
+
+    minimum_detectable_effect() answers a hit-rate question. The tax gate
+    forces win/loss ratios away from 1, where that question is the wrong
+    one -- so power is obtained by resampling the payoff distribution
+    itself, assuming nothing about its shape.
+    """
+
+    # A 2:1 design at a 45% hit rate: clears the tax threshold comfortably.
+    GOOD = [2.0] * 45 + [-1.0] * 55
+    # A symmetric design at 55%: gross PF 1.222, below 1.4535.
+    TAX_DEAD = [1.0] * 55 + [-1.0] * 45
+
+    def test_profit_factor_matches_hand_derivation(self):
+        self.assertAlmostEqual(profit_factor([2.0, 2.0, -1.0, -1.0]), 2.0, places=9)
+        self.assertAlmostEqual(profit_factor(self.TAX_DEAD), 55 / 45, places=9)
+
+    def test_profit_factor_undefined_without_a_losing_trade(self):
+        self.assertIsNone(profit_factor([1.0, 2.0]))
+
+    def test_profit_factor_is_zero_with_losses_and_no_wins(self):
+        self.assertEqual(profit_factor([-1.0, -2.0]), 0.0)
+
+    def test_zeros_belong_to_neither_leg(self):
+        self.assertAlmostEqual(profit_factor([2.0, 0.0, -1.0]), 2.0, places=9)
+
+    def test_bootstrap_power_is_deterministic(self):
+        a = bootstrap_profit_factor_power(self.GOOD, n_trades=200, seed=7)
+        b = bootstrap_profit_factor_power(self.GOOD, n_trades=200, seed=7)
+        self.assertEqual(a, b)
+
+    def test_bootstrap_power_rises_with_sample_size(self):
+        small = bootstrap_profit_factor_power(self.GOOD, n_trades=20, seed=7)
+        large = bootstrap_profit_factor_power(self.GOOD, n_trades=500, seed=7)
+        self.assertGreater(large, small)
+
+    def test_a_tax_dead_distribution_never_reaches_power(self):
+        """No sample size rescues a shape whose expectancy is below the bar."""
+        self.assertLess(
+            bootstrap_profit_factor_power(self.TAX_DEAD, n_trades=5000, seed=7), 0.5)
+        self.assertIsNone(
+            required_trades_for_profit_factor(self.TAX_DEAD, max_trades=4000, n_resamples=200))
+
+    def test_required_trades_found_for_a_viable_shape(self):
+        n = required_trades_for_profit_factor(self.GOOD, n_resamples=300, seed=7)
+        self.assertIsNotNone(n)
+        self.assertGreaterEqual(
+            bootstrap_profit_factor_power(self.GOOD, n_trades=n, n_resamples=300, seed=7), 0.80)
+
+    def test_rejects_invalid_inputs(self):
+        with self.assertRaises(ValueError):
+            bootstrap_profit_factor_power([], n_trades=10)
+        with self.assertRaises(ValueError):
+            bootstrap_profit_factor_power([1.0, -1.0], n_trades=0)
+
+
+class TestA2DerivedAcceptanceBar(unittest.TestCase):
+    """A2: the bar is derived per campaign, never inherited."""
+
+    def test_the_inherited_055_was_too_low_at_every_tested_horizon(self):
+        for h in (1, 24, 72, 120):
+            with self.subTest(horizon=h):
+                bar, _ = derive_acceptance_bar(
+                    mean_abs_move_bps=MEAN_ABS_MOVE_BPS[h], horizon_hours=h)
+                self.assertGreater(bar, 0.55)
+
+    def test_24h_symmetric_bar_is_tax_binding(self):
+        bar, c = derive_acceptance_bar(mean_abs_move_bps=218.8, horizon_hours=24)
+        self.assertAlmostEqual(bar, 0.6152, places=4)
+        self.assertEqual(c["binding"], "tax")
+
+    def test_asymmetric_payoffs_lower_the_derived_bar(self):
+        sym, _ = derive_acceptance_bar(mean_abs_move_bps=203.6, horizon_hours=24,
+                                       funding_bps_per_day=0.0)
+        asym, _ = derive_acceptance_bar(mean_abs_move_bps=203.6, horizon_hours=24,
+                                        win_loss_ratio=2.0, funding_bps_per_day=0.0)
+        self.assertLess(asym, sym)
+
+    def test_bar_is_never_below_either_component(self):
+        bar, c = derive_acceptance_bar(mean_abs_move_bps=39.8, horizon_hours=1)
+        self.assertGreaterEqual(bar, c["breakeven_hit_rate"])
+        self.assertGreaterEqual(bar, c["tax_viable_hit_rate"])
+
+    def test_maker_fills_lower_the_bar(self):
+        taker, _ = derive_acceptance_bar(mean_abs_move_bps=39.8, horizon_hours=1)
+        maker, _ = derive_acceptance_bar(mean_abs_move_bps=39.8, horizon_hours=1,
+                                         entry_is_maker=True, exit_is_maker=True)
+        self.assertLess(maker, taker)
