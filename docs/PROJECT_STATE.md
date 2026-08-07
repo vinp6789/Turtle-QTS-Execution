@@ -65,6 +65,31 @@ an authorized critical-defect correction (`PROJECT_CONSTITUTION.md` §9) or
 the outstanding testnet operator actions (`ROADMAP.md` Track B), neither
 gated by nor gating Alpha Engine research.
 
+### Business-first prioritisation rule (2026-08-07)
+
+**Project Alpha's objective is a profitable, deployable systematic
+trading business. Research exists to serve that objective; it is not the
+objective.** When prioritising, ask in this order — a task that answers
+none of these is not prioritised:
+
+1. Does this increase the probability of a **profitable trading business**?
+2. Does this improve our ability to **measure profitability**?
+3. Does this improve **scientific confidence**?
+4. Does this improve **engineering**?
+
+**Two questions, permanently distinguished.** *Scientific:* is this
+hypothesis supported by evidence? *Business:* can this make money after
+realistic costs and constraints? Both matter; neither replaces the other.
+Every campaign now declares which it answers **before it begins**
+(`RESEARCH_PLAYBOOK.md` §2) and ends with **both verdicts** (§8).
+
+**Open milestone — First Measured Equity Curve.** `[M]` Eight campaigns,
+zero returns measured. Achievable now with the gate-rejected
+pipeline-validation strategy; profitability is not required, measurement
+is. Scope and boundary in `ROADMAP.md` A5-M, not restated here.
+
+---
+
 ### Active tracks
 
 Project Alpha now has **two equally important outputs**: validated

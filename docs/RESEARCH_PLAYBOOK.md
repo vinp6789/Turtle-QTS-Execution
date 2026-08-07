@@ -105,6 +105,33 @@ sample is gathered or inspected:
 - The expected failure modes — what would make this hypothesis wrong, or
   its result untrustworthy, stated in advance.
 
+**Campaign-type declaration (mandatory, first line of every
+pre-registration). Exactly one classification. This is not a new
+distinction — `RESEARCH_DECISIONS.md` RD-11 C already recorded that
+"Campaigns 01–05 validate **signals**, not executable strategies." That
+observation is hereby made a forward, binding declaration.**
+
+| | **Type 1 — Signal Validation** | **Type 2 — Strategy Validation** |
+|---|---|---|
+| Asks | Does this information source contain predictive information? | Is this complete strategy economically deployable? |
+| Declares | Feature, threshold, direction, horizon, universe | Everything in Type 1 **plus** entry rules, exit rules, holding period, position sizing, leverage, transaction costs, slippage, funding, tax model, portfolio construction, benchmark |
+| May report | Hit rate, information coefficient, significance, MDE, N_eff, bootstrap, permutation, robustness | All of Type 1 **plus** CAGR, profit factor, payoff ratio, expectancy, Sharpe, max drawdown, win rate, trade count, equity curve, return after costs, return after tax, comparison vs HLP |
+| May conclude | Supported / not supported / unresolved | **deploy · reject economically · inferior to benchmark · commercially viable** |
+| May **never** conclude | Anything about profitability | — |
+
+**A Type 1 campaign must state verbatim in its pre-registration and in
+its evidence `known_limitations`:**
+
+> *"This campaign has not answered the business question."*
+
+**Only a Type 2 campaign may reach a deployment conclusion.** A Type 1
+result is never sufficient grounds to allocate capital, however strong
+its statistics.
+
+`[R]` **All eight closed campaigns are Type 1.** None declared entry
+rules, exits, sizing, costs or a benchmark — see `ALPHA_SCORECARD.md` for
+the per-campaign classification and what each therefore proved.
+
 **Derivation-scope declaration (mandatory, `RESEARCH_DECISIONS.md`
 RD-11 A).** For **each derived quantity** in the specification
 (thresholds, normalizations, rolling statistics), the pre-registration
@@ -315,6 +342,26 @@ optional and is not skipped for a rejected hypothesis — Research Campaign
 the same rigor as an approval would have received, plus explicit lessons
 (raw OI non-stationarity, per-symbol underpowering) that shaped the next
 campaign's design.
+
+**Two separate verdicts are mandatory (2026-08-07). Neither substitutes
+for the other, and they are recorded separately so a strong one cannot
+launder a weak one.**
+
+**Scientific Verdict** — is the evidence statistically reliable? How much
+uncertainty remains? Would replication likely change the conclusion?
+Which assumptions dominate the result?
+
+**Business Verdict** — would this make money? Would I deploy it? Would I
+allocate capital? Does it beat HLP (`[M]` 11.4 %/yr after tax — see
+`MECHANISMS.md`, not restated here)? Does it beat cash? Does it justify
+the engineering complexity? What is the expected business value?
+
+**A Type 1 campaign's Business Verdict is always
+"NOT ANSWERED — signal validation only."** Writing anything else in it is
+the specific error this rule exists to prevent: `[M]` eight campaigns
+produced signal statistics that were repeatedly discussed as though they
+were business outcomes, and the project measured a return exactly zero
+times (`ALPHA_SCORECARD.md` §0).
 
 **Decision point:** none — this stage is a recording obligation, not a
 judgment call. The only failure mode here is skipping it.

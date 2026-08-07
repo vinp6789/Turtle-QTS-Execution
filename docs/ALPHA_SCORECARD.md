@@ -85,6 +85,43 @@ after 31.2 % VDA tax.** Zero effort, no execution risk.
 
 ---
 
+## 1.1 · Historical campaign classification (Type 1 / Type 2)
+
+**Conclusions are unchanged. This explains what each campaign actually
+proved.** Classification per `RESEARCH_PLAYBOOK.md` §2, applied
+retrospectively for clarity only — no verdict, evidence package,
+fingerprint or ledger entry is altered.
+
+| Campaign | Type | Declared entry/exit/sizing/costs? | Therefore proved | Business question |
+|---|---|---|---|---|
+| CAMP-01 Open interest level | **Type 1 — Signal Validation** | No | Nothing about profitability | **NOT ANSWERED** |
+| CAMP-02 Funding, absolute | **Type 1** | No | " | **NOT ANSWERED** |
+| CAMP-03 Funding, venue-relative | **Type 1** | No | " | **NOT ANSWERED** |
+| CAMP-04 Funding delta | **Type 1** | No | " | **NOT ANSWERED** |
+| CAMP-05 OI velocity | **Type 1** | No | " | **NOT ANSWERED** |
+| CAMP-06 Liquidations, daily | **Type 1** *(never ran)* | No | Nothing — deferred at the gate | **NOT ANSWERED** |
+| CAMP-07 OI, long horizon | **Type 1** | No | " | **NOT ANSWERED** |
+| CAMP-08 Liquidation density, hourly | **Type 1** | No | The signal carries no 1 h directional information, **at adequate power** | **NOT ANSWERED** — though its 0.40 bp effect is arithmetically dead against a 9.06 bp cost |
+| trend_momentum *(pipeline validation)* | **Type 1** | Exits declared (ATR), costs not modelled | Signal is significantly **negative** (z = −3.5) | **NOT ANSWERED** |
+
+**`[R]` All nine are Type 1. Project Alpha has never run a Type 2
+campaign.** This is already recorded — RD-11 C states *"Campaigns 01–05
+validate signals, not executable strategies"* — and is confirmed here
+across all nine.
+
+**Consequence, stated plainly:** no campaign in project history was ever
+capable of concluding *deploy*, *reject economically*, *inferior to
+benchmark* or *commercially viable*. Every economic verdict in §1 above
+is an **overlay computed in 2026-08**, not a campaign output.
+
+**The two 2026-08 screens (carry, session boundary) are also not Type 2
+campaigns** — they are outcome-blind feasibility screens that reached
+economic conclusions from measured costs without a trade simulation.
+They are recorded as screens, not campaigns, and produced no evidence
+package.
+
+---
+
 ## 2 · Failure classification — one category each
 
 | Cat | Definition | Count | Which |

@@ -141,6 +141,38 @@ Extract from CAMP-08's harness — the newest and cleanest — once a ninth
 campaign exists to justify it. The eight existing harnesses (4,735 lines)
 are **immutable scientific record and are never refactored.**
 
+### A5-M. MILESTONE — First Measured Equity Curve
+
+**The transition from signal science to business science.** `[M]` Project
+Alpha has run eight campaigns and measured a return **zero times**
+(`ALPHA_SCORECARD.md` §0). This milestone ends that.
+
+**Definition of done — one complete sequence of trades producing:**
+equity curve · profit factor · payoff ratio · expectancy · CAGR ·
+Sharpe · max drawdown · trade distribution · trade count · win rate ·
+return after costs · return after tax.
+
+**Profitability is NOT required. Measurement is.**
+
+**Achievable now, and that is the point.** It needs no approved alpha —
+the gate-rejected pipeline-validation strategy is a perfectly valid
+input, because the deliverable is the *measurement capability*, not the
+result. This deliberately decouples "can we measure a business outcome"
+from "have we found alpha", which have been entangled for eight months.
+
+**Scope boundary vs A5, stated so the RD-11 trigger is not quietly
+broken.** RD-11 defers the **full** HVL until the first SUPPORTED
+hypothesis. This milestone requires a **strict subset**: deterministic
+trade simulation over a fixed, pre-declared rule, plus the metrics above.
+It explicitly does **not** include rolling threshold recalculation,
+rolling normalisation, stop/TP optimisation, or event-conditional
+slippage — all of which remain deferred under RD-11's unchanged trigger.
+Building the subset is Constitution §5-compliant (a present, concrete
+need); building the rest would not be.
+
+**If a formal amendment to RD-11's trigger is wanted, that is a separate
+governance act requiring a new RD — proposed here, not performed.**
+
 ### A5. Historical Validation Layer (HVL)
 
 **Trigger: the first campaign producing a SUPPORTED hypothesis. Nothing is
