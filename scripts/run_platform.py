@@ -32,6 +32,7 @@ from app.observability import configure_logging
 from app.runtime import AppSettings, AppState
 from app.runtime.accounting import AccountingSync
 from app.runtime.engine_builder import _risk_limits, build_engine_from_settings
+from app.runtime.venue_rules import fetch_hyperliquid_rules
 
 from composition_root import build_engine
 from composition_root.deployment import load_deployment_settings
@@ -72,7 +73,17 @@ def _simulated_state(settings, strategies):
     if settings.initial_deposit > 0:
         engine.portfolio_manager.deposit(
             settings.initial_deposit, request_id="app_accounting:initial-deposit:v1")
+    # FIX A: the simulated path must quantize EXACTLY as live does.
+    # AppState.create() fetches these for a live engine; building AppState
+    # directly skipped it, so the engine sized orders to 29 decimal places
+    # -- venue-impossible, and enough to push the portfolio invariant to
+    # the edge of Decimal's 28-significant-digit context. Reuses the live
+    # path's own fetch; no precision logic is duplicated.
+    rules = fetch_hyperliquid_rules(base_url)
+    _log.info("venue quantization rules loaded for %d assets", len(rules))
+
     state = AppState(
+        quantization_rules=rules,
         settings=settings, engine=engine,
         universe=tuple(Symbol(s) for s in config.universe.symbols),
         risk_profile=config.risk.active_profile_params,
