@@ -10,5 +10,14 @@ enforces it.
 """
 
 from .equity_log import SCHEMA_VERSION, EquityLog, idempotency_key, row_from_snapshot
+from .metrics import (
+    cagr, compute, cost_attribution, max_drawdown, period_returns,
+    rolling_returns, sharpe, to_jsonable, total_return, trade_metrics,
+)
 
-__all__ = ["EquityLog", "row_from_snapshot", "idempotency_key", "SCHEMA_VERSION"]
+__all__ = [
+    "EquityLog", "row_from_snapshot", "idempotency_key", "SCHEMA_VERSION",
+    "compute", "to_jsonable", "total_return", "cagr", "sharpe",
+    "max_drawdown", "period_returns", "rolling_returns", "trade_metrics",
+    "cost_attribution",
+]
