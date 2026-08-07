@@ -1,0 +1,32 @@
+# Which strategy plugins the runtime loads. Product configuration, NOT
+# research: nothing here implies a governance decision.
+#
+# A plugin trades only if `enabled = true` -- literally true, nothing else.
+# Every plugin loads through the identical path (alpha_engine.platform),
+# so adding a future alpha strategy means adding a registry entry and a
+# block here, and nothing else.
+#
+# Registered plugins: python -c "from alpha_engine.platform import STRATEGY_REGISTRY; print(sorted(STRATEGY_REGISTRY))"
+
+[[strategies]]
+# PIPELINE VALIDATION STRATEGY -- NOT FOR TRADING -- KNOWN NEGATIVE EXPECTANCY
+#
+# An ENGINE TEST PLUGIN: a unit test that happens to emit deterministic
+# orders. Its purpose is to continuously exercise entries, exits, sizing,
+# portfolio accounting, the order lifecycle, recovery, monitoring and
+# metrics. It is EXPECTED TO LOSE -- the specification was REJECTED by the
+# research gate on 2026-08-06 (hit rate 0.4353 vs a 0.55 bar, z = -3.5).
+#
+# It is not research. It appears in no Alpha Library, Research Ledger,
+# campaign, Mechanism Atlas or scorecard.
+name = "pipeline_validation"
+enabled = true
+
+[strategies.params]
+symbols = ["BTC", "ETH", "SOL"]
+cadence_seconds = 3600
+threshold = "0.40"
+direction_convention = "momentum"
+atr_stop_mult = "2.0"
+atr_t1_mult = "3.0"
+atr_t2_mult = "4.0"
