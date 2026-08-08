@@ -117,11 +117,40 @@ class FileLevelFailures(unittest.TestCase):
 
 
 class EnvironmentOverrides(unittest.TestCase):
-    def test_mode_override(self):
-        path = _write(VALID_TOML)
+    def test_mode_override_may_agree_with_the_file(self):
+        """The variable is retained so a deployment can ASSERT its mode."""
+        path = _write(VALID_TOML)                      # VALID_TOML is mode="paper"
         try:
-            config = load_config(path, env={"TURTLE_EXEC_MODE": "live"})
-            self.assertEqual(config.environment, "live")
+            config = load_config(path, env={"TURTLE_EXEC_MODE": "paper"})
+            self.assertEqual(config.environment, "paper")
+        finally:
+            path.unlink()
+
+    def test_mode_override_contradicting_the_file_fails_closed(self):
+        """REPLACES test_mode_override, which asserted the opposite.
+
+        That test encoded the behaviour that a paper configuration file
+        plus TURTLE_EXEC_MODE=live silently yields a LIVE engine. That is
+        the defect: scripts/run_local.* auto-load a .env setting exactly
+        that variable, so a launcher advertising "paper mode" resolved to a
+        real HyperliquidAdapter. An environment variable must not be able
+        to change the execution mode of a reviewed configuration.
+        """
+        path = _write(VALID_TOML)                      # mode = "paper"
+        try:
+            with self.assertRaises(ConfigValidationError) as ctx:
+                load_config(path, env={"TURTLE_EXEC_MODE": "live"})
+            self.assertIn("mode conflict", str(ctx.exception))
+        finally:
+            path.unlink()
+
+    def test_mode_override_fails_closed_in_the_live_to_paper_direction_too(self):
+        """Symmetric: an operator who believes they are trading and is not
+        has an equally false picture of the system."""
+        path = _write(VALID_TOML.replace('mode = "paper"', 'mode = "live"'))
+        try:
+            with self.assertRaises(ConfigValidationError):
+                load_config(path, env={"TURTLE_EXEC_MODE": "paper"})
         finally:
             path.unlink()
 

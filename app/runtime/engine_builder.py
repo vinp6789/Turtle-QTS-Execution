@@ -8,12 +8,13 @@ lives here -- this module exists so the app layer has a single, testable
 """
 
 from pathlib import Path
-from typing import Mapping, Optional, Tuple
+from typing import Callable, Mapping, Optional, Tuple
 
 import os
 
 from config import RiskProfileParams, load_config
 from exchange_adapter import Symbol
+from hyperliquid_adapter import TransportFn
 from hyperliquid_adapter.transport import MAINNET_BASE_URL, TESTNET_BASE_URL
 from risk_manager import RiskManagerLimits
 
@@ -35,7 +36,10 @@ def _risk_limits(settings: AppSettings) -> RiskManagerLimits:
 
 
 def build_engine_from_settings(
-    settings: AppSettings, env: Optional[Mapping[str, str]] = None
+    settings: AppSettings,
+    env: Optional[Mapping[str, str]] = None,
+    *,
+    transport_factory: Optional[Callable[[str], TransportFn]] = None,
 ) -> Tuple[Engine, Tuple[Symbol, ...], RiskProfileParams, Optional[QuantizationRules]]:
     """Returns (engine, universe, active_risk_profile, quantization_rules).
     Universe and the active RiskProfileParams (from the loaded EngineConfig)
@@ -45,7 +49,16 @@ def build_engine_from_settings(
     quantization_rules (C2): for a LIVE engine, per-asset szDecimals rules
     fetched fail-fast from the venue's meta endpoint -- a live engine must
     never trade without them. None for paper mode (MockExchangeAdapter has
-    no quantization constraints; None preserves prior behavior exactly)."""
+    no quantization constraints; None preserves prior behavior exactly).
+
+    transport_factory: optional venue-transport substitution, called as
+    transport_factory(base_url) -> TransportFn and forwarded to
+    build_engine(transport=...). It takes the base_url because THIS
+    function is the only place that derives it from config, and a caller
+    that re-derived it would be duplicating wiring -- the exact drift this
+    parameter exists to remove. None (the default) leaves every prior
+    caller byte-for-byte unchanged: build_engine receives transport=None
+    and installs hyperliquid_adapter's real transport."""
     e = os.environ if env is None else env
     config = load_config(settings.engine_config_path, env=e)
     deployment = load_deployment_settings(e)
@@ -55,18 +68,23 @@ def build_engine_from_settings(
     store_path = Path(settings.event_store_path)
     store_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Derived once, here, and used for BOTH the transport and the
+    # quantization fetch below. Previously computed inside the live branch;
+    # hoisting it is a pure expression move (no I/O, no config re-read).
+    base_url = MAINNET_BASE_URL if config.exchange.network == "mainnet" else TESTNET_BASE_URL
+
     engine = build_engine(
         config=config,
         deployment=deployment,
         risk_limits=_risk_limits(settings),
         event_store_path=store_path,
         env=e,
+        transport=None if transport_factory is None else transport_factory(base_url),
     )
     universe = tuple(Symbol(s) for s in config.universe.symbols)
 
     quantization_rules: Optional[QuantizationRules] = None
     if config.environment == "live":
-        base_url = MAINNET_BASE_URL if config.exchange.network == "mainnet" else TESTNET_BASE_URL
         try:
             quantization_rules = fetch_hyperliquid_rules(base_url)
         except Exception:

@@ -37,7 +37,10 @@ def main() -> int:
         env = dict(os.environ)
         env["ENGINE_STORE_PATH"] = str(Path(tmp) / "validate.log")
         try:
-            engine, universe, risk_profile = build_engine_from_settings(settings, env=env)
+            # 4-tuple since the C2 quantization_rules change; unpacking 3
+            # made this script raise ValueError on every valid config.
+            engine, universe, risk_profile, _rules = build_engine_from_settings(
+                settings, env=env)
         except Exception as exc:  # noqa: BLE001
             print(f"ENGINE BUILD ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1

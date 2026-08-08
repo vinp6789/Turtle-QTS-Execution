@@ -1,19 +1,21 @@
-"""Run the trading platform WITH strategies loaded from configuration.
+"""THE launcher. Every supported launch path arrives here.
 
-WHY THIS EXISTS ALONGSIDE app.main. `app.main` builds AppState with no
-strategies, so the engine runs cycles and trades nothing -- which is what
-it did for every run before P1. Both seams needed to fix that already
-existed and had simply never been used:
-
-    AppState.create(settings, strategies=...)   accepts them
-    create_app(state=...)                       accepts a prebuilt state
-
-So this entry point touches NO frozen module. It reads
-config/strategies.toml, builds the enabled plugins through
-alpha_engine.platform, and hands the result to the frozen engine.
+Docker, run_local.ps1, run_local.sh and a developer shell all invoke this
+module; they differ only in environment variables. There is no second
+runtime tree, and `app.main` remains only as the ASGI object for process
+managers that import one (uvicorn app.main:app) -- it builds the same
+AppState through the same constructor.
 
     python -m scripts.run_platform
+    EXECUTION_MODE=simulated python -m scripts.run_platform
     STRATEGY_CONFIG_PATH=config/strategies.toml python -m scripts.run_platform
+
+CONSTRUCTION IS NOT DUPLICATED HERE. Every mode -- paper, simulated, live
+-- is built by AppState.create(). This module chooses a transport and a
+strategy set; it never assembles an engine. It previously carried a copy
+of that constructor for the simulated path, and the copy silently lost
+the durable emergency-stop restoration that AppState.create() performs.
+That is why the transport_factory seam exists.
 
 Every loaded plugin is logged with its kind and warning at startup, so an
 operator can never be unaware that an engine-test plugin is emitting
@@ -23,22 +25,12 @@ orders.
 import logging
 import os
 import sys
-from pathlib import Path
 
 import uvicorn
 
 from app.api import create_app
 from app.observability import configure_logging
 from app.runtime import AppSettings, AppState
-from app.runtime.accounting import AccountingSync
-from app.runtime.engine_builder import _risk_limits, build_engine_from_settings
-from app.runtime.venue_rules import fetch_hyperliquid_rules
-
-from composition_root import build_engine
-from composition_root.deployment import load_deployment_settings
-from config import load_config
-from exchange_adapter import Symbol
-from hyperliquid_adapter.transport import MAINNET_BASE_URL, TESTNET_BASE_URL
 
 from alpha_engine.platform import StrategyLoadError, describe, load_strategies
 from execution_sim import SimulatedTransport
@@ -47,51 +39,55 @@ from measurement import EquityLog, build_all, to_json
 _log = logging.getLogger("turtle.platform")
 
 
-def _simulated_state(settings, strategies):
-    """Build the engine with SimulatedTransport injected.
+def _load_env_file(path: str) -> int:
+    """Populate os.environ from a KEY=VALUE file. EXPLICIT AND OPT-IN.
 
-    Replicates build_engine_from_settings, differing in exactly one
-    argument -- transport= -- because that function does not expose the
-    seam and is frozen. The adapter, order lifecycle, position tracking,
-    event store and accounting are the REAL ones; only the venue's
-    answers are simulated.
+    NEVER AUTO-DISCOVERED, and this is a safety property rather than a
+    preference. config/loader.py:81 applies TURTLE_EXEC_MODE as an
+    UNCONDITIONAL override of the config file's mode, and this
+    repository's .env sets it to "live". Auto-loading .env would
+    therefore have silently converted every paper launch -- including
+    Docker's default -- into a live Hyperliquid engine bound to the real
+    venue. Loading happens only when ENV_FILE is set explicitly.
+
+    A variable already present in the environment always wins, so an
+    explicit `KEY=value python -m scripts.run_platform` can never be
+    overridden by a file.
+
+    This is not a configuration system. It populates os.environ, which
+    AppSettings.from_env() and config.load_config already read; no value
+    is interpreted here and no precedence is invented.
     """
-    env = os.environ
-    config = load_config(settings.engine_config_path, env=env)
-    deployment = load_deployment_settings(env)
-    store_path = Path(settings.event_store_path)
-    store_path.parent.mkdir(parents=True, exist_ok=True)
+    loaded = 0
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if key in os.environ:          # explicit environment wins
+                continue
+            os.environ[key] = value.strip().strip('"').strip("'")
+            loaded += 1
+    return loaded
 
-    base_url = MAINNET_BASE_URL if config.exchange.network == "mainnet" else TESTNET_BASE_URL
-    transport = SimulatedTransport(base_url=base_url)
-    _log.warning("EXECUTION IS SIMULATED -- real market data, local deterministic fills")
 
-    engine = build_engine(
-        config=config, deployment=deployment, risk_limits=_risk_limits(settings),
-        event_store_path=store_path, env=env, transport=transport,
-    )
-    if settings.initial_deposit > 0:
-        engine.portfolio_manager.deposit(
-            settings.initial_deposit, request_id="app_accounting:initial-deposit:v1")
-    # FIX A: the simulated path must quantize EXACTLY as live does.
-    # AppState.create() fetches these for a live engine; building AppState
-    # directly skipped it, so the engine sized orders to 29 decimal places
-    # -- venue-impossible, and enough to push the portfolio invariant to
-    # the edge of Decimal's 28-significant-digit context. Reuses the live
-    # path's own fetch; no precision logic is duplicated.
-    rules = fetch_hyperliquid_rules(base_url)
-    _log.info("venue quantization rules loaded for %d assets", len(rules))
+def _transport_factory():
+    """The SimulatedTransport factory, or None for the real venue.
 
-    state = AppState(
-        quantization_rules=rules,
-        settings=settings, engine=engine,
-        universe=tuple(Symbol(s) for s in config.universe.symbols),
-        risk_profile=config.risk.active_profile_params,
-        strategies=tuple(strategies),
-        accounting=AccountingSync(engine, target_leverage=settings.target_leverage),
-    )
-    state.simulated_transport = transport      # for equity persistence
-    return state
+    Returning None is what every non-simulated launch does, and None is
+    exactly what build_engine received before this seam existed -- so the
+    paper and live paths are bit-for-bit what they always were.
+    """
+    if os.environ.get("EXECUTION_MODE", "").lower() != "simulated":
+        return None
+
+    def factory(base_url: str) -> SimulatedTransport:
+        _log.warning("EXECUTION IS SIMULATED -- real market data, local deterministic fills")
+        return SimulatedTransport(base_url=base_url)
+
+    return factory
 
 
 def _attach_equity_log(state, path):
@@ -146,8 +142,16 @@ def _attach_scoreboard_api(app, state, entries):
 
 
 def main() -> int:
+    # Before AppSettings.from_env(), because that is what reads the result.
+    env_file = os.environ.get("ENV_FILE")
+    if env_file:
+        count = _load_env_file(env_file)
+
     settings = AppSettings.from_env()
     configure_logging(settings.log_level, settings.log_format)
+    if env_file:
+        _log.warning("loaded %d variable(s) from %s -- note that TURTLE_EXEC_MODE "
+                     "in such a file OVERRIDES the config file's mode", count, env_file)
 
     path = os.environ.get("STRATEGY_CONFIG_PATH", "config/strategies.toml")
     try:
@@ -165,10 +169,11 @@ def main() -> int:
         if entry.warning:
             _log.warning("%s", entry.warning)
 
-    if os.environ.get("EXECUTION_MODE", "").lower() == "simulated":
-        state = _simulated_state(settings, strategies)
-    else:
-        state = AppState.create(settings, strategies=strategies)
+    # ONE construction path for every mode. The transport is the only
+    # thing that varies, and it varies through a parameter -- not a branch
+    # into a second constructor.
+    state = AppState.create(
+        settings, strategies=strategies, transport_factory=_transport_factory())
     _attach_equity_log(state, os.environ.get("EQUITY_LOG_PATH", "data/measurement/equity.jsonl"))
     app = create_app(state=state)
     _attach_scoreboard_api(app, state, entries)

@@ -79,7 +79,33 @@ def _read_toml(path: Path) -> dict:
 def _apply_env_overrides(raw: dict, env: Mapping[str, str]) -> dict:
     raw = dict(raw)
     if _ENV_MODE_OVERRIDE in env:
-        raw["environment"] = {**raw.get("environment", {}), "mode": env[_ENV_MODE_OVERRIDE]}
+        # FAIL CLOSED ON CONTRADICTION. This override used to REPLACE the
+        # file's mode unconditionally, which meant an environment variable
+        # could silently turn a reviewed paper configuration into a live
+        # venue engine -- and did: scripts/run_local.* auto-load a .env
+        # containing TURTLE_EXEC_MODE=live, so a launcher whose banner said
+        # "paper mode" resolved deploy/engine.paper.toml to environment
+        # 'live' against the real venue.
+        #
+        # The variable is retained (deployments set it to ASSERT the mode
+        # they expect) but it may now only AGREE with the file. Disagreement
+        # in EITHER direction is an error: paper->live because it is unsafe,
+        # live->paper because an operator silently not trading when they
+        # believe they are is equally a false picture of the system. There
+        # is deliberately NO force flag -- to change the mode, edit the
+        # reviewed configuration file, which is the artefact under review.
+        file_mode = raw.get("environment", {}).get("mode")
+        env_mode = env[_ENV_MODE_OVERRIDE]
+        if file_mode is not None and env_mode != file_mode:
+            raise ConfigValidationError([
+                f"environment.mode conflict: configuration file declares "
+                f"mode={file_mode!r} but {_ENV_MODE_OVERRIDE}={env_mode!r}. "
+                f"Refusing to let an environment variable change the execution "
+                f"mode of a reviewed configuration. Either unset "
+                f"{_ENV_MODE_OVERRIDE}, set it to {file_mode!r}, or use a "
+                f"configuration file whose mode is {env_mode!r}."
+            ])
+        raw["environment"] = {**raw.get("environment", {}), "mode": env_mode}
     if _ENV_SIGNING_KEY_REF_OVERRIDE in env:
         raw["secrets"] = {**raw.get("secrets", {}), "signing_key_ref": env[_ENV_SIGNING_KEY_REF_OVERRIDE]}
     if _ENV_TELEGRAM_TOKEN_REF_OVERRIDE in env:

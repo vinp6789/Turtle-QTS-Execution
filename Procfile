@@ -1,1 +1,1 @@
-web: python -m app.main
+web: python -m scripts.run_platform

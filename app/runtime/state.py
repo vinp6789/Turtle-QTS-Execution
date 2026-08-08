@@ -19,10 +19,11 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from config import RiskProfileParams
 from exchange_adapter import Symbol
+from hyperliquid_adapter import TransportFn
 from risk_manager import CorrelationInfo
 
 from execution_state_machine import State as EsmState, Trigger as EsmTrigger
@@ -88,8 +89,16 @@ class AppState:
         env=None,
         strategies: Tuple[Strategy, ...] = (),
         quantization_rules: Optional[QuantizationRules] = None,
+        transport_factory: Optional[Callable[[str], TransportFn]] = None,
     ) -> "AppState":
-        engine, universe, risk_profile, built_rules = build_engine_from_settings(settings, env)
+        """transport_factory is forwarded verbatim to
+        build_engine_from_settings; see its docstring. It exists so a
+        caller needing a substituted venue transport (execution_sim)
+        uses THIS constructor rather than assembling a parallel one --
+        the copied constructor that lost the emergency-stop restoration
+        below is why this parameter exists rather than a second path."""
+        engine, universe, risk_profile, built_rules = build_engine_from_settings(
+            settings, env, transport_factory=transport_factory)
         # C1 fix: one-time equity seed. The FIXED request_id makes this
         # exactly-once per event store (durable idempotency): every later
         # boot -- and any change to the env var -- is a no-op.
