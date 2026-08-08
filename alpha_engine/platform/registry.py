@@ -12,6 +12,7 @@ branches on it nowhere. Deleting the engine-test plugin later is one
 config edit and one registry line -- zero architectural work.
 """
 
+from decimal import Decimal
 from enum import Enum
 from types import MappingProxyType
 from typing import Callable, Mapping
@@ -103,7 +104,44 @@ def _build_pipeline_validation(params: Mapping) -> Strategy:
     )
 
 
+def _build_lifecycle_probe(params: Mapping) -> Strategy:
+    """The one-shot lifecycle probe: entry, reduce-only exit, silence.
+
+    Exists because no production component has ever emitted
+    reduce_only=True, so POSITION_CLOSED had never been reached anywhere
+    in this repository's history. Infrastructure validation only -- never
+    research, never a scorecard entry, never a profitability claim.
+
+    Defaults are chosen so the EXISTING sizing identity yields a small
+    notional (wide entry stop) and a full close (narrow exit stop, clamped
+    by reduce_only). See lifecycle_probe.py for the arithmetic and for the
+    honest statement of the safety model.
+    """
+    from exchange_adapter import Symbol
+
+    from .lifecycle_probe import LifecycleProbeStrategy
+
+    return LifecycleProbeStrategy(
+        Symbol(str(params.get("symbol", "BTC"))),
+        stop_fraction=Decimal(str(params.get("stop_fraction", "0.30"))),
+        exit_stop_fraction=Decimal(str(params.get("exit_stop_fraction", "0.075"))),
+        limit_slip=Decimal(str(params.get("limit_slip", "0.001"))),
+    )
+
+
 STRATEGY_REGISTRY = MappingProxyType({
+    "lifecycle_probe": PluginEntry(
+        name="lifecycle_probe",
+        kind=PluginKind.ENGINE_TEST,
+        factory=_build_lifecycle_probe,
+        description=(
+            "One-shot entry -> reduce-only exit -> stop. Validates the close "
+            "half of the canonical execution path against a real venue."),
+        warning=(
+            "LIFECYCLE PROBE -- INFRASTRUCTURE VALIDATION ONLY -- NOT A TRADING "
+            "STRATEGY -- NO STOP IS PLACED AT THE VENUE; SAFETY RESTS ON SMALL "
+            "NOTIONAL, SUPERVISED EXECUTION AND MANUAL CLOSE FALLBACK"),
+    ),
     "pipeline_validation": PluginEntry(
         name="pipeline_validation",
         kind=PluginKind.ENGINE_TEST,

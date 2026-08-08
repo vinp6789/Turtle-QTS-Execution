@@ -28,6 +28,23 @@ class EventType(Enum):
     SYSTEM_STARTED = "SYSTEM_STARTED"
     SYSTEM_STOPPED = "SYSTEM_STOPPED"
 
+    TRADE_ATTRIBUTION = "TRADE_ATTRIBUTION"
+    """Why a cycle decided what it decided: the strategy behind each
+    intent, the thesis and point-in-time features it acted on, the sizing
+    inputs, and the risk decision -- including intents that were REJECTED
+    or SKIPPED and therefore never became orders.
+
+    ADDITIVE ONLY (§9, 2026-08-08). No producer, consumer, payload schema
+    or replay behaviour changes; nothing matches EventType exhaustively,
+    so existing stores replay unchanged. It is written by non-frozen
+    platform code through the ordinary public append(), exactly like any
+    other event.
+
+    It exists because that information is COMPUTED EVERY CYCLE and then
+    discarded when CycleResult goes out of scope -- in particular the
+    vetoed intents, without which any future analysis would be trained
+    only on trades risk permitted (survivorship bias by construction)."""
+
 
 def _deep_freeze(value: Any) -> Any:
     """Recursively convert dicts to MappingProxyType and lists to tuples.

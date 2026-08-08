@@ -123,3 +123,53 @@ says so.
 **Closing the two open items requires only a longer observation window —
 no further engineering.** They are recorded here rather than waived, and
 this document is amended when they close.
+
+---
+
+## Addendum A — 2026-08-08 · the close path was unreachable, not untriggered
+
+**Everything above is preserved exactly as written on 2026-08-07.** This
+addendum corrects an *interpretation* in it. No original figure, verdict
+or line has been altered, and none of the measured evidence changes.
+
+**The claim being corrected.** §1 item 2 states: *"Zero `POSITION_CLOSED`
+events. **ATR stops were not reached in the observation window.**"*
+
+**Why it is unsupported.** A repository-wide audit on 2026-08-08 found
+that no production component can close a position at all:
+
+| Evidence | Finding |
+|---|---|
+| `grep reduce_only=True` across production | **Zero occurrences.** Only capability declarations (`mock_adapter.py:43`, `hyperliquid_adapter/capabilities.py:29`) |
+| `alpha_engine/execution_bridge/candle_strategy.py:281` | emits `reduce_only=False` — entries only, never exits |
+| `hyperliquid_adapter/capabilities.py:51-55` | `supports_trigger_orders=False` — *"the venue supports trigger orders, but they are unexpressible through [the contract]"* |
+| `exchange_adapter.OrderType` | `MARKET`, `LIMIT` only — no stop/trigger type exists |
+| `intent.stop_price` consumers | `sizing/calculator.py` and `risk_manager/manager.py` **only — never transmitted to the venue** |
+| Stop-breach monitor | none exists |
+| `auto_flatten_enabled` | `false` in every shipped config |
+
+**Even if every ATR stop had been breached, nothing would have closed
+anything.** The original sentence attributes the absence to market
+conditions; the actual cause is an absent capability.
+
+**The correct historical statement.** *"Zero `POSITION_CLOSED` events. No
+production component emits a reduce-only exit intent, and no venue-side
+stop exists, so the close path was unreachable during qualification —
+not merely untriggered."*
+
+**Does the qualification verdict change? No.** Item 2 was already
+`NOT QUALIFIED` and item 12 already `NOT QUALIFIED`. The measured results
+— 42 events, 8 equity rows, fee reconciliation to ten decimal places —
+are unaffected and were re-verified on 2026-08-08 as byte-identical.
+
+**What does change is §5's remedy.** The statement *"Closing the two open
+items requires only a longer observation window — no further
+engineering"* is **wrong for item 2**. No observation window of any
+length could have closed a position. Closing item 2 requires engineering:
+a component that emits `reduce_only=True`. Item 12 (funding) is
+unaffected — that genuinely does require only elapsed time.
+
+**Why this is recorded as an addendum.** §1 is point-in-time evidence.
+The original wording is preserved so the error, and its correction,
+remain auditable. Reviewers should read item 2 together with this
+addendum.

@@ -9,6 +9,44 @@
 # Registered plugins: python -c "from alpha_engine.platform import STRATEGY_REGISTRY; print(sorted(STRATEGY_REGISTRY))"
 
 [[strategies]]
+# LIFECYCLE PROBE -- INFRASTRUCTURE VALIDATION ONLY -- DISABLED BY DEFAULT
+#
+# One entry, one reduce-only exit, then silence. It exists solely to prove
+# the close half of the canonical execution path, which no production
+# component had ever reached: as of 2026-08-08 nothing emitted
+# reduce_only=True, so POSITION_CLOSED had never occurred.
+#
+# NOT research. Never enters the Alpha Library, Research Ledger, a
+# campaign, the Mechanism Atlas, a scorecard, or any profitability claim.
+#
+# SAFETY MODEL, STATED PLAINLY: small notional + supervised execution +
+# manual UI close fallback. NOT a stop-protected trade -- no venue-side
+# trigger order exists and no stop-breach monitor runs, so the stop
+# prices below are SIZING INPUTS ONLY and nothing will act on them. If
+# the process stops between entry and exit, the position stays open at
+# the venue until closed by hand.
+#
+# stop_fraction is WIDE on purpose: through the existing sizing identity
+# (size = equity * risk_pct / |entry - stop|) a wide stop yields a SMALL
+# position. At equity 999 and BTC ~64,900, 0.30 gives ~0.00026 BTC
+# (~$17), above the venue's $10 minimum. risk_pct_per_trade is untouched.
+#
+# exit_stop_fraction is NARROW on purpose: it makes the computed exit size
+# exceed the open position, and reduce_only then clamps it to exactly the
+# remaining quantity -- a full close rather than a residue.
+#
+# Enable ONLY for an explicitly authorised, supervised testnet run, and
+# set it back to false immediately afterwards.
+name = "lifecycle_probe"
+enabled = false
+
+[strategies.params]
+symbol = "BTC"
+stop_fraction = "0.30"
+exit_stop_fraction = "0.075"
+limit_slip = "0.001"
+
+[[strategies]]
 # PIPELINE VALIDATION STRATEGY -- NOT FOR TRADING -- KNOWN NEGATIVE EXPECTANCY
 #
 # An ENGINE TEST PLUGIN: a unit test that happens to emit deterministic

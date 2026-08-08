@@ -117,6 +117,78 @@ def _attach_equity_log(state, path):
     return state
 
 
+def _attach_attribution(state, entries):
+    """Persist WHY each cycle decided what it decided.
+
+    Wraps run_one_cycle at the SAME seam the equity log already uses --
+    no new execution path, and the trading path never depends on this.
+    Every value written is already on the CycleResult that run_cycle
+    returns and would otherwise discard, including the vetoed intents.
+
+    FAILURE IS VISIBLE, NEVER SILENT. Execution must not depend on
+    attribution persistence, so a failure is caught -- but it then emits
+    a HEALTH_ALERT naming the cycle and sets attribution_degraded, so the
+    cycle can never be presented as fully auditable.
+    """
+    from event_store import EventType
+
+    from alpha_engine.platform.attributed_strategy import AttributedStrategy, StrategyIdentity
+    from measurement import attribution
+
+    by_name = {e.name: e for e in entries}
+    wrapped = []
+    for s in state.strategies:
+        entry = by_name.get(s.name)
+        if entry is None:
+            # Fall back on the plugin list positionally only when a name
+            # does not match; kind is still registry-sourced, never guessed.
+            entry = list(by_name.values())[len(wrapped)] if len(wrapped) < len(by_name) else None
+        identity = StrategyIdentity(
+            strategy_id=entry.name if entry else s.name,
+            strategy_version=str(getattr(s, "version", "")),
+            strategy_kind=entry.kind.value if entry else "UNKNOWN",
+        )
+        wrapped.append(AttributedStrategy(s, identity))
+    state.strategies = tuple(wrapped)
+
+    inner = state.run_one_cycle
+
+    def wrapped_cycle():
+        result = inner()
+        try:
+            thesis = {}
+            features = {}
+            for s in state.strategies:
+                target = s.inner if isinstance(s, AttributedStrategy) else s
+                t = getattr(target, "thesis", None)
+                if t:
+                    thesis[s.identity.strategy_id if isinstance(s, AttributedStrategy) else s.name] = t
+                features.update(getattr(target, "features_by_intent", {}) or {})
+            failure = attribution.record(
+                state.engine.event_store, result, state.strategies,
+                thesis_by_strategy=thesis, features_by_intent=features)
+        except Exception as exc:                       # noqa: BLE001
+            failure = f"{type(exc).__name__}: {exc}"
+        if failure:
+            state.attribution_degraded = True
+            _log.error("ATTRIBUTION DEGRADED for cycle %s: %s",
+                       getattr(result, "evaluated_at_utc", "?"), failure)
+            try:
+                state.engine.event_store.append(EventType.HEALTH_ALERT, {
+                    "source": "attribution", "severity": "DEGRADED",
+                    "cycle_evaluated_at_utc": getattr(result, "evaluated_at_utc", None),
+                    "error": failure,
+                })
+            except Exception:                          # noqa: BLE001
+                pass                                   # never fail a cycle
+        return result
+
+    state.run_one_cycle = wrapped_cycle
+    state.attribution_degraded = False
+    _log.info("attribution -> TRADE_ATTRIBUTION events in the engine event store")
+    return state
+
+
 def _attach_scoreboard_api(app, state, entries):
     """GET /scoreboard -- the business report, as JSON.
 
@@ -135,6 +207,16 @@ def _attach_scoreboard_api(app, state, entries):
             strategies=state.strategies, equity_log=state.equity_log,
             store=state.engine.event_store,
             position_manager=state.engine.position_manager, entries=entries))
+
+    @router.get("/attribution/health", tags=["monitoring"])
+    def attribution_health():
+        """Whether every cycle so far is fully auditable. ADDITIVE: the
+        frozen /health is untouched. A consumer must not treat cycles as
+        auditable while degraded is true."""
+        degraded = bool(getattr(state, "attribution_degraded", False))
+        return {"attribution_degraded": degraded,
+                "fully_auditable": not degraded,
+                "cycles_run": state.cycles_run}
 
     app.include_router(router)
     _log.info("scoreboard API -> GET /scoreboard")
@@ -174,6 +256,7 @@ def main() -> int:
     # into a second constructor.
     state = AppState.create(
         settings, strategies=strategies, transport_factory=_transport_factory())
+    _attach_attribution(state, entries)
     _attach_equity_log(state, os.environ.get("EQUITY_LOG_PATH", "data/measurement/equity.jsonl"))
     app = create_app(state=state)
     _attach_scoreboard_api(app, state, entries)
