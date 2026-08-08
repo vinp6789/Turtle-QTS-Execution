@@ -12,12 +12,18 @@ the repository. If information is missing, say so explicitly — do not guess.
 
 ## 1. Which documents to read first (in order)
 
-1. `docs/CLAUDE_ONBOARDING.md` — this file.
-2. `docs/ARCHITECTURE_VERSION.md` — version, frozen modules, baseline.
-3. `docs/MODULE_INVENTORY.md` — the nine modules, APIs, deps, test counts.
-4. `docs/DEPENDENCY_GRAPH.md` — real import graph and layering.
-5. `docs/REPOSITORY_STRUCTURE.md` — the tree.
-6. `docs/DEVELOPMENT_WORKFLOW.md` — how work proceeds from here.
+1. **`docs/PROJECT_STATE.md` — always first.** The single authoritative
+   execution-state document: current phase, objective, blockers, active
+   work, next actions. Never reconstruct current state from any other
+   document, including this one.
+2. `docs/PROJECT_CONSTITUTION.md` — the unchanging vision, principles and
+   governance invariants.
+3. `docs/CLAUDE_ONBOARDING.md` — this file.
+4. `docs/ARCHITECTURE_VERSION.md` — version, frozen modules, baseline.
+5. `docs/MODULE_INVENTORY.md` — the nine modules, APIs, deps, test counts.
+6. `docs/DEPENDENCY_GRAPH.md` — real import graph and layering.
+7. `docs/REPOSITORY_STRUCTURE.md` — the tree.
+8. `docs/DEVELOPMENT_WORKFLOW.md` — how work proceeds from here.
 
 Then read the actual `__init__.py` and module docstrings of any package you
 will touch. The docstrings are authoritative on responsibility and scope.

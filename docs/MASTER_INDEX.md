@@ -163,7 +163,7 @@ candidates.)*
 | | **Execution Engine total** | | **~820** (see `FINAL_PRODUCTION_AUDIT.md`) |
 
 Alpha Engine, historical pipeline, and research-harness tests bring the
-**full suite to 1,942 passing, 0 failed** (re-verified 2026-08-07 — see
+**full suite to 2,102 passing, 0 failed** (re-verified 2026-08-08 — see
 `PROJECT_STATE.md` Executive Summary for the current authoritative figure;
 this is a living number, don't hardcode it elsewhere).
 

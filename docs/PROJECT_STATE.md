@@ -37,9 +37,9 @@ they're found, never silently carried forward.
 | **Current phase** | Alpha Engine: research phase, reorganising from campaign-driven to track-driven. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
 | **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
-| **Current blocker** | **Slippage has never been measured** — blocked on testnet credentials (see Current Blockers → Operational). Every cost figure in the project is therefore a lower bound. |
+| **Current blocker** | **Testnet account funding.** `[M]` 2026-08-08: `accountValue=0.0`, `withdrawable=0.0`. **Credentials exist and are valid** — the earlier "blocked on credentials" claim was disproved on 2026-08-08 (`.env` has held a valid wallet key and deployment address since 2026-07-21; the smoke test's credential check passes once that file is loaded). Consequence: **slippage has never been measured**, so every cost figure in the project is a lower bound. Next action is operator-side — faucet + spot→perp transfer. |
 | **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
-| **Full regression** | **1,942 passed, 0 failed** (verified 2026-08-07) |
+| **Full regression** | **2,102 passed, 0 failed** (verified 2026-08-08, commit `be3eb26`) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 | **Active tracks** | **A Alpha Research · B Product Development · C Reverse Engineering · D Continuous Learning** — parallel streams; at most one holds an active *engineering* task at a time. **Track D is at stage D-0 (defined, zero code)** — its inputs do not exist yet. See `ROADMAP.md`. |
@@ -99,7 +99,7 @@ Three tracks run **in parallel**; research no longer gates the product.
 | Track | Owns | State |
 |---|---|---|
 | **A · Alpha Research** | Methodology (A1–A5) and mechanism discovery (A6–A7). Governance, evidence standards and the five-stage gate are **unchanged** | **ACTIVE** — A1, the expectancy/profit-factor gate |
-| **B · Product Development** | Execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment (B1–B4) and the data platform (B5–B7) | **ACTIVE** — B1 (D6 commit) done; B2 blocked on credentials |
+| **B · Product Development** | Execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment (B1–B4) and the data platform (B5–B7) | **ACTIVE** — B1 (D6 commit) done; B2 blocked on **testnet account funding** (not credentials — those exist and are valid) |
 | **C · Reverse Engineering** | Structured competitive intelligence on working systematic businesses | **ACTIVE** — output contract is `MECHANISMS.md` rows only |
 | **D · Continuous Learning** | Observe → measure → explain → rank → **recommend**. Never deploys | **D-0 — DEFINED, ZERO CODE.** Every input is currently empty: 0 approved models, 0 live trades, 0 fills. Activates in stages as data appears |
 
@@ -306,7 +306,10 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
   `python -m alpha_engine.historical.backfill_liquidations --start ... --end ...`.
 - `boto3>=1.34.0` / `lz4>=4.3.0` declared in `requirements.txt`, scoped
   to the historical pipeline only (both lazily imported; re-verified the
-  deployed `app.main` entrypoint still imports neither).
+  deployed entrypoint still imports neither — `app.main` at the time;
+  the canonical launcher is `python -m scripts.run_platform` since
+  `be3eb26`, with `app.main` retained only as a compatibility ASGI
+  object).
 - 19 new tests (11 `collect_liquidations`, 8 CLI). Full regression at the
   time: 1,661 passed, 92 subtests, 0 failed — **later found incomplete,
   see below.**
@@ -527,7 +530,7 @@ pre-fix code and passes against the fix).
 - ~~Zero overlap between mark-price coverage and the liquidation archive~~ — **closed 2026-07-29.** Hyperliquid-native daily-candle mark price now covers 2025-07-27→2026-07-28 (367/367/367 rows, BTC/ETH/SOL) — full overlap with the liquidation archive's own window. Binance secondary-source coverage for the same window still filling in (see Active Work) but is not itself blocking.
 - ~~Measured cross-symbol correlation (+0.85–0.90) means raw per-fold counts overstate power~~ — **closed 2026-08-05 (RD-16)**, and now generalised: the dependence haircut is enforced in code for every future campaign.
 - **OPEN — the gate cannot score an asymmetric design.** The VDA tax gate makes symmetric-payoff designs untradeable (`[M]` 0.6169 required hit rate), but `feasibility.assess()` scores only a binomial hit rate. An expectancy/profit-factor gate with bootstrap power is required before any new pre-registration is locked. **This is the current Track A task.**
-- **OPEN — slippage has never been measured.** `slippage_bps_per_side` defaults to 0.0 deliberately, so every breakeven in the project is a **lower bound** and every feasibility verdict is optimistic. Blocked on testnet credentials.
+- **OPEN — slippage has never been measured.** `slippage_bps_per_side` defaults to 0.0 deliberately, so every breakeven in the project is a **lower bound** and every feasibility verdict is optimistic. Blocked on **testnet account funding**, `[M]` re-verified 2026-08-08: `accountValue=0.0`, `withdrawable=0.0`. **Not blocked on credentials** — that claim was disproved on 2026-08-08; a valid wallet key and deployment address have been present in `.env` since 2026-07-21. Owner: operator (faucet + spot→perp transfer).
 
 **Operational**
 - **OPEN — testnet credentials absent.** `TURTLE_DEPLOYMENT_ACCOUNT_ADDRESS` and a testnet `TURTLE_SECRET_HYPERLIQUID_WALLET_KEY_V1`, plus a funded wallet and a spot→perp transfer, are required before slippage can be measured or any order placed. Operator action; not a code defect.
@@ -608,7 +611,7 @@ see `RESEARCH_BACKLOG.md` §1.
 10a. ~~Outcome-blind N_eff screen (3.2)~~ — **done 2026-08-05: DEFER.**
 10b. ~~Campaign 07, longer-horizon OI~~ — **done 2026-08-05: all six REJECTED on merit (RD-17).** Horizon closed as a rescue path.
 11. **Hourly-liquidation feasibility screen (RD-16 §E)** — the last near-free experiment in the queue.
-11. Before starting any *future* long-running collection job beyond the two currently in flight: close the launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`) — see Current Blockers → Operational.
+11. Before starting any *future* long-running collection job (`[M]` 2026-08-08: `liq_backfill` and `deep_history_backfill` are both **no longer running** — argv-verified via `scripts/job_status.py`; only `live_recorder` is live): close the launcher concurrency race (`scripts/run_detached_job.py::_acquire_lock`) — see Current Blockers → Operational.
 
 ---
 
