@@ -261,12 +261,35 @@ class RiskManager:
 
     @staticmethod
     def _timestamps_to_check(portfolio_snapshot, open_positions, funding_info, correlation_info):
+        # Only OBSERVATIONS belong here. An observation is a reading of the
+        # outside world that decays: marks, funding, correlation. Its age
+        # measures how far reality may have moved since we looked.
+        #
+        # POSITION TIMESTAMPS ARE DELIBERATELY EXCLUDED (§9 fix, 2026-08-08).
+        # PositionSnapshot.updated_at_utc is written ONLY from
+        # event.timestamp_utc (position_manager/manager.py:191,231,261,264,274),
+        # so it records the last STATE MUTATION, not a refresh. A position's
+        # quantity, side and entry price are event-exact and do not decay: an
+        # old stamp means nothing has happened, not that the data is unreliable.
+        # Nothing refreshes it either -- AccountingSync.update_marks() pushes
+        # fresh marks to the PORTFOLIO, never to the position -- so every
+        # position became permanently "stale" max_stale_data_seconds after it
+        # opened, and RiskManager then FAIL_SAFE-rejected every later intent
+        # for it INCLUDING ITS OWN reduce-only close. Measured on Hyperliquid
+        # testnet 2026-08-08: a real position was unclosable through the
+        # canonical path at age 344s, and the position had to be closed by
+        # hand at the venue.
+        #
+        # The check could not have delivered the safety it implied, either: if
+        # local position state ever diverged from the venue, the divergence
+        # would arrive AS AN EVENT and therefore carry a FRESH stamp. Detecting
+        # that is ExchangeAdapter.reconcile()'s job -- it compares local against
+        # venue positions every cycle -- and remains untouched.
+        #
+        # Freshness checks apply to data that actually becomes stale.
         pairs = []
         if portfolio_snapshot is not None:
             pairs.append(("portfolio_snapshot", portfolio_snapshot.updated_at_utc))
-        if open_positions is not None:
-            for pos in open_positions:
-                pairs.append((f"position:{pos.position_id}", pos.updated_at_utc))
         if funding_info is not None:
             pairs.append(("funding_info", funding_info.as_of_utc))
         if correlation_info is not None:
