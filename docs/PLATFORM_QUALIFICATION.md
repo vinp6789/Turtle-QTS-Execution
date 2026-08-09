@@ -173,3 +173,145 @@ unaffected — that genuinely does require only elapsed time.
 The original wording is preserved so the error, and its correction,
 remain auditable. Reviewers should read item 2 together with this
 addendum.
+
+---
+
+## Addendum B — 2026-08-09 · the close path is now reachable and live-proven, and item 2 is still NOT QUALIFIED
+
+**Everything above, Addendum A included, is preserved exactly as
+written.** This addendum records new evidence. It alters no original
+figure, status, verdict or line, and it changes no count: **10 of 12
+QUALIFIED; items 2 and 12 remain `NOT QUALIFIED`.**
+
+**The triggering event.** Addendum A concluded that closing item 2
+*"requires engineering: a component that emits `reduce_only=True`"*. That
+component was built, and two supervised lifecycles were then executed
+against the Hyperliquid **testnet** with `strategy_kind = engine_test`.
+The first failed for a reason a capability audit could not have found;
+the second succeeded.
+
+**Lifecycle #1, 2026-08-08 — the exit was emitted, and refused.** A
+canonical-path entry filled a real position. The automated reduce-only
+close was then rejected by `RiskManager` with
+`FAIL_SAFE / STALE_DATA`, violated limit
+`position:pm:default:1:position(age=344.576899s)`. The position could not
+be closed through the engine at all and was **closed by hand at the
+venue** (`cloid = None`). Addendum A had found **one** obstruction — no
+emitter. There were **two**.
+
+**Root cause.** `PositionSnapshot.updated_at_utc` records the last
+position-state **mutation**, not an observation: nothing refreshes it
+between open and close, because `AccountingSync.update_marks()` pushes
+fresh marks to the *portfolio*, never to the position. `RiskManager`
+carried it in its observation-freshness set, so every position became
+permanently stale `max_stale_data_seconds` after opening, and every later
+intent for it was `FAIL_SAFE`-rejected — **including its own reduce-only
+close**. Treating a mutation stamp as freshness data was the
+architectural defect.
+
+**The correction — Option B, `788729e`.** Position-state timestamps were
+removed from `RiskManager`'s observation-freshness set. Every genuine
+observation check is intact: `portfolio_snapshot.updated_at_utc`,
+`funding_info.as_of_utc`, `correlation_info.as_of_utc`, and the
+future-timestamp guard all still `FAIL_SAFE`.
+
+**Regression evidence.** Ten dedicated stale-position tests were added;
+**six were confirmed failing against the pre-fix implementation** with
+the live signature above, and four prove that genuine freshness
+protection still fires while an open position is present. Total
+regression at the time of the fix: **2,152 passed, 0 failed**.
+
+**Lifecycle #2, 2026-08-09 — live evidence.** ENGINE_TEST only, testnet
+only, executed through the canonical path by a supervised runner
+(`9a1f142`, 54 tests; full regression **2,206 passed**; no frozen-module
+change). The probe was enabled solely through a temporary
+out-of-repository configuration; shipped `config/strategies.toml` was
+never modified.
+
+| Measured | Value |
+|---|---|
+| Entry | `0.00025` BTC filled through the canonical path |
+| Ageing before the close | **≈195 s of real elapsed time**, past the **150 s** `max_stale_data_seconds` threshold — no clock injection, no timestamp manipulation |
+| Risk decision on the aged close | **`APPROVED`** — the exact condition that returned `FAIL_SAFE / STALE_DATA` in lifecycle #1 |
+| Close intent | `reduce_only=True`, canonical path, engine-generated `cloid` (`0x1ce3e84b…`); the venue clamped the deliberately over-asked size to the remaining position |
+| Close outcome | filled; **`POSITION_CLOSED` recorded — the first in this project's history** |
+| Venue after | **flat**: positions `0`, `openOrders` `0` |
+| Reconciliation | local ↔ venue **matched** |
+| Operator involvement | **no manual close, no retry, no direct `adapter.place_order`, no risk bypass**; clean shutdown, no process left running |
+
+**What this proves.** The **execution half** of the close path is
+live-proven on testnet: an exit intent can be emitted, approved for an
+**aged** position, routed through the canonical path, filled, recorded as
+`POSITION_CLOSED`, and reconciled flat. **Option B (`788729e`) is
+live-proven for the stale-position freshness defect.** Addendum A's
+sentence *"Even if every ATR stop had been breached, nothing would have
+closed anything"* was true of the 2026-08-07 run and is now superseded
+prospectively: something can close something.
+
+**What this does NOT prove — item 2 remains `NOT QUALIFIED`.** The
+lifecycle **narrows** item 2's remaining scope; it does not satisfy it.
+
+- **A · Measurement half — unexercised.** §1 item 2 requires that
+  trade-level metrics stop being *"unexercised end-to-end"*, and §3 names
+  `profit_factor`, `payoff_ratio`, `win_rate`, `expectancy`,
+  `average_win/loss` and `average_holding_seconds` as having **no live
+  confirmation**. That is still true. The measurement layer was not in
+  this lifecycle's path — `EquityLog` is constructed only in
+  `scripts/run_platform.py`, the platform was never started, and no
+  scoreboard was produced. Events and attribution existing is **not** the
+  same as the metrics being exercised end-to-end.
+- **B · Production-emitter criterion — unmet.** The only
+  `reduce_only=True` emitter in this lifecycle was the **ENGINE_TEST**
+  lifecycle probe, which is **disabled in shipped configuration**. Six of
+  Addendum A's seven audit rows were re-verified on 2026-08-09 and are
+  **unchanged**: `candle_strategy.py:281` still emits `reduce_only=False`;
+  `supports_trigger_orders=False`; `exchange_adapter.OrderType` is still
+  `MARKET`, `LIMIT` only; no stop-breach monitor exists;
+  `auto_flatten_enabled = false` in every shipped config. Only the
+  *"zero `reduce_only=True` in production"* row is superseded, and only by
+  an ENGINE_TEST plugin. **No production strategy can autonomously close a
+  position, and no production close/trigger path has been demonstrated.**
+- **C · Sample.** One close, one symbol, one direction. The ✅ rows in §1
+  rest on populations — 42 events, 8 rows, 26 metrics — not on a single
+  observation.
+
+**Item 12 (funding) — unchanged, `NOT QUALIFIED`.** The hold was ≈199
+seconds and `cumFunding` was **0**: no funding settlement occurred, so the
+path is still **untested, not proven**. Addendum A's judgment that item 12
+*"genuinely does require only elapsed time"* stands.
+
+**Other §3 statements — unchanged, with one narrowing.** The **`FAIL`
+verdict has still never fired**; no verdict of any kind was produced here.
+*"Slippage is zero by construction (Phase 1 simulator)"* remains true of
+the simulated run. *"The simulated venue fills every order in full at its
+limit price… the gap is unmeasured"* is now **incomplete rather than
+false**: real fills were partial and executed inside the limit, giving
+**several observed legs — not a statistical distribution**, and no
+performance or profitability inference may be drawn from them.
+
+**Research boundary.** `strategy_kind = engine_test` throughout. This
+evidence is recorded in **no** Alpha Library entry, **no** Research
+Ledger entry, **no** Research Decisions entry, **no** Alpha Scorecard and
+**no** campaign. It is **execution-infrastructure qualification evidence
+only**, and establishes nothing about alpha, edge, profitability,
+execution quality, or mainnet readiness.
+
+**Explicit qualification status after this addendum.**
+
+| | |
+|---|---|
+| Overall | **10 of 12 QUALIFIED** — unchanged |
+| Item 2 · close | ❌ **NOT QUALIFIED** — *partially resolved*: execution half live-proven, measurement half unexercised, production-emitter criterion unmet |
+| Item 12 · funding | ❌ **NOT QUALIFIED** — unchanged |
+| All other items | unchanged |
+
+**A note on §5's remedy.** Addendum A was right to retract *"no further
+engineering"* for item 2. The engineering has now been done twice — an
+exit emitter, then the `788729e` freshness correction — and item 2 is
+still open, because it additionally requires the measurement layer and a
+production emitter.
+
+**Why this is recorded as an addendum.** For the same reason Addendum A
+was: §1 is point-in-time evidence, and it is preserved so that the
+sequence — failure, root cause, fix, regression, live proof — remains
+auditable. Reviewers should read item 2 together with **both** addenda.
