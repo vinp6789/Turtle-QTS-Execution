@@ -37,9 +37,9 @@ they're found, never silently carried forward.
 | **Current phase** | Alpha Engine: research phase, reorganising from campaign-driven to track-driven. Execution Engine: frozen, dormant, stable, no live capital. |
 | **Overall completion toward long-term vision** | ~50–55% (`docs/STRATEGIC_GAP_ANALYSIS.md`; platform is no longer the bottleneck — a validated alpha signal is) |
 | **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
-| **Current blocker** | **No funding, credential or transfer blocker exists.** `[M]` verified 2026-08-08 on the configured deployment address `0x127643A7eaa55Cd7157224737cB0146AD1Cc1269`: `userAbstraction` = **`unifiedAccount`**; unified trading equity **999.0 USDC**. Under unified account one USDC balance collateralises cross-margin perp positions, so **no spot→perp transfer is required or possible** — the UI's transfer control is disabled for exactly that reason. The legacy `clearinghouseState.marginSummary.accountValue = 0` is **perp-position-scoped and is NOT evidence of an unfunded account** (two earlier conclusions to the contrary were wrong and are retracted). Credentials present and valid since 2026-07-21. **Open item: slippage has never been measured** — `userFills` = 0, no real venue order has ever been submitted, so every cost figure remains a lower bound. **Next operational step: one controlled real Hyperliquid testnet order** (requires explicit authorisation). |
+| **Current blocker** | **No funding, credential or transfer blocker exists.** `[M]` verified 2026-08-08 on the configured deployment address `0x127643A7eaa55Cd7157224737cB0146AD1Cc1269`: `userAbstraction` = **`unifiedAccount`**; unified trading equity **999.0 USDC**. Under unified account one USDC balance collateralises cross-margin perp positions, so **no spot→perp transfer is required or possible** — the UI's transfer control is disabled for exactly that reason. The legacy `clearinghouseState.marginSummary.accountValue = 0` is **perp-position-scoped and is NOT evidence of an unfunded account** (two earlier conclusions to the contrary were wrong and are retracted). Credentials present and valid since 2026-07-21. **Two supervised ENGINE_TEST lifecycles have now been executed** (`userFills` = 5) — see Active Work for the full chronology. **The second, on 2026-08-09, proved the automated aged-position close: a position aged ≈195 s (past the 150 s `max_stale_data_seconds` threshold) was closed automatically through the canonical path, RiskManager approving it.** `[M]` venue flat, `openOrders` = 0, reconciliation matched, cleanup clean. **Open items are now measurement and coverage, not capability:** slippage remains a handful of observations rather than a distribution, funding reconciliation is untested, and the `FAIL` verdict has never fired live. No position is currently open and no platform process is running. |
 | **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
-| **Full regression** | **2,102 passed, 0 failed** (verified 2026-08-08, commit `be3eb26`) |
+| **Full regression** | **2,206 passed, 0 failed, 0 skipped** (verified 2026-08-09, commit `9a1f142` — includes the 10 stale-position tests from Option B `788729e` and the 54 supervised-lifecycle runner tests) |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 | **Active tracks** | **A Alpha Research · B Product Development · C Reverse Engineering · D Continuous Learning** — parallel streams; at most one holds an active *engineering* task at a time. **Track D is at stage D-0 (defined, zero code)** — its inputs do not exist yet. See `ROADMAP.md`. |
@@ -99,7 +99,7 @@ Three tracks run **in parallel**; research no longer gates the product.
 | Track | Owns | State |
 |---|---|---|
 | **A · Alpha Research** | Methodology (A1–A5) and mechanism discovery (A6–A7). Governance, evidence standards and the five-stage gate are **unchanged** | **ACTIVE** — A1, the expectancy/profit-factor gate |
-| **B · Product Development** | Execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment (B1–B4) and the data platform (B5–B7) | **ACTIVE** — B1 (D6 commit) done; B2 is **not blocked by funding, credentials or any transfer** (unified account, 999.0 USDC usable collateral). It awaits only the first authorised real testnet order |
+| **B · Product Development** | Execution, risk, sizing, portfolio construction, monitoring, paper trading, deployment (B1–B4) and the data platform (B5–B7) | **ACTIVE** — B1 (D6 commit) done. B2 is **not blocked by funding, credentials or any transfer** (unified account, 999.0 USDC usable collateral). Two supervised ENGINE_TEST lifecycles have executed, and the second closed automatically through the canonical path, giving **entry and exit slippage observations**. B2 is **not complete**: these are a small number of observations, not a distribution, and the roadmap's remaining B2 items (OBS-1, testnet checklist and soak, mainnet gate) are untouched |
 | **C · Reverse Engineering** | Structured competitive intelligence on working systematic businesses | **ACTIVE** — output contract is `MECHANISMS.md` rows only |
 | **D · Continuous Learning** | Observe → measure → explain → rank → **recommend**. Never deploys | **D-0 — DEFINED, ZERO CODE.** Every input is currently empty: 0 approved models, 0 live trades, 0 fills. Activates in stages as data appears |
 
@@ -264,6 +264,97 @@ Funding family: **NEAR-EXHAUSTED**. Full detail: `docs/RESEARCH_LEDGER.md`.
 ---
 
 ## Active Work
+
+**First supervised testnet lifecycle + stale-position defect (2026-08-08).**
+ENGINE_TEST infrastructure validation only — **not alpha evidence, not
+profitability evidence, not campaign evidence**, and it appears in no Alpha
+Library, Research Ledger or Alpha Scorecard. Recorded in order, without
+rewriting what actually happened:
+
+- **A.** Attribution and lifecycle-probe infrastructure implemented
+  (`49f1c17`): `TRADE_ATTRIBUTION` event, `AttributedStrategy`,
+  `LifecycleProbeStrategy` (`PluginKind.ENGINE_TEST`, shipped disabled).
+- **B.** First real engine-test entry authorised by the operator.
+- **C.** Entry traversed the canonical path — Strategy → Portfolio →
+  Sizing → Risk → Execution → OrderManager → HyperliquidAdapter → real
+  testnet `/exchange` — and **filled**: 0.00025 BTC @ 64,956.0, oid
+  `57590625205`, fee 0.007307.
+- **D.** Trade attribution recorded (strategy id/version/kind, thesis,
+  point-in-time features, sizing inputs, risk decision).
+- **E.** Automated reduce-only close attempted through the same path.
+- **F.** **RiskManager rejected the close**: `Decision.FAIL_SAFE`,
+  `ReasonCode.STALE_DATA`,
+  `position:pm:default:1:position:stale(age=344.576899s)` — because
+  `position.updated_at_utc` had aged beyond `max_stale_data_seconds=150`.
+- **G.** Investigation proved `PositionSnapshot.updated_at_utc` records the
+  **last position-state mutation**, not observation freshness: it is written
+  only from `event.timestamp_utc`, and `AccountingSync.update_marks()`
+  refreshes the *portfolio*, never the position. Every position therefore
+  became permanently "stale" 150 s after opening.
+- **H.** **Position closed manually at the venue** (oid `57592128390` @
+  65,022.0), because the canonical path could not close it.
+- **I.** Option B selected: remove the position timestamp from the
+  observation-freshness set; genuine portfolio/funding/correlation checks
+  and future-timestamp protection unchanged; **no `reduce_only` bypass**.
+- **J.** Ten regression tests added (`tests/test_risk_manager_stale_position.py`)
+  — six fail against the pre-fix implementation with the live failure
+  signature; four prove genuine freshness protection is intact.
+- **K.** Full regression **2,152 passed, 0 failed, 0 skipped** (at the time of the fix).
+- **L.** Option B committed as **`788729e`**.
+- **M.** ~~The automated aged-position close remains LIVE-UNPROVEN.~~
+  **True when written on 2026-08-08 and SUPERSEDED on 2026-08-09** by the
+  second supervised lifecycle below. At the time, Option B was validated at
+  the risk-evaluation and regression layer only and no close had completed
+  through the engine against a live venue. Recorded rather than deleted:
+  the point at which the fix was unproven is part of the record.
+
+**Second supervised testnet lifecycle — the automated aged-position close
+is now LIVE-PROVEN (2026-08-09).** ENGINE_TEST infrastructure validation
+only, `strategy_kind = engine_test` throughout. **Not alpha evidence, not
+profitability evidence, not a performance result**, and recorded in no
+Alpha Library, Research Ledger, Research Decisions, Alpha Scorecard or
+campaign.
+
+- **N.** Supervised lifecycle runner implemented and committed (`9a1f142`,
+  54 tests). Its design is a direct response to lifecycle #1's operational
+  failure: reporting cannot terminate the critical path, cleanup is
+  guaranteed, and preflight verifies every interface before an order can
+  exist.
+- **O.** One authorised lifecycle executed via the canonical path with
+  `lifecycle_probe` enabled only through a temporary out-of-repository
+  configuration; shipped `config/strategies.toml` was never modified and
+  the probe remains disabled there.
+- **P.** Entry filled: **0.00025 BTC total**, in two fills on one order —
+  `0.00002 @ 64,577.0` and `0.00023 @ 64,576.0` — limit `64,631`,
+  `exchange_order_id 57612502844`.
+- **Q.** Position aged **≈195 s** of real elapsed time, past the 150 s
+  `max_stale_data_seconds` threshold. No clock injection, no timestamp
+  manipulation.
+- **R.** **RiskManager APPROVED the aged reduce-only close** — the exact
+  condition that produced `FAIL_SAFE / STALE_DATA` in lifecycle #1.
+- **S.** Close submitted through the canonical path with
+  `reduce_only=True`, `exchange_order_id 57612592085`; the venue clamped
+  the deliberately over-asked `0.00104` to the actual position size.
+- **T.** Close filled **0.00025 @ 64,542.0**, fee `0.00726`,
+  `closedPnl -0.0085`. **`POSITION_CLOSED` recorded — the first in this
+  project's history.**
+- **U.** Venue ended **flat**: positions 0, `openOrders` 0, `userFills` 5.
+  Local/venue reconciliation **matched**; cleanup clean; **no manual
+  intervention, no retry, no risk bypass, no direct
+  `adapter.place_order`**. The close carries an engine-generated `cloid`
+  (`0x1ce3e84b…`), which is what distinguishes it from lifecycle #1's
+  manual close (`cloid = None`).
+- **V.** **Option B (`788729e`) is therefore LIVE-PROVEN for the
+  stale-position defect.** That claim is bounded: it establishes that an
+  aged position can be closed automatically through the canonical risk
+  path on testnet. It establishes **nothing** about alpha, edge,
+  profitability, statistical execution quality, or mainnet/production
+  readiness.
+- **W.** Still open: **funding reconciliation** (`cumFunding` was 0 over a
+  199 s hold — needs elapsed time), the **`FAIL` verdict has never fired
+  live**, and slippage remains **a small number of observations, not a
+  distribution**. `PLATFORM_QUALIFICATION.md` is deliberately unamended
+  pending its own separate review.
 
 **P0 chain closed this session (2026-07-29):**
 - `data/alpha_engine_research/` (880 KB, 36 files) now tracked in git —
@@ -530,7 +621,18 @@ pre-fix code and passes against the fix).
 - ~~Zero overlap between mark-price coverage and the liquidation archive~~ — **closed 2026-07-29.** Hyperliquid-native daily-candle mark price now covers 2025-07-27→2026-07-28 (367/367/367 rows, BTC/ETH/SOL) — full overlap with the liquidation archive's own window. Binance secondary-source coverage for the same window still filling in (see Active Work) but is not itself blocking.
 - ~~Measured cross-symbol correlation (+0.85–0.90) means raw per-fold counts overstate power~~ — **closed 2026-08-05 (RD-16)**, and now generalised: the dependence haircut is enforced in code for every future campaign.
 - **OPEN — the gate cannot score an asymmetric design.** The VDA tax gate makes symmetric-payoff designs untradeable (`[M]` 0.6169 required hit rate), but `feasibility.assess()` scores only a binomial hit rate. An expectancy/profit-factor gate with bootstrap power is required before any new pre-registration is locked. **This is the current Track A task.**
-- **OPEN — slippage has never been measured.** `slippage_bps_per_side` defaults to 0.0 deliberately, so every breakeven in the project is a **lower bound** and every feasibility verdict is optimistic. **Not blocked on credentials, funding, or any transfer** — all three were investigated and disproved on 2026-08-08. `[M]` `userAbstraction` = `unifiedAccount` with 999.0 USDC unified trading equity; under that mode a single USDC balance collateralises perp positions and **no spot→perp transfer exists**. The measurement is outstanding for one reason only: **no real venue order has ever been submitted** (`userFills` = 0). Closing it requires one authorised real testnet order, not operator funding.
+- **OPEN — slippage now has a handful of observations; it is still not measured at size.** `slippage_bps_per_side` still defaults to 0.0, so every breakeven in the project remains a **lower bound** and every feasibility verdict remains optimistic. **Not blocked on credentials, funding, or any transfer** — all three were investigated and disproved on 2026-08-08. `[M]` `userAbstraction` = `unifiedAccount` with 999.0 USDC unified trading equity; under that mode a single USDC balance collateralises perp positions and **no spot→perp transfer exists**.
+
+  `[M]` **Execution observations to date (ENGINE_TEST, both lifecycles):**
+
+  | | |
+  |---|---|
+  | Lifecycle 1 entry (2026-08-08) | BTC **0.00025**, limit **65,006**, fill **64,956**, **−50 vs limit (favourable)**, fee **0.007307**, oid `57590625205` |
+  | Lifecycle 1 exit | **65,022** — **manually closed in the Hyperliquid testnet UI**, so **no automated exit observation** |
+  | Lifecycle 2 entry (2026-08-09) | BTC **0.00025** in two fills, **0.00002 @ 64,577.0** + **0.00023 @ 64,576.0**, limit **64,631**, oid `57612502844` |
+  | Lifecycle 2 exit | **0.00025 @ 64,542.0**, limit **64,485**, fee **0.00726**, `closedPnl` **−0.0085**, oid `57612592085` — **automated, through the canonical path** |
+
+  **These are individual observations, not a distribution, and they support no performance conclusion.** Both legs of lifecycle 2 happened to fill better than their limits; that is a market coincidence, not a result. Closing B2 requires the remaining roadmap items, not merely more fills.
 
 **Operational**
 - ~~**OPEN — testnet credentials absent.**~~ **DISPROVED 2026-08-08, together with the two successor claims that replaced it.** Three conclusions were wrong in sequence and all are retracted: (1) *"credentials missing"* — `TURTLE_DEPLOYMENT_ACCOUNT_ADDRESS` (len 42) and `TURTLE_SECRET_HYPERLIQUID_WALLET_KEY_V1` (len 66) have been in `.env` since 2026-07-21; (2) *"account unfunded"* — came from querying only `clearinghouseState` (perp-scoped) and ignoring spot; (3) *"spot→perp transfer pending"* — `[M]` `userAbstraction` returns **`unifiedAccount`**, under which one USDC balance collateralises perp positions and the transfer neither is required nor exists. **Verified state: 999.0 USDC usable collateral, no funding blocker.** Recorded rather than deleted so the failure mode stays visible: each wrong conclusion came from checking one endpoint and generalising, and each survived a cleanup pass because that pass searched for a phrase instead of the concept.

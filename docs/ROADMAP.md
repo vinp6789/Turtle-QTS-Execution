@@ -286,15 +286,38 @@ additive work outside the frozen boundary, or an operator action.
 
 Built and tested; additive only. No frozen module's public API changed.
 
-### B2. Measure realised slippage at size — **blocked on operator action**
+### B2. Measure realised slippage at size — **entry and exit observed; NOT complete**
 
-The single most valuable unmeasured input in the project. Every breakeven
-is a lower bound until this exists. Requires:
+The single most valuable under-measured input in the project. Every
+breakeven is a lower bound until this exists.
 
-1. Move the plaintext `env` file to `.env`; decide on wallet-key rotation
-   before any mainnet use (`FINAL_PRODUCTION_AUDIT.md` SEC-1).
-2. Testnet spot→perp balance transfer + a live-mode testnet config
-   (`FINAL_PRODUCTION_AUDIT.md` §4).
+**Prerequisites 1 and 2 below are DISPROVED and no longer apply
+(2026-08-08).** `[M]` Credentials are present and valid (since
+2026-07-21); the deployment address is verified; the account is
+`unifiedAccount` with **999 USDC** wallet/spot collateral; under that
+account model a **spot→perp transfer is neither required nor available**.
+B2 is therefore **no longer blocked by operator funding or credentials**.
+
+`[M]` **Two supervised ENGINE_TEST lifecycles have occurred.** The first
+(2026-08-08) gave one entry observation — 0.00025 BTC, limit 65,006, fill
+64,956 (−50 favourable), fee 0.007307 — but no exit observation, because
+its automated close was rejected by the stale-position defect and the
+position was closed manually at the venue. The second (2026-08-09), after
+Option B (`788729e`), completed **entry and automated reduce-only close**
+through the canonical path: entry 0.00025 BTC in two fills (0.00002 @
+64,577.0 + 0.00023 @ 64,576.0) against limit 64,631, and close 0.00025 @
+64,542.0 against limit 64,485, fee 0.00726. **The aged-position automated
+close is therefore live-proven** (see `PROJECT_STATE.md` Active Work).
+
+**B2 remains NOT COMPLETE.** These are a small number of individual
+observations, not a distribution, and items 3–5 below are untouched.
+
+1. ~~Move the plaintext `env` file to `.env`~~ — **done**; wallet-key
+   rotation before any mainnet use still applies
+   (`FINAL_PRODUCTION_AUDIT.md` SEC-1).
+2. ~~Testnet spot→perp balance transfer~~ — **not applicable under
+   `unifiedAccount`**; a live-mode testnet config exists
+   (`config/simulated.toml`) and was used for the first entry.
 3. Fix `AppState.last_error` never clearing (OBS-1) before gating a soak
    test's pass/fail criterion on it.
 4. Execute the full testnet checklist and a 24–72 h soak
