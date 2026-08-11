@@ -248,5 +248,112 @@ class TestPhase1ScopeIsHonest(unittest.TestCase):
             self.assertEqual(body["response"]["data"]["statuses"][0]["filled"]["avgPx"], px)
 
 
+class TestReduceOnlyIsEnforced(unittest.TestCase):
+    """A reduce-only order may only ever SHRINK a position.
+
+    THE DEFECT THIS REPRODUCES. _place() parsed the wire "r" flag into
+    _orders and never consulted it again, so an over-asked close filled
+    in full. Measured 2026-08-10 in the simulated qualification run: a
+    reduce-only SELL of 0.01042 against a +0.00256 long filled 0.01042
+    and left a -0.00786 SHORT open, while the engine above recorded
+    POSITION_CLOSED. The two views of the same account disagreed.
+
+    WHY OVER-ASKING IS CORRECT, NOT A CALLER BUG. lifecycle_probe sizes
+    its exit deliberately larger than the position so reduce_only clamps
+    to a FULL close rather than leaving a residue, and the real venue
+    does exactly that -- measured on Hyperliquid testnet in lifecycle #2,
+    0.00104 requested -> 0.00025 filled. The simulator is the path this
+    project validates everything on "up to testnet", so it has to agree.
+    """
+
+    @staticmethod
+    def _fill_sz(body):
+        entry = body["response"]["data"]["statuses"][0]
+        return entry["filled"]["totalSz"] if "filled" in entry else None
+
+    def _long(self, t, sz="0.00256", px="64901"):
+        """Open a long the way the probe does, then hand back its size."""
+        t(BASE + "/exchange", _order(buy=True, px=px, sz=sz), 10)
+        return Decimal(sz)
+
+    def test_oversized_reduce_only_close_is_clamped_to_the_position(self):
+        """The exact measured case: 0.01042 asked against 0.00256 open."""
+        t = _new()
+        self._long(t)
+        body = t(BASE + "/exchange",
+                 _order(buy=False, px="64774", sz="0.01042", reduce_only=True), 10).body
+        self.assertEqual(self._fill_sz(body), "0.00256",
+                         "reduce-only fill must be clamped to the open position")
+        self.assertEqual(t.snapshot()["open_positions"], {},
+                         "position must be flat, not flipped short")
+
+    def test_oversized_reduce_only_leaves_no_opposite_side_residue(self):
+        """The flip is the harmful half of the defect: assert the SIGN."""
+        t = _new()
+        self._long(t)
+        t(BASE + "/exchange",
+          _order(buy=False, px="64774", sz="0.01042", reduce_only=True), 10)
+        for coin, size in t.snapshot()["open_positions"].items():
+            self.assertGreaterEqual(Decimal(size), 0, f"{coin} flipped short")
+
+    def test_exact_size_reduce_only_close_flattens_with_no_residual(self):
+        t = _new()
+        qty = self._long(t)
+        body = t(BASE + "/exchange",
+                 _order(buy=False, px="64774", sz=str(qty), reduce_only=True), 10).body
+        self.assertEqual(Decimal(self._fill_sz(body)), qty)
+        self.assertEqual(t.snapshot()["open_positions"], {})
+
+    def test_partial_reduce_only_close_leaves_the_correct_remainder(self):
+        t = _new()
+        self._long(t, sz="0.01000")
+        body = t(BASE + "/exchange",
+                 _order(buy=False, px="64774", sz="0.00400", reduce_only=True), 10).body
+        self.assertEqual(Decimal(self._fill_sz(body)), Decimal("0.00400"))
+        self.assertEqual(Decimal(t.snapshot()["open_positions"]["BTC"]), Decimal("0.00600"))
+
+    def test_reduce_only_with_no_position_creates_nothing(self):
+        """Rejected, not filled -- {"error": ...} is the shape
+        hyperliquid_adapter.adapter._parse_place_result already maps."""
+        t = _new()
+        body = t(BASE + "/exchange",
+                 _order(buy=False, px="64774", sz="0.00500", reduce_only=True), 10).body
+        entry = body["response"]["data"]["statuses"][0]
+        self.assertIn("error", entry)
+        self.assertEqual(t.snapshot()["open_positions"], {})
+        self.assertEqual(t.snapshot()["fill_count"], 0, "a rejected order must not fill")
+
+    def test_reduce_only_on_the_same_side_as_the_position_cannot_add(self):
+        """A BUY against a LONG reduces nothing, so it must not fill."""
+        t = _new()
+        self._long(t)
+        body = t(BASE + "/exchange",
+                 _order(buy=True, px="64901", sz="0.00100", reduce_only=True), 10).body
+        self.assertIn("error", body["response"]["data"]["statuses"][0])
+        self.assertEqual(Decimal(t.snapshot()["open_positions"]["BTC"]), Decimal("0.00256"))
+
+    def test_reduce_only_buy_closes_a_short(self):
+        """Both directions, so the clamp is not accidentally long-only."""
+        t = _new()
+        t(BASE + "/exchange", _order(buy=False, px="64901", sz="0.00256"), 10)
+        body = t(BASE + "/exchange",
+                 _order(buy=True, px="64774", sz="0.01042", reduce_only=True), 10).body
+        self.assertEqual(self._fill_sz(body), "0.00256")
+        self.assertEqual(t.snapshot()["open_positions"], {})
+
+    def test_normal_orders_are_unaffected_by_the_clamp(self):
+        """REGRESSION: non-reduce-only behaviour must be untouched --
+        opening, adding, and even reversing all still fill in full."""
+        t = _new()
+        t(BASE + "/exchange", _order(buy=True, px="100000", sz="0.01000"), 10)
+        body = t(BASE + "/exchange", _order(buy=True, px="100000", sz="0.00500"), 10).body
+        self.assertEqual(self._fill_sz(body), "0.00500", "a normal add must fill in full")
+        self.assertEqual(Decimal(t.snapshot()["open_positions"]["BTC"]), Decimal("0.01500"))
+        body = t(BASE + "/exchange", _order(buy=False, px="100000", sz="0.02000"), 10).body
+        self.assertEqual(self._fill_sz(body), "0.02000",
+                         "a normal order may still reverse -- only reduce-only may not")
+        self.assertEqual(Decimal(t.snapshot()["open_positions"]["BTC"]), Decimal("-0.00500"))
+
+
 if __name__ == "__main__":
     unittest.main()

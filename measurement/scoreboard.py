@@ -73,21 +73,56 @@ def closed_position_ids(store) -> List[str]:
 def closed_trades(store, position_manager) -> List[Dict[str, Any]]:
     """One record per closed position, shaped for metrics.trade_metrics.
 
-    Every field is the position manager's own figure. A position that
+    Every figure originates in the position manager. A position that
     cannot be read is SKIPPED and never fabricated -- a missing trade is
     better than an invented one.
+
+    WHY realized_pnl IS NORMALISED HERE. metrics.trade_metrics documents
+    its input contract as "realized_pnl is NET of fees" and derives
+    gross = realized_pnl + fees_paid + funding_paid. PositionSnapshot's
+    realized_pnl does not meet that contract: pnl.leg_realized_pnl
+    subtracts only the CLOSING leg's fee, while fees_paid accumulates the
+    entry fill's fee too (position_manager/manager.py:230). Feeding the
+    raw field in therefore added the entry fee back without it ever
+    having been subtracted, and gross came out ABOVE price PnL by exactly
+    that amount -- measured 2026-08-10 on the corrected lifecycle:
+    reported -0.2530262760 against a price PnL of -0.32766, a difference
+    of 0.0746337240 = the entry fee. The bias is one-directional
+    (fees are positive), so gross_profit_factor and the VDA gate were
+    both optimistic -- the direction that lets a losing strategy be
+    called deployable.
+
+    THE ADAPTATION IS THE INVERSE OF THE FROZEN FORMULA, NOT A SECOND
+    ONE. Each ClosedLeg carries the leg fee that leg_realized_pnl
+    subtracted, so `leg.realized_pnl + leg.fee` re-derives that leg's
+    price PnL using the position manager's own numbers -- no price
+    arithmetic, no side handling and no fee ledger is reimplemented here.
+    Everything downstream keeps one convention:
+
+        gross = price PnL, before all costs
+        net   = gross - fees_paid - funding_paid
+        gross = net + fees_paid + funding_paid   (metrics, unchanged)
+
+    A closed position with no readable legs is skipped for the same
+    reason an unreadable position is: its exit fee is unknowable, and a
+    trade reported on a guessed cost basis is worse than one omitted.
     """
     trades: List[Dict[str, Any]] = []
     for pid in closed_position_ids(store):
         try:
             p = position_manager.get_position(pid)
+            legs = position_manager.get_closed_legs(pid)
         except Exception:                      # noqa: BLE001
             continue
+        if not legs:
+            continue
+        exit_fees = sum((leg.fee for leg in legs), Decimal("0"))
+        entry_fees = p.fees_paid - exit_fees
         trades.append({
             "position_id": pid,
             "symbol": p.symbol.value,
             "side": p.side.value,
-            "realized_pnl": str(p.realized_pnl),
+            "realized_pnl": str(p.realized_pnl - entry_fees - p.funding_paid),
             "fees_paid": str(p.fees_paid),
             "funding_paid": str(p.funding_paid),
             "created_at_utc": p.created_at_utc,

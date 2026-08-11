@@ -138,12 +138,38 @@ class SimulatedTransport:
             is_buy = bool(wire["b"])
             px = Decimal(str(wire["p"]))
             sz = Decimal(str(wire["s"]))
+            reduce_only = bool(wire.get("r", False))
             oid = self._next_oid
             self._next_oid += 1
+
+            # REDUCE-ONLY IS ENFORCED, NOT MERELY RECORDED. The flag was
+            # previously parsed into _orders and never consulted again, so
+            # an over-asked close filled in full and FLIPPED the position:
+            # measured 2026-08-10, a reduce-only SELL of 0.01042 against a
+            # +0.00256 long left a -0.00786 short open while the engine
+            # recorded POSITION_CLOSED. Over-asking is the deliberate,
+            # correct way to request a full close (lifecycle_probe.py:47),
+            # and the real venue clamps it -- measured on Hyperliquid
+            # testnet in lifecycle #2, 0.00104 -> 0.00025. The simulator
+            # must therefore clamp too, or "everything up to testnet"
+            # validates against semantics the venue does not have.
+            if reduce_only:
+                sz = self._reducible(coin, is_buy, sz)
+                if sz == 0:
+                    # Nothing to reduce. A reduce-only order must never
+                    # OPEN a position, so it is rejected rather than
+                    # filled -- {"error": ...} is the shape the adapter
+                    # already parses (adapter.py:456).
+                    statuses.append({"error":
+                        "Order would increase position: reduce-only order "
+                        "with no reducible " + coin + " position"})
+                    continue
 
             # PHASE 1 FILL RULE -- deterministic and total: every accepted
             # order fills immediately, in full, at its own limit price.
             # No book, no slippage, no partials (see module docstring).
+            # A reduce-only clamp is NOT a partial-fill model: the quantity
+            # is decided before the fill, and the fill is still total.
             # Taker fee, because an immediate fill is a taking fill.
             fee = px * sz * TAKER_FEE_RATE
             self._apply_fill(coin, is_buy, px, sz, fee)
@@ -162,7 +188,7 @@ class SimulatedTransport:
                 "coin": coin, "side": "B" if is_buy else "A",
                 "limitPx": str(px), "sz": "0", "origSz": str(sz), "oid": oid,
                 "timestamp": self._clock(), "cloid": wire.get("c"),
-                "reduceOnly": bool(wire.get("r", False)),
+                "reduceOnly": reduce_only,
             }
             statuses.append({"filled": {
                 "totalSz": str(sz), "avgPx": str(px), "oid": oid}})
@@ -175,6 +201,23 @@ class SimulatedTransport:
         return HttpResponse(status_code=200, body={
             "status": "ok",
             "response": {"type": "cancel", "data": {"statuses": ["success"] * n}}})
+
+    def _reducible(self, coin, is_buy, sz) -> Decimal:
+        """How much of `sz` this side may actually close, clamped to the
+        open position. Reuses _apply_fill's side convention exactly --
+        a BUY is +signed and therefore reduces a SHORT; a SELL is -signed
+        and reduces a LONG -- so there is one side semantics in this
+        module, not two. Returns 0 when the order would open or add,
+        which is the case a reduce-only order must never reach.
+
+        Clamping to abs(prev) is also what makes a flip unreachable:
+        |signed| <= |prev| means _apply_fill's new position can only
+        shrink toward zero, never cross it."""
+        prev = self._positions.get(coin, Decimal("0"))
+        if prev == 0:
+            return Decimal("0")
+        opposes = (prev < 0) if is_buy else (prev > 0)
+        return min(sz, abs(prev)) if opposes else Decimal("0")
 
     def _apply_fill(self, coin, is_buy, px, sz, fee) -> None:
         signed = sz if is_buy else -sz
