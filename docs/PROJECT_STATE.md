@@ -39,7 +39,8 @@ they're found, never silently carried forward.
 | **Current objective** | **Build the pre-registration gate the first eight campaigns never had.** A power/cost/tax audit of all 15 closed configurations found **none could answer its own question** — 13 underpowered, 1 disputed, CAMP-08 powered but uneconomic. Root cause: `min_signaled_samples = 100` is a count, not a power criterion (`[M]` 100 effective samples ⇒ MDE 0.6384; a 0.55 bar needs 783). Full detail: `RESEARCH_BACKLOG.md` §1. |
 | **Current blocker** | **No funding, credential or transfer blocker exists.** `[M]` verified 2026-08-08 on the configured deployment address `0x127643A7eaa55Cd7157224737cB0146AD1Cc1269`: `userAbstraction` = **`unifiedAccount`**; unified trading equity **999.0 USDC**. Under unified account one USDC balance collateralises cross-margin perp positions, so **no spot→perp transfer is required or possible** — the UI's transfer control is disabled for exactly that reason. The legacy `clearinghouseState.marginSummary.accountValue = 0` is **perp-position-scoped and is NOT evidence of an unfunded account** (two earlier conclusions to the contrary were wrong and are retracted). Credentials present and valid since 2026-07-21. **Two supervised ENGINE_TEST lifecycles have now been executed** (`userFills` = 5) — see Active Work for the full chronology. **The second, on 2026-08-09, proved the automated aged-position close: a position aged ≈195 s (past the 150 s `max_stale_data_seconds` threshold) was closed automatically through the canonical path, RiskManager approving it.** `[M]` venue flat, `openOrders` = 0, reconciliation matched, cleanup clean. **Open items are now measurement and coverage, not capability:** slippage remains a handful of observations rather than a distribution, funding reconciliation is untested, and the `FAIL` verdict has never fired live. No position is currently open and no platform process is running. |
 | **Immediate next task** | Track A: an **expectancy/profit-factor gate with bootstrap power**. The VDA tax gate forces asymmetric payoffs (`[M]` symmetric designs need a 0.6169 hit rate), and the current gate scores only a binomial hit rate — so it cannot score the only designs worth running. Prerequisite to locking any new pre-registration. |
-| **Full regression** | **2,206 passed, 0 failed, 0 skipped** (verified 2026-08-09, commit `9a1f142` — includes the 10 stale-position tests from Option B `788729e` and the 54 supervised-lifecycle runner tests) |
+| **Full regression** | **2,294 passed, 143 subtests, 0 failed** (verified 2026-08-11 at commit `cddfbbc`, run as `python -m pytest --ignore=scratchpad`; the `--ignore` is required because a gitignored scratch artifact breaks root collection). Includes the 10 stale-position tests (`788729e`), the 54 supervised-lifecycle runner tests (`9a1f142`), and the 25 reduce-only + gross-PnL tests (`cddfbbc`) |
+| **Data collection** | **PAUSED — `live_recorder` is not running.** `[M]` verified 2026-08-11: no Python process of any kind is alive; the job's `pid`/`lock` files still name the dead PID 20136. Last successful observation **2026-08-09T11:00:00Z**, last write 2026-08-09 16:58 local; the machine was shut down four minutes later and the recorder has no auto-start. All 9 Hyperliquid series hold **69 rows each (621 total), 0 duplicates**; the 2 historical gaps per series are unchanged and no new internal gap exists — the current absence is trailing staleness, which resuming closes. **Not restarted; resuming is an operator decision.** `scripts/recorder_health.py` reports `DEGRADED` |
 | **Approved alpha models** | **0** |
 | **Rejected hypotheses** | **28 registered** (Campaigns 01–05: 18; 07: 6; **08: 4**) — but only ~**14 independent measurements** (RD-17 §D) · **2 deferred pre-registrations** (RD-04, RD-16) · **0 approved** |
 | **Active tracks** | **A Alpha Research · B Product Development · C Reverse Engineering · D Continuous Learning** — parallel streams; at most one holds an active *engineering* task at a time. **Track D is at stage D-0 (defined, zero code)** — its inputs do not exist yet. See `ROADMAP.md`. |
@@ -353,8 +354,48 @@ campaign.
 - **W.** Still open: **funding reconciliation** (`cumFunding` was 0 over a
   199 s hold — needs elapsed time), the **`FAIL` verdict has never fired
   live**, and slippage remains **a small number of observations, not a
-  distribution**. `PLATFORM_QUALIFICATION.md` is deliberately unamended
-  pending its own separate review.
+  distribution**. ~~`PLATFORM_QUALIFICATION.md` is deliberately unamended
+  pending its own separate review.~~ **True when written on 2026-08-09;
+  superseded on the same day** — that review was carried out and the
+  document now carries **Addendum B** (`aac7106`), which records the
+  second lifecycle and narrows item 2 without changing any status. The
+  count remains **10 of 12**, items 2 and 12 still `NOT QUALIFIED`. The
+  three simulated runs below are **not** recorded there; amending it for
+  them is a separate, still-open decision.
+
+**Simulated qualification run and two measurement defects (2026-08-10/11).
+Simulated environment only — no venue interaction, no order, no probe in
+shipped config.**
+
+- **X.** One controlled **simulated** lifecycle executed through the
+  canonical launcher with `lifecycle_probe` enabled via a temporary
+  out-of-repository config; shipped `config/strategies.toml` unchanged
+  (`lifecycle_probe` still `enabled = false`). It produced the **first
+  `FAIL` verdict in this project's history** and the first trade-level
+  metrics computed over a real closed trade.
+- **Y.** Two defects were found by that run and fixed in **`cddfbbc`**,
+  both in non-frozen code. **(1) `SimulatedTransport` ignored
+  `reduce_only`** — an over-asked close filled in full and left a short
+  open while the engine recorded `POSITION_CLOSED`; `_place` now clamps
+  to the reducible position. **(2) `measurement.closed_trades` fed
+  `metrics` a `realized_pnl` that omitted the entry fee**, so gross PnL
+  exceeded price PnL by exactly that fee, making `gross_profit_factor`
+  and the VDA gate **optimistic**; it is now normalised using the
+  existing `ClosedLeg` data. `metrics.py`, the VDA threshold and the
+  verdict logic were **not** touched.
+- **Z.** Evidence for all three runs is preserved separately and
+  unmodified under `data/qual/sim_close_2026-08-10{,_fixed,_gross}/`. In
+  the final run `gross` reconciles to price PnL exactly
+  (`(63997−64129)×0.00259 = −0.34188`) and `gross = net + fees + funding`
+  closes; verdict **FAIL**, 22/26 metrics `VALID`. A robustness audit
+  confirmed the normalisation holds for every closed-position shape the
+  engine can produce (multiple entry fills, multiple exit legs, partial
+  closes, funding, multi-position isolation).
+- **AA.** **Deliberately deferred, NOT part of `cddfbbc`:**
+  `position_manager/pnl.py::leg_realized_pnl` has no direction term, so
+  **short positions inherit a long-only sign** upstream of measurement.
+  Shorts are reachable in production. This is a frozen Module 7 (§9)
+  question, pinned by a regression test and left untouched.
 
 **P0 chain closed this session (2026-07-29):**
 - `data/alpha_engine_research/` (880 KB, 36 files) now tracked in git —
