@@ -1,5 +1,24 @@
 # Turtle Execution Engine
 
+<p align="left">
+  <a href="https://github.com/vinp6789/Turtle-QTS-Execution/actions/workflows/ci.yml"><img src="https://github.com/vinp6789/Turtle-QTS-Execution/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+  <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/docker-non--root%20%2B%20healthcheck-2496ED?logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/deploy-Railway-0B0D0E?logo=railway&logoColor=white" alt="Railway"/>
+  <img src="https://img.shields.io/badge/tests-84%20test%20modules-success" alt="Tests"/>
+</p>
+
+> **DevOps / DevSecOps highlights**
+>
+> | Area | What's in this repo |
+> |---|---|
+> | **CI/CD** | [GitHub Actions](.github/workflows/ci.yml): Python 3.12/3.13 matrix → config validation → full regression suite → in-process smoke test → Docker image build (only if tests pass) |
+> | **Containers** | [Dockerfile](Dockerfile) with layer caching, **non-root user (uid 10001)**, container `HEALTHCHECK`, same image locally and in the cloud |
+> | **Deploy & reliability** | [railway.json](railway.json): `/health` probe, restart-on-failure policy; `/metrics` endpoint; [docker-compose.yml](docker-compose.yml) for local runs |
+> | **Secrets & security** | Signing boundary that never exposes raw keys, HMAC-SHA256, one-way key revocation, event log rejects secret-like fields, log file mode `0600`, SHA-256 tamper detection — see [SECURITY_ASSUMPTIONS.md](docs/SECURITY_ASSUMPTIONS.md) |
+> | **Safe by default** | Boots in **paper mode** (no network, no real orders); going live is an environment change only |
+> | **Operations** | Runbooks: [DEPLOYMENT](docs/DEPLOYMENT.md) · [OPERATIONS](docs/OPERATIONS.md) · [PRODUCTION_CHECKLIST](docs/PRODUCTION_CHECKLIST.md) · audit history |
+
 Crash-safe, event-sourced execution core for a crypto trading strategy.
 **v1.0 — Modules 1–9 frozen.** This README orients the repository; the
 authoritative detail lives in [`docs/`](docs/MASTER_INDEX.md). Everything
